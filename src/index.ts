@@ -11,14 +11,18 @@
  */
 
 /**
- * A game as the API serves it. Structural on purpose: both clients have their
- * own richer type and can pass it straight in.
+ * The bits of a game these rules actually read.
+ *
+ * Deliberately minimal and without an index signature: both clients have their
+ * own richer `LessonGame`, and a TypeScript interface is not assignable to a
+ * type that carries an index signature. Keeping this narrow lets either client
+ * pass its own type straight in.
  */
 export type AuthoredGame = {
-  game_type: string;
+  id: string;
+  game_type?: string;
   title?: string;
   data?: Record<string, unknown> | null;
-  [key: string]: unknown;
 };
 
 export type PreparedOption = {
