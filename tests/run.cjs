@@ -8,7 +8,7 @@
  * Run: npm test
  */
 
-const rules = require('../dist/index.js');
+const rules = require('../dist/cjs/index.js');
 
 let passed = 0;
 let failed = 0;

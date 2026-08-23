@@ -1,19 +1,28 @@
 {
   "name": "@moswavle/game-rules",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "How authored Moswavle game data becomes something playable. Shared by the web player and the mobile app.",
   "license": "UNLICENSED",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/cjs/index.js",
+  "types": "dist/esm/index.d.ts",
   "files": [
     "dist",
     "src"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.esm.json && tsc -p tsconfig.cjs.json && node scripts/finish-build.cjs",
     "test": "node tests/run.cjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
-  }
+  },
+  "module": "dist/esm/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "sideEffects": false
 }
