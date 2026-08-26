@@ -453,6 +453,15 @@ export function resolveGameKind(type, config) {
         return "svg-assemble";
     }
     if ([
+        "jigsaw",
+        "jigsaw_puzzle",
+        "jigsawpuzzle",
+        "picture_puzzle",
+        "puzzle",
+    ].includes(normalizedType)) {
+        return "jigsaw";
+    }
+    if ([
         "catch_correct",
         "catchcorrect",
         "catch_the_correct",
@@ -699,6 +708,49 @@ export function normalizeImageOrderConfig(config) {
             extractNumber(config.order_lives) ??
             extractNumber(config.io_lives) ??
             3)),
+    };
+}
+/**
+ * A picture cut into a grid.
+ *
+ * The pieces are not authored — the whole point is that any picture in the
+ * library becomes a game without anybody preparing anything. So the config
+ * carries the grid, and the players slice the image themselves with
+ * background-position (web) or a clipped view (native).
+ *
+ * The board is clamped to something a small child can finish: fewer than two
+ * columns is not a puzzle, and more than four of anything is a chore. An
+ * authored 5×5 is corrected rather than refused, because a spec that is merely
+ * ambitious should still produce a playable game.
+ */
+export function normalizeJigsawConfig(config) {
+    const clampAxis = (value, fallback) => Math.max(1, Math.min(4, Math.floor(value ?? fallback)));
+    let columns = clampAxis(extractNumber(config.columns) ?? extractNumber(config.jig_columns), 2);
+    let rows = clampAxis(extractNumber(config.rows) ?? extractNumber(config.jig_rows), 2);
+    // 1×1 is a picture, not a puzzle. Grow the shorter axis rather than refuse.
+    if (columns * rows < 2) {
+        columns = 2;
+        rows = 1;
+    }
+    const pieces = [];
+    for (let row = 0; row < rows; row++) {
+        for (let column = 0; column < columns; column++) {
+            pieces.push({ id: `piece-${row + 1}-${column + 1}`, column, row });
+        }
+    }
+    return {
+        image: extractMediaUrl(config.image) ??
+            extractMediaUrl(config.question_image) ??
+            extractMediaUrl(config.bg_image) ??
+            null,
+        columns,
+        rows,
+        pieces,
+        // Defaults on: without the picture underneath, a four-year-old is
+        // rearranging abstract rectangles.
+        showGuide: extractBoolean(config.show_guide) ?? true,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
     };
 }
 export function normalizeDragDropMatchConfig(config) {

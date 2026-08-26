@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -107,6 +107,24 @@ export type ImageOrderConfig = {
     time_limit: number | null;
     bg_image: string | null;
     show_example: number;
+    lives: number;
+};
+export type JigsawPiece = {
+    /** Stable across a shuffle, so a player can key React children by it. */
+    id: string;
+    /** Column and row of the piece's home, zero-based. */
+    column: number;
+    row: number;
+};
+export type JigsawConfig = {
+    image: string | null;
+    columns: number;
+    rows: number;
+    /** Home order, left to right and top to bottom. Players shuffle it. */
+    pieces: JigsawPiece[];
+    /** Show the finished picture faintly under the board. */
+    showGuide: boolean;
+    time_limit: number | null;
     lives: number;
 };
 export type DragDropMatchPromptType = "text" | "image" | "number";
@@ -196,6 +214,20 @@ export declare function resolveGameKind(type: string, config: Record<string, unk
 export declare function normalizeCatchCorrectConfig(config: Record<string, unknown>): CatchCorrectConfig;
 export declare function normalizeShadowMatchConfig(config: Record<string, unknown>): ShadowMatchConfig;
 export declare function normalizeImageOrderConfig(config: Record<string, unknown>): ImageOrderConfig;
+/**
+ * A picture cut into a grid.
+ *
+ * The pieces are not authored — the whole point is that any picture in the
+ * library becomes a game without anybody preparing anything. So the config
+ * carries the grid, and the players slice the image themselves with
+ * background-position (web) or a clipped view (native).
+ *
+ * The board is clamped to something a small child can finish: fewer than two
+ * columns is not a puzzle, and more than four of anything is a chore. An
+ * authored 5×5 is corrected rather than refused, because a spec that is merely
+ * ambitious should still produce a playable game.
+ */
+export declare function normalizeJigsawConfig(config: Record<string, unknown>): JigsawConfig;
 export declare function normalizeDragDropMatchConfig(config: Record<string, unknown>): DragDropMatchConfig;
 export declare function normalizeSelectOptionConfig(config: Record<string, unknown>): SelectOptionConfig;
 export declare function normalizeMemoryCardsConfig(config: Record<string, unknown>): MemoryCardsConfig;

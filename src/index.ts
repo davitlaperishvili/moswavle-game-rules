@@ -57,6 +57,7 @@ export type RuntimeGameKind =
   | "select-option"
   | "answer-choice"
   | "svg-assemble"
+  | "jigsaw"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -131,6 +132,26 @@ export type ImageOrderConfig = {
   time_limit: number | null;
   bg_image: string | null;
   show_example: number;
+  lives: number;
+};
+
+export type JigsawPiece = {
+  /** Stable across a shuffle, so a player can key React children by it. */
+  id: string;
+  /** Column and row of the piece's home, zero-based. */
+  column: number;
+  row: number;
+};
+
+export type JigsawConfig = {
+  image: string | null;
+  columns: number;
+  rows: number;
+  /** Home order, left to right and top to bottom. Players shuffle it. */
+  pieces: JigsawPiece[];
+  /** Show the finished picture faintly under the board. */
+  showGuide: boolean;
+  time_limit: number | null;
   lives: number;
 };
 
@@ -782,6 +803,16 @@ export function resolveGameKind(
   }
 
   if ([
+    "jigsaw",
+    "jigsaw_puzzle",
+    "jigsawpuzzle",
+    "picture_puzzle",
+    "puzzle",
+  ].includes(normalizedType)) {
+    return "jigsaw";
+  }
+
+  if ([
     "catch_correct",
     "catchcorrect",
     "catch_the_correct",
@@ -1089,6 +1120,65 @@ export function normalizeImageOrderConfig(
           3,
       ),
     ),
+  };
+}
+
+/**
+ * A picture cut into a grid.
+ *
+ * The pieces are not authored — the whole point is that any picture in the
+ * library becomes a game without anybody preparing anything. So the config
+ * carries the grid, and the players slice the image themselves with
+ * background-position (web) or a clipped view (native).
+ *
+ * The board is clamped to something a small child can finish: fewer than two
+ * columns is not a puzzle, and more than four of anything is a chore. An
+ * authored 5×5 is corrected rather than refused, because a spec that is merely
+ * ambitious should still produce a playable game.
+ */
+export function normalizeJigsawConfig(
+  config: Record<string, unknown>,
+): JigsawConfig {
+  const clampAxis = (value: number | null, fallback: number): number =>
+    Math.max(1, Math.min(4, Math.floor(value ?? fallback)));
+
+  let columns = clampAxis(
+    extractNumber(config.columns) ?? extractNumber(config.jig_columns),
+    2,
+  );
+  let rows = clampAxis(
+    extractNumber(config.rows) ?? extractNumber(config.jig_rows),
+    2,
+  );
+
+  // 1×1 is a picture, not a puzzle. Grow the shorter axis rather than refuse.
+  if (columns * rows < 2) {
+    columns = 2;
+    rows = 1;
+  }
+
+  const pieces: JigsawPiece[] = [];
+
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      pieces.push({ id: `piece-${row + 1}-${column + 1}`, column, row });
+    }
+  }
+
+  return {
+    image:
+      extractMediaUrl(config.image) ??
+      extractMediaUrl(config.question_image) ??
+      extractMediaUrl(config.bg_image) ??
+      null,
+    columns,
+    rows,
+    pieces,
+    // Defaults on: without the picture underneath, a four-year-old is
+    // rearranging abstract rectangles.
+    showGuide: extractBoolean(config.show_guide) ?? true,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
   };
 }
 

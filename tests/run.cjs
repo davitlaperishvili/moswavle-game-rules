@@ -150,6 +150,34 @@ check('length is preserved', shuffled.length === deck.length);
 check('every card survives', [...shuffled].sort().join() === [...deck].sort().join());
 check('the input is not mutated', deck.join() === 'a,b,c,d,e');
 
+section('a jigsaw is a grid, and the grid is the whole config');
+
+// The pieces are not authored — any picture in the library becomes a game
+// without anybody preparing anything. Both players must cut it the same way.
+const jig = rules.normalizeJigsawConfig({ question_image: "cow.webp", columns: 3, rows: 2 });
+
+check('a piece per cell', jig.pieces.length === 6);
+check('pieces run left to right, top to bottom', jig.pieces[0].row === 0 && jig.pieces[0].column === 0 && jig.pieces[3].row === 1 && jig.pieces[3].column === 0, JSON.stringify(jig.pieces.map((p) => p.id)));
+check('ids are stable so a shuffle can be keyed by them', jig.pieces[4].id === 'piece-2-2');
+
+// An ambitious spec should still produce a playable game rather than be
+// refused: 5x5 is 25 pieces, which no four-year-old finishes.
+const huge = rules.normalizeJigsawConfig({ image: "x.webp", columns: 9, rows: 9 });
+check('the board is clamped to something a child can finish', huge.columns === 4 && huge.rows === 4);
+
+// 1x1 is a picture, not a puzzle.
+const tiny = rules.normalizeJigsawConfig({ image: "x.webp", columns: 1, rows: 1 });
+check('a single-piece board is grown, not shipped', tiny.pieces.length >= 2, JSON.stringify(tiny));
+
+check('the guide is on unless it is turned off', rules.normalizeJigsawConfig({ image: 'x' }).showGuide === true);
+check('and can be turned off', rules.normalizeJigsawConfig({ image: 'x', show_guide: false }).showGuide === false);
+
+// bg_image is the last resort so a game authored on the wrong field still
+// plays rather than showing an empty board.
+check('the picture is found on any of the three fields', rules.normalizeJigsawConfig({ bg_image: 'scene.webp' }).image === 'scene.webp');
+
+check('the type resolves to its own kind', rules.resolveGameKind('jigsaw', {}) === 'jigsaw' && rules.resolveGameKind('Picture Puzzle', {}) === 'jigsaw');
+
 section('client event ids are unique');
 
 const ids = new Set(Array.from({ length: 200 }, () => rules.createClientEventId()));
