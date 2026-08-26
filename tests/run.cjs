@@ -178,6 +178,74 @@ check('the picture is found on any of the three fields', rules.normalizeJigsawCo
 
 check('the type resolves to its own kind', rules.resolveGameKind('jigsaw', {}) === 'jigsaw' && rules.resolveGameKind('Picture Puzzle', {}) === 'jigsaw');
 
+section('counting is authored as one picture and one number');
+
+// A single drawing of an apple has to cover counting from one to ten, or the
+// library needs "three apples" and "four apples" pictures it will never have.
+const count = rules.normalizeCountPickConfig({ image: 'apple.webp', count: 4 });
+
+check('the correct number is offered', count.choices.some((c) => c.value === 4 && c.isCorrect));
+check('three choices by default', count.choices.length === 3, JSON.stringify(count.choices));
+check('exactly one is correct', count.choices.filter((c) => c.isCorrect).length === 1);
+
+// Neighbours, not random numbers: a child who counts gets it right, a child
+// who eyeballs "a few" does not.
+const values = count.choices.map((c) => c.value).sort((a, b) => a - b);
+check('the wrong answers are the neighbouring numbers', values.join() === '3,4,5', values.join());
+
+const one = rules.normalizeCountPickConfig({ image: 'x', count: 1 });
+check('counting one never offers zero', one.choices.every((c) => c.value >= 1), JSON.stringify(one.choices.map((c) => c.value)));
+
+section('a pattern is authored as its repeating unit');
+
+const pattern = rules.normalizePatternNextConfig({
+  pattern: [{ image: 'a.webp' }, { image: 'b.webp' }],
+  repeats: 3,
+});
+
+check('the run is expanded from the unit', pattern.sequence.length === 6);
+check('it alternates', pattern.sequence[0].image === 'a.webp' && pattern.sequence[1].image === 'b.webp' && pattern.sequence[4].image === 'a.webp');
+
+// The run always stops at the end of a repeat, so what comes next is
+// answerable rather than a guess.
+check('the answer continues the unit', pattern.answer.image === 'a.webp', JSON.stringify(pattern.answer));
+check('the choices are the unit itself, so nothing extra is drawn', pattern.choices.length === 2);
+
+const short = rules.normalizePatternNextConfig({ pattern: [{ image: 'a.webp' }] });
+check('one picture is not a pattern', short.sequence.length === 0 && short.answer === null);
+
+section('sorting puts many things into few bins');
+
+const sort = rules.normalizeSortBinsConfig({
+  bins: [{ id: 'fruit', label: 'Fruit' }, { id: 'veg', label: 'Vegetables' }],
+  items: [
+    { image: 'apple.webp', binId: 'fruit' },
+    { image: 'pear.webp', binId: 'fruit' },
+    { image: 'carrot.webp', binId: 'veg' },
+    { image: 'ghost.webp', binId: 'nowhere' },
+  ],
+});
+
+check('both bins survive', sort.bins.length === 2);
+
+// An item pointing at a bin that does not exist can never be placed, so it is
+// dropped rather than left to make the game unwinnable.
+check('an item with no bin is dropped', sort.items.length === 3, JSON.stringify(sort.items.map((i) => i.id)));
+check('a bin may hold several items', sort.items.filter((i) => i.binId === 'fruit').length === 2);
+
+const unnamed = rules.normalizeSortBinsConfig({
+  bins: [{ id: 'a' }, { id: 'b', label: 'B' }],
+  items: [{ image: 'x.webp', binId: 'b' }],
+});
+check('a bin with neither name nor picture is dropped', unnamed.bins.length === 1);
+
+check(
+  'each type resolves to its own kind',
+  rules.resolveGameKind('count_pick', {}) === 'count-pick'
+    && rules.resolveGameKind('What Comes Next', {}) === 'pattern-next'
+    && rules.resolveGameKind('sort_into_groups', {}) === 'sort-bins',
+);
+
 section('client event ids are unique');
 
 const ids = new Set(Array.from({ length: 200 }, () => rules.createClientEventId()));

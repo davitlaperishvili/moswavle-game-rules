@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -107,6 +107,58 @@ export type ImageOrderConfig = {
     time_limit: number | null;
     bg_image: string | null;
     show_example: number;
+    lives: number;
+};
+export type CountPickChoice = {
+    id: string;
+    value: number;
+    isCorrect: boolean;
+};
+export type CountPickConfig = {
+    /** The object to count. One picture, repeated. */
+    image: string | null;
+    /** How many copies to lay out. */
+    count: number;
+    /** The numbers offered, already shuffled. */
+    choices: CountPickChoice[];
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+};
+export type PatternItem = {
+    id: string;
+    image: string;
+};
+export type PatternNextConfig = {
+    /** The repeating unit: A-B, or A-B-C, or A-A-B. */
+    pattern: PatternItem[];
+    /** The run shown to the child, already expanded from the pattern. */
+    sequence: PatternItem[];
+    /** The one that comes next. */
+    answer: PatternItem | null;
+    /** The pattern's own items, shuffled, as the things to choose between. */
+    choices: PatternItem[];
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+};
+export type SortBin = {
+    id: string;
+    label: string | null;
+    image: string | null;
+};
+export type SortBinsItem = {
+    id: string;
+    image: string;
+    label: string | null;
+    binId: string;
+};
+export type SortBinsConfig = {
+    bins: SortBin[];
+    /** Shuffled, because the authored order is usually bin by bin. */
+    items: SortBinsItem[];
+    bg_image: string | null;
+    time_limit: number | null;
     lives: number;
 };
 export type JigsawPiece = {
@@ -214,6 +266,43 @@ export declare function resolveGameKind(type: string, config: Record<string, unk
 export declare function normalizeCatchCorrectConfig(config: Record<string, unknown>): CatchCorrectConfig;
 export declare function normalizeShadowMatchConfig(config: Record<string, unknown>): ShadowMatchConfig;
 export declare function normalizeImageOrderConfig(config: Record<string, unknown>): ImageOrderConfig;
+/**
+ * Count the objects, tap the number.
+ *
+ * One picture and one number is the whole authored input — the copies are laid
+ * out here and the wrong answers are generated. That is the point: a single
+ * drawing of an apple covers counting from one to ten, where a library of
+ * "three apples", "four apples" pictures never would.
+ *
+ * The distractors are the neighbouring numbers, which is what makes it a
+ * counting game rather than a guessing one: a child who counts four gets it
+ * right, a child who eyeballs "a few" does not.
+ */
+export declare function normalizeCountPickConfig(config: Record<string, unknown>): CountPickConfig;
+/**
+ * What comes next in the row.
+ *
+ * The author writes the repeating unit — two or three pictures — and the run is
+ * expanded from it here. Two drawings therefore make an unlimited number of
+ * games, and the answer is always one of the pattern's own pictures, so there
+ * is nothing else to draw.
+ *
+ * The run is cut so that it always stops mid-unit or at its end, never partway
+ * into a repeat that has not started: a child who has seen A-B-A-B is being
+ * asked something answerable, one who has seen A-B-A is not.
+ */
+export declare function normalizePatternNextConfig(config: Record<string, unknown>): PatternNextConfig;
+/**
+ * Many things into a few containers.
+ *
+ * Not drag_drop_match: there every item has its own zone, here a bin takes as
+ * many as belong in it. That is what makes it a game about the *rule* — fruit
+ * against vegetable, wild against tame — rather than about matching pictures.
+ *
+ * Items are shuffled because the authored order is nearly always bin by bin,
+ * which would hand the answer over for free.
+ */
+export declare function normalizeSortBinsConfig(config: Record<string, unknown>): SortBinsConfig;
 /**
  * A picture cut into a grid.
  *

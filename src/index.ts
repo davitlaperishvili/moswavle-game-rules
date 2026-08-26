@@ -58,6 +58,9 @@ export type RuntimeGameKind =
   | "answer-choice"
   | "svg-assemble"
   | "jigsaw"
+  | "count-pick"
+  | "pattern-next"
+  | "sort-bins"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -132,6 +135,65 @@ export type ImageOrderConfig = {
   time_limit: number | null;
   bg_image: string | null;
   show_example: number;
+  lives: number;
+};
+
+export type CountPickChoice = {
+  id: string;
+  value: number;
+  isCorrect: boolean;
+};
+
+export type CountPickConfig = {
+  /** The object to count. One picture, repeated. */
+  image: string | null;
+  /** How many copies to lay out. */
+  count: number;
+  /** The numbers offered, already shuffled. */
+  choices: CountPickChoice[];
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+};
+
+export type PatternItem = {
+  id: string;
+  image: string;
+};
+
+export type PatternNextConfig = {
+  /** The repeating unit: A-B, or A-B-C, or A-A-B. */
+  pattern: PatternItem[];
+  /** The run shown to the child, already expanded from the pattern. */
+  sequence: PatternItem[];
+  /** The one that comes next. */
+  answer: PatternItem | null;
+  /** The pattern's own items, shuffled, as the things to choose between. */
+  choices: PatternItem[];
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+};
+
+export type SortBin = {
+  id: string;
+  label: string | null;
+  image: string | null;
+};
+
+export type SortBinsItem = {
+  id: string;
+  image: string;
+  label: string | null;
+  binId: string;
+};
+
+export type SortBinsConfig = {
+  bins: SortBin[];
+  /** Shuffled, because the authored order is usually bin by bin. */
+  items: SortBinsItem[];
+  bg_image: string | null;
+  time_limit: number | null;
   lives: number;
 };
 
@@ -813,6 +875,36 @@ export function resolveGameKind(
   }
 
   if ([
+    "count_pick",
+    "countpick",
+    "count_and_pick",
+    "counting",
+    "how_many",
+  ].includes(normalizedType)) {
+    return "count-pick";
+  }
+
+  if ([
+    "pattern_next",
+    "patternnext",
+    "continue_pattern",
+    "sequence_pattern",
+    "what_comes_next",
+  ].includes(normalizedType)) {
+    return "pattern-next";
+  }
+
+  if ([
+    "sort_bins",
+    "sortbins",
+    "sorting",
+    "sort_into_groups",
+    "group_sort",
+  ].includes(normalizedType)) {
+    return "sort-bins";
+  }
+
+  if ([
     "catch_correct",
     "catchcorrect",
     "catch_the_correct",
@@ -1120,6 +1212,227 @@ export function normalizeImageOrderConfig(
           3,
       ),
     ),
+  };
+}
+
+/**
+ * Count the objects, tap the number.
+ *
+ * One picture and one number is the whole authored input — the copies are laid
+ * out here and the wrong answers are generated. That is the point: a single
+ * drawing of an apple covers counting from one to ten, where a library of
+ * "three apples", "four apples" pictures never would.
+ *
+ * The distractors are the neighbouring numbers, which is what makes it a
+ * counting game rather than a guessing one: a child who counts four gets it
+ * right, a child who eyeballs "a few" does not.
+ */
+export function normalizeCountPickConfig(
+  config: Record<string, unknown>,
+): CountPickConfig {
+  const count = Math.max(1, Math.min(10, Math.floor(extractNumber(config.count) ?? 3)));
+
+  const authored = Array.isArray(config.choices)
+    ? config.choices
+        .map((choice) => extractNumber(choice))
+        .filter((value): value is number => value !== null && value > 0)
+    : [];
+
+  // Neighbours first, then outward, until there are enough. Below three the
+  // guess is worth too much; above four the row stops fitting a phone.
+  const wanted = Math.max(2, Math.min(4, Math.floor(extractNumber(config.choice_count) ?? 3)));
+  const values = new Set<number>(authored.length > 0 ? authored : [count]);
+  values.add(count);
+
+  for (let step = 1; values.size < wanted && step <= 10; step += 1) {
+    if (count - step >= 1) {
+      values.add(count - step);
+    }
+    if (values.size < wanted) {
+      values.add(count + step);
+    }
+  }
+
+  const choices = shuffle(Array.from(values).slice(0, wanted)).map((value) => ({
+    id: `count-${value}`,
+    value,
+    isCorrect: value === count,
+  }));
+
+  return {
+    image:
+      extractMediaUrl(config.image) ??
+      extractMediaUrl(config.question_image) ??
+      null,
+    count,
+    choices,
+    bg_image: extractMediaUrl(config.bg_image),
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+  };
+}
+
+/**
+ * What comes next in the row.
+ *
+ * The author writes the repeating unit — two or three pictures — and the run is
+ * expanded from it here. Two drawings therefore make an unlimited number of
+ * games, and the answer is always one of the pattern's own pictures, so there
+ * is nothing else to draw.
+ *
+ * The run is cut so that it always stops mid-unit or at its end, never partway
+ * into a repeat that has not started: a child who has seen A-B-A-B is being
+ * asked something answerable, one who has seen A-B-A is not.
+ */
+export function normalizePatternNextConfig(
+  config: Record<string, unknown>,
+): PatternNextConfig {
+  const rawPattern = Array.isArray(config.pattern)
+    ? config.pattern
+    : Array.isArray(config.items)
+      ? config.items
+      : [];
+
+  const pattern = rawPattern
+    .map((item, index): PatternItem | null => {
+      const record =
+        item && typeof item === "object" && !Array.isArray(item)
+          ? (item as Record<string, unknown>)
+          : {};
+
+      const image =
+        extractMediaUrl(record.image) ??
+        extractMediaUrl(record.pn_image) ??
+        extractMediaUrl(item) ??
+        null;
+
+      if (!image) {
+        return null;
+      }
+
+      return {
+        id: extractText(record.id) ?? `pattern-${index + 1}`,
+        image,
+      };
+    })
+    .filter((item): item is PatternItem => item !== null);
+
+  if (pattern.length < 2) {
+    return {
+      pattern,
+      sequence: [],
+      answer: null,
+      choices: [],
+      bg_image: extractMediaUrl(config.bg_image),
+      time_limit: extractNumber(config.time_limit),
+      lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    };
+  }
+
+  // At least two full repeats, or there is no pattern to have noticed.
+  const repeats = Math.max(2, Math.min(4, Math.floor(extractNumber(config.repeats) ?? 2)));
+  const length = Math.min(pattern.length * repeats, 12);
+
+  const sequence: PatternItem[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const source = pattern[index % pattern.length];
+    sequence.push({ id: `${source.id}-${index + 1}`, image: source.image });
+  }
+
+  const answer = pattern[length % pattern.length];
+
+  return {
+    pattern,
+    sequence,
+    answer,
+    choices: shuffle(pattern),
+    bg_image: extractMediaUrl(config.bg_image),
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+  };
+}
+
+/**
+ * Many things into a few containers.
+ *
+ * Not drag_drop_match: there every item has its own zone, here a bin takes as
+ * many as belong in it. That is what makes it a game about the *rule* — fruit
+ * against vegetable, wild against tame — rather than about matching pictures.
+ *
+ * Items are shuffled because the authored order is nearly always bin by bin,
+ * which would hand the answer over for free.
+ */
+export function normalizeSortBinsConfig(
+  config: Record<string, unknown>,
+): SortBinsConfig {
+  const rawBins = Array.isArray(config.bins) ? config.bins : [];
+
+  const bins = rawBins
+    .map((bin, index): SortBin | null => {
+      const record =
+        bin && typeof bin === "object" && !Array.isArray(bin)
+          ? (bin as Record<string, unknown>)
+          : {};
+
+      const id =
+        extractText(record.id) ??
+        extractText(record.sb_bin_id) ??
+        extractText(record.key) ??
+        `bin-${index + 1}`;
+
+      const label = extractText(record.label) ?? extractText(record.sb_bin_label);
+      const image =
+        extractMediaUrl(record.image) ?? extractMediaUrl(record.sb_bin_image);
+
+      // A bin with neither a name nor a picture is invisible.
+      if (!label && !image) {
+        return null;
+      }
+
+      return { id, label, image };
+    })
+    .filter((bin): bin is SortBin => bin !== null);
+
+  const binIds = new Set(bins.map((bin) => bin.id));
+
+  const rawItems = Array.isArray(config.items) ? config.items : [];
+
+  const items = rawItems
+    .map((item, index): SortBinsItem | null => {
+      const record =
+        item && typeof item === "object" && !Array.isArray(item)
+          ? (item as Record<string, unknown>)
+          : {};
+
+      const image =
+        extractMediaUrl(record.image) ?? extractMediaUrl(record.sb_item_image);
+      const binId =
+        extractText(record.binId) ??
+        extractText(record.sb_bin_id) ??
+        extractText(record.bin) ??
+        null;
+
+      // An item pointing at a bin that does not exist can never be placed, so
+      // it is dropped rather than left to make the game unwinnable.
+      if (!image || !binId || !binIds.has(binId)) {
+        return null;
+      }
+
+      return {
+        id: extractText(record.id) ?? `sort-item-${index + 1}`,
+        image,
+        label: extractText(record.label),
+        binId,
+      };
+    })
+    .filter((item): item is SortBinsItem => item !== null);
+
+  return {
+    bins,
+    items: shuffle(items),
+    bg_image: extractMediaUrl(config.bg_image),
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
   };
 }
 
