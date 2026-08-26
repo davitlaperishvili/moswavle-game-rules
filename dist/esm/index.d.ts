@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -108,6 +108,22 @@ export type ImageOrderConfig = {
     bg_image: string | null;
     show_example: number;
     lives: number;
+};
+export type SizeOrderStep = {
+    id: string;
+    /** 0..1 of the largest. Multiply the drawn size by this. */
+    scale: number;
+    /** Position in the finished row, zero-based. */
+    rank: number;
+};
+export type SizeOrderConfig = {
+    image: string | null;
+    /** Home order: rank 0 first. Players shuffle it. */
+    steps: SizeOrderStep[];
+    /** Which way round the finished row goes. */
+    direction: "ascending" | "descending";
+    bg_image: string | null;
+    time_limit: number | null;
 };
 export type CountPickChoice = {
     id: string;
@@ -266,6 +282,18 @@ export declare function resolveGameKind(type: string, config: Record<string, unk
 export declare function normalizeCatchCorrectConfig(config: Record<string, unknown>): CatchCorrectConfig;
 export declare function normalizeShadowMatchConfig(config: Record<string, unknown>): ShadowMatchConfig;
 export declare function normalizeImageOrderConfig(config: Record<string, unknown>): ImageOrderConfig;
+/**
+ * The same object at several sizes, put in order.
+ *
+ * One picture and a step count is the whole authored input — the sizes are
+ * computed here. Nothing else in the catalog teaches bigger and smaller, and
+ * for a two-year-old it may be the only comparison they can already make.
+ *
+ * The smallest is 40% of the largest, not 10%: a step small enough to be
+ * ambiguous next to its neighbour turns a comparison into a guess, and at five
+ * steps the gap is already down to 15%.
+ */
+export declare function normalizeSizeOrderConfig(config: Record<string, unknown>): SizeOrderConfig;
 /**
  * Count the objects, tap the number.
  *

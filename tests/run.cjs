@@ -246,6 +246,35 @@ check(
     && rules.resolveGameKind('sort_into_groups', {}) === 'sort-bins',
 );
 
+section('sizes are computed, not authored');
+
+// One picture and a step count is the whole input. Nothing else in the
+// catalog teaches bigger and smaller.
+const size = rules.normalizeSizeOrderConfig({ image: 'bear.webp', steps: 4 });
+
+check('a step per size', size.steps.length === 4);
+check('ranks run 0 upward', size.steps.map((s) => s.rank).join() === '0,1,2,3');
+check('the largest is full size', Math.abs(size.steps[3].scale - 1) < 0.001, String(size.steps[3].scale));
+
+// A step small enough to be ambiguous next to its neighbour turns a
+// comparison into a guess.
+const gaps = size.steps.slice(1).map((step, index) => step.scale - size.steps[index].scale);
+check('the gaps are even and never tiny', gaps.every((gap) => gap > 0.15 && Math.abs(gap - gaps[0]) < 0.001), gaps.map((g) => g.toFixed(2)).join());
+check('the smallest is still clearly visible', size.steps[0].scale >= 0.4);
+
+const descending = rules.normalizeSizeOrderConfig({ image: 'x', steps: 3, direction: 'descending' });
+
+// Descending only changes which end the finished row starts at; the players
+// place by rank either way and never have to know the difference.
+check('descending starts large', descending.steps[0].scale > descending.steps[2].scale);
+check('and its ranks still run 0 upward', descending.steps.map((s) => s.rank).join() === '0,1,2');
+
+// Two sizes is a pair, not an ordering; six is beyond what fits a phone row.
+check('below three steps is corrected', rules.normalizeSizeOrderConfig({ image: 'x', steps: 1 }).steps.length === 3);
+check('above five steps is corrected', rules.normalizeSizeOrderConfig({ image: 'x', steps: 9 }).steps.length === 5);
+
+check('the type resolves to its own kind', rules.resolveGameKind('size_order', {}) === 'size-order' && rules.resolveGameKind('Big To Small', {}) === 'size-order');
+
 section('client event ids are unique');
 
 const ids = new Set(Array.from({ length: 200 }, () => rules.createClientEventId()));

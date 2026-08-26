@@ -489,6 +489,15 @@ export function resolveGameKind(type, config) {
         return "sort-bins";
     }
     if ([
+        "size_order",
+        "sizeorder",
+        "order_by_size",
+        "big_to_small",
+        "biggest_smallest",
+    ].includes(normalizedType)) {
+        return "size-order";
+    }
+    if ([
         "catch_correct",
         "catchcorrect",
         "catch_the_correct",
@@ -735,6 +744,39 @@ export function normalizeImageOrderConfig(config) {
             extractNumber(config.order_lives) ??
             extractNumber(config.io_lives) ??
             3)),
+    };
+}
+/**
+ * The same object at several sizes, put in order.
+ *
+ * One picture and a step count is the whole authored input — the sizes are
+ * computed here. Nothing else in the catalog teaches bigger and smaller, and
+ * for a two-year-old it may be the only comparison they can already make.
+ *
+ * The smallest is 40% of the largest, not 10%: a step small enough to be
+ * ambiguous next to its neighbour turns a comparison into a guess, and at five
+ * steps the gap is already down to 15%.
+ */
+export function normalizeSizeOrderConfig(config) {
+    const count = Math.max(3, Math.min(5, Math.floor(extractNumber(config.steps) ?? 3)));
+    const smallest = 0.4;
+    const steps = Array.from({ length: count }, (_, index) => ({
+        id: `size-${index + 1}`,
+        scale: smallest + ((1 - smallest) * index) / (count - 1),
+        rank: index,
+    }));
+    const direction = extractText(config.direction) === "descending" ? "descending" : "ascending";
+    // `steps` is always smallest-first; descending simply reverses which end the
+    // finished row starts at, so the players never have to know the difference.
+    const ordered = direction === "descending" ? [...steps].reverse() : steps;
+    return {
+        image: extractMediaUrl(config.image) ??
+            extractMediaUrl(config.question_image) ??
+            null,
+        steps: ordered.map((step, index) => ({ ...step, rank: index })),
+        direction,
+        bg_image: extractMediaUrl(config.bg_image),
+        time_limit: extractNumber(config.time_limit),
     };
 }
 /**
