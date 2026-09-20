@@ -614,41 +614,43 @@ export function resolveGameKind(type, config) {
 }
 export function normalizeCatchCorrectConfig(config) {
     const rawItems = extractOptionsSource(config);
-    return {
-        items: rawItems
-            .map((item) => {
-            if (typeof item === "string" || typeof item === "number") {
-                return {
-                    label: String(item),
-                    correct: false,
-                };
-            }
-            const record = asRecord(item);
-            if (!record) {
-                return null;
-            }
-            const label = extractMediaUrl(record.label) ??
-                OPTION_IMAGE_KEYS.map((key) => extractMediaUrl(record[key])).find(Boolean) ??
-                OPTION_TEXT_KEYS.map((key) => extractText(record[key])).find(Boolean);
-            const correct = extractBoolean(record.correct) ??
-                extractBoolean(record.is_correct) ??
-                extractBoolean(record.isCorrect) ??
-                false;
-            if (!label) {
-                return null;
-            }
+    const items = rawItems
+        .map((item) => {
+        if (typeof item === "string" || typeof item === "number") {
             return {
-                label,
-                correct,
+                label: String(item),
+                correct: false,
             };
-        })
-            .filter((item) => Boolean(item)),
+        }
+        const record = asRecord(item);
+        if (!record) {
+            return null;
+        }
+        const label = extractMediaUrl(record.label) ??
+            OPTION_IMAGE_KEYS.map((key) => extractMediaUrl(record[key])).find(Boolean) ??
+            OPTION_TEXT_KEYS.map((key) => extractText(record[key])).find(Boolean);
+        const correct = extractBoolean(record.correct) ??
+            extractBoolean(record.is_correct) ??
+            extractBoolean(record.isCorrect) ??
+            false;
+        if (!label) {
+            return null;
+        }
+        return {
+            label,
+            correct,
+        };
+    })
+        .filter((item) => Boolean(item));
+    return {
+        // A game authored without items would spawn nothing and could never be won.
+        items: items.length > 0 ? items : DEFAULT_CATCH_CORRECT_ITEMS.map((item) => ({ ...item })),
         target: extractNumber(config.target) ??
             extractNumber(config.target_score) ??
             extractNumber(config.score_target) ??
             10,
         lives: extractNumber(config.lives) ?? 3,
-        frequency: extractNumber(config.frequency) ?? 1200,
+        frequency: Math.max(CATCH_CORRECT_MIN_FREQUENCY_MS, extractNumber(config.frequency) ?? 1200),
         speed: extractNumber(config.speed) ?? 120,
         time_limit: extractNumber(config.time_limit),
         bg_image: normalizeBackground(config),
@@ -1144,7 +1146,9 @@ export function normalizeDragDropMatchConfig(config) {
         extractNumber(config.background_height) ??
         900;
     return {
-        items: filteredItems,
+        // Shuffled here, like sort_bins: the authored order is nearly always zone by
+        // zone, which would hand the answer over, and both players must shuffle alike.
+        items: shuffle(filteredItems),
         zones: filteredZones,
         time_limit: extractNumber(config.time_limit) ??
             extractNumber(config.ddm_time_limit) ??
@@ -1436,3 +1440,222 @@ export function shuffle(items) {
     }
     return next;
 }
+// ---------------------------------------------------------------------------
+// Play rules both renderers must agree on.
+//
+// Everything below used to live in the two players as local constants and
+// helpers, and had drifted: the same drop counted as a hit on one platform and
+// a miss on the other, a mistake cost the first-attempt bonus in the app but
+// not on the web, a zone sat on the artwork on one screen and beside it on the
+// other. Keeping the numbers here is the only way to keep them equal.
+// ---------------------------------------------------------------------------
+function clampNumber(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+export const FAILURE_REASON = {
+    timeout: "timeout",
+    livesOut: "lives_out",
+    /** Catch Correct only: the last life went on a wrong catch. */
+    wrongCatch: "wrong_catch",
+    movesOut: "moves_out",
+};
+/**
+ * The "halfway there" cheer. Fires once, when the child reaches the midpoint
+ * of a game with more than two steps, and never on the last step — the win
+ * sound covers that. A two-step game gets the ordinary "correct" instead:
+ * cheering "halfway" after the first of two is noise.
+ */
+export function shouldPlayHalfway(next, total) {
+    return total > 2 && next >= Math.ceil(total / 2) && next < total;
+}
+/**
+ * Whether an authored label is a picture (URL or path) rather than text.
+ * Catch Correct items may be either, and both renderers must draw the same
+ * thing for the same label.
+ */
+export function isImageReference(value) {
+    if (typeof value !== "string") {
+        return false;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return false;
+    }
+    return (/^https?:\/\//i.test(trimmed) ||
+        trimmed.startsWith("/") ||
+        /\.(jpe?g|gif|png|svg|webp)(\?.*)?$/i.test(trimmed));
+}
+// --- Catch Correct ----------------------------------------------------------
+/** Spawn interval floor: below this the screen fills faster than a child can look. */
+export const CATCH_CORRECT_MIN_FREQUENCY_MS = 500;
+/** Fall duration bounds: faster is unplayable, slower is boring. */
+export const CATCH_CORRECT_MIN_FALL_MS = 2400;
+export const CATCH_CORRECT_MAX_FALL_MS = 7600;
+/** Demo items for a game authored without any, so it is still playable. */
+export const DEFAULT_CATCH_CORRECT_ITEMS = [
+    { label: "🍎", correct: true },
+    { label: "🍌", correct: true },
+    { label: "👟", correct: false },
+    { label: "🚗", correct: false },
+];
+/** How long one item takes to cross the stage, from the authored `speed`. */
+export function catchCorrectFallDurationMs(speed) {
+    const safeSpeed = Number.isFinite(speed) && speed > 0 ? speed : 120;
+    return Math.round(clampNumber((100000 / safeSpeed) * 5, CATCH_CORRECT_MIN_FALL_MS, CATCH_CORRECT_MAX_FALL_MS));
+}
+// --- Shadow Match -----------------------------------------------------------
+/** A drop counts when its centre is within this fraction of the target's longer side. */
+export const SHADOW_MATCH_DROP_TOLERANCE = 0.42;
+/** A miss is blamed on the nearest other target within this fraction — feedback only. */
+export const SHADOW_MATCH_MISS_TOLERANCE = 0.5;
+export function isShadowMatchHit(distance, targetWidth, targetHeight) {
+    return distance <= Math.max(targetWidth, targetHeight) * SHADOW_MATCH_DROP_TOLERANCE;
+}
+export function isShadowMatchNearMiss(distance, targetWidth, targetHeight) {
+    return distance <= Math.max(targetWidth, targetHeight) * SHADOW_MATCH_MISS_TOLERANCE;
+}
+export function getDragDropMatchSceneMetrics(viewportWidth, viewportHeight, sourceWidth, sourceHeight) {
+    if (viewportWidth <= 0 || viewportHeight <= 0 || sourceWidth <= 0 || sourceHeight <= 0) {
+        return null;
+    }
+    const coverScale = Math.max(viewportWidth / sourceWidth, viewportHeight / sourceHeight);
+    const renderWidth = sourceWidth * coverScale;
+    const renderHeight = sourceHeight * coverScale;
+    const shortestSide = Math.max(Math.min(viewportWidth, viewportHeight), 1);
+    return {
+        viewportWidth,
+        viewportHeight,
+        sourceWidth,
+        sourceHeight,
+        coverScale,
+        renderWidth,
+        renderHeight,
+        offsetX: (viewportWidth - renderWidth) / 2,
+        offsetY: (viewportHeight - renderHeight) / 2,
+        leftSafeInset: viewportWidth > viewportHeight ? Math.max(shortestSide * 0.19, 1) : 0,
+        minZoneWidth: viewportWidth < 640 ? shortestSide * 0.14 : 0,
+    };
+}
+export function getDragDropMatchZoneRect(zone, metrics) {
+    const visualWidth = Math.max((zone.width / 100) * metrics.sourceWidth * metrics.coverScale, 1);
+    const visualHeight = Math.max((zone.height / 100) * metrics.sourceHeight * metrics.coverScale, 1);
+    const visualLeft = metrics.offsetX + (zone.x / 100) * metrics.renderWidth;
+    const visualTop = metrics.offsetY + (zone.y / 100) * metrics.renderHeight;
+    const finalWidth = Math.max(visualWidth, metrics.minZoneWidth);
+    return {
+        left: clampNumber(visualLeft - (finalWidth - visualWidth) / 2, metrics.leftSafeInset, Math.max(metrics.viewportWidth - finalWidth, metrics.leftSafeInset)),
+        top: clampNumber(visualTop, 0, Math.max(metrics.viewportHeight - visualHeight, 0)),
+        width: finalWidth,
+        height: visualHeight,
+    };
+}
+/** Zone rectangles in stage pixels, in `config.zones` order. Raw percentages until the stage is measured. */
+export function layoutDragDropMatchZones(stage, config) {
+    const metrics = getDragDropMatchSceneMetrics(stage.width, stage.height, Math.max(config.board_width, 1), Math.max(config.board_height, 1));
+    return config.zones.map((zone) => metrics
+        ? getDragDropMatchZoneRect(zone, metrics)
+        : {
+            left: (zone.x / 100) * stage.width,
+            top: (zone.y / 100) * stage.height,
+            width: (zone.width / 100) * stage.width,
+            height: (zone.height / 100) * stage.height,
+        });
+}
+export function getSelectOptionSceneMetrics(viewportWidth, viewportHeight, sourceWidth, sourceHeight) {
+    if (viewportWidth <= 0 || viewportHeight <= 0 || sourceWidth <= 0 || sourceHeight <= 0) {
+        return null;
+    }
+    const coverScale = Math.max(viewportWidth / sourceWidth, viewportHeight / sourceHeight);
+    const containScale = Math.min(viewportWidth / sourceWidth, viewportHeight / sourceHeight);
+    const renderWidth = sourceWidth * coverScale;
+    const renderHeight = sourceHeight * coverScale;
+    const shortestSide = Math.max(Math.min(viewportWidth, viewportHeight), 1);
+    const visualScaleBoost = clampNumber(520 / shortestSide, 1, 1.36);
+    const minTouchSize = viewportWidth < 640 ? shortestSide * 0.14 : 0;
+    const safeInset = Math.max(shortestSide * 0.035, 1);
+    const leftSafeInset = viewportWidth > viewportHeight ? Math.max(shortestSide * 0.19, safeInset) : safeInset;
+    const bottomSafeInset = Math.max(shortestSide * 0.1, safeInset);
+    const minVisualExtent = shortestSide * (viewportWidth < 640 ? 0.18 : 0.08);
+    const maxVisualExtent = shortestSide * (viewportWidth < 640 ? 0.28 : 0.2);
+    return {
+        viewportWidth,
+        viewportHeight,
+        sourceWidth,
+        sourceHeight,
+        renderWidth,
+        renderHeight,
+        offsetX: (viewportWidth - renderWidth) / 2,
+        offsetY: (viewportHeight - renderHeight) / 2,
+        containScale,
+        visualScaleBoost,
+        minTouchWidth: minTouchSize,
+        minTouchHeight: minTouchSize,
+        safeInset,
+        leftSafeInset,
+        bottomSafeInset,
+        minVisualExtent,
+        maxVisualExtent,
+    };
+}
+export function getSelectOptionItemRect(item, metrics) {
+    const baseVisualWidth = Math.max((item.width / 100) * metrics.sourceWidth * metrics.containScale, 1);
+    const baseVisualHeight = Math.max((item.height / 100) * metrics.sourceHeight * metrics.containScale, 1);
+    const baseVisualExtent = Math.max(baseVisualWidth, baseVisualHeight);
+    const visualScale = clampNumber(metrics.visualScaleBoost * Math.max(1, metrics.minVisualExtent / baseVisualExtent), 1, metrics.maxVisualExtent / baseVisualExtent);
+    const visualWidth = baseVisualWidth * visualScale;
+    const visualHeight = baseVisualHeight * visualScale;
+    const visualLeft = metrics.offsetX + (item.x / 100) * metrics.renderWidth;
+    const visualTop = metrics.offsetY + (item.y / 100) * metrics.renderHeight;
+    const hitWidth = Math.max(visualWidth, metrics.minTouchWidth);
+    const hitHeight = Math.max(visualHeight, metrics.minTouchHeight);
+    return {
+        left: clampNumber(visualLeft - (hitWidth - visualWidth) / 2, metrics.leftSafeInset, Math.max(metrics.viewportWidth - hitWidth - metrics.safeInset, metrics.leftSafeInset)),
+        top: clampNumber(visualTop - (hitHeight - visualHeight) / 2, metrics.safeInset, Math.max(metrics.viewportHeight - hitHeight - metrics.bottomSafeInset, metrics.safeInset)),
+        width: hitWidth,
+        height: hitHeight,
+        visualWidth,
+        visualHeight,
+    };
+}
+/** Item touch boxes in stage pixels, in `config.items` order. Empty until the stage is measured. */
+export function layoutSelectOptionItems(stage, config) {
+    const metrics = getSelectOptionSceneMetrics(stage.width, stage.height, Math.max(config.board_width, 1), Math.max(config.board_height, 1));
+    if (!metrics) {
+        return [];
+    }
+    return config.items.map((item) => ({ id: item.id, ...getSelectOptionItemRect(item, metrics) }));
+}
+// --- Feedback timings -------------------------------------------------------
+/**
+ * How long each game waits between an action and its consequence, in ms. Not
+ * a rule in the scoring sense, but a child who gets 650 ms to see a mistake on
+ * one device and 900 ms on another is playing two different games.
+ */
+export const GAME_TIMINGS = {
+    answerChoice: { wrongFeedbackSingleMs: 700, wrongFeedbackMultiMs: 850, successSettleMs: 120 },
+    catchCorrect: { wrongShakeMs: 100, completionDelayMs: 0 },
+    countPick: { wrongFeedbackMs: 600 },
+    dragDropMatch: { wrongFeedbackMs: 420, successSettleMs: 140 },
+    imagesOrder: { wrongFillFeedbackMs: 900 },
+    jigsaw: { wrongFlashMs: 500, successSettleMs: 400 },
+    memoryCards: { matchRevealMs: 500, mismatchFlipBackMs: 1000 },
+    patternNext: { wrongFeedbackMs: 600, successSettleMs: 450 },
+    selectOption: { wrongFeedbackMs: 600, successSettleMs: 180, livesOutDelayMs: 260 },
+    shadowMatch: {
+        correctLockMs: 220,
+        successSettleMs: 220,
+        wrongFeedbackMs: 620,
+        wrongReturnMs: 220,
+        wrongUnlockMs: 560,
+        livesOutDelayMs: 640,
+    },
+    sizeOrder: { successSettleMs: 350 },
+    sortBins: { wrongFeedbackMs: 600, successSettleMs: 350 },
+    svgAssemble: {
+        wrongFeedbackMs: 560,
+        flyMs: 620,
+        successSettleMs: 260,
+        timeoutSettleMs: 320,
+        livesOutDelayMs: 320,
+    },
+};

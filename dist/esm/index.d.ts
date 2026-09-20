@@ -356,4 +356,274 @@ export declare function createClientEventId(): string;
  * the same way rather than each reaching for its own helper.
  */
 export declare function shuffle<T>(items: readonly T[]): T[];
+/**
+ * Why a game ended without a pass. Stored with the attempt; the web player
+ * maps each one to a message.
+ */
+export type GameFailureReason = "timeout" | "lives_out" | "wrong_catch" | "moves_out";
+export declare const FAILURE_REASON: {
+    readonly timeout: "timeout";
+    readonly livesOut: "lives_out";
+    /** Catch Correct only: the last life went on a wrong catch. */
+    readonly wrongCatch: "wrong_catch";
+    readonly movesOut: "moves_out";
+};
+/**
+ * The "halfway there" cheer. Fires once, when the child reaches the midpoint
+ * of a game with more than two steps, and never on the last step — the win
+ * sound covers that. A two-step game gets the ordinary "correct" instead:
+ * cheering "halfway" after the first of two is noise.
+ */
+export declare function shouldPlayHalfway(next: number, total: number): boolean;
+/**
+ * Whether an authored label is a picture (URL or path) rather than text.
+ * Catch Correct items may be either, and both renderers must draw the same
+ * thing for the same label.
+ */
+export declare function isImageReference(value: unknown): value is string;
+/** Spawn interval floor: below this the screen fills faster than a child can look. */
+export declare const CATCH_CORRECT_MIN_FREQUENCY_MS = 500;
+/** Fall duration bounds: faster is unplayable, slower is boring. */
+export declare const CATCH_CORRECT_MIN_FALL_MS = 2400;
+export declare const CATCH_CORRECT_MAX_FALL_MS = 7600;
+/** Demo items for a game authored without any, so it is still playable. */
+export declare const DEFAULT_CATCH_CORRECT_ITEMS: ReadonlyArray<{
+    label: string;
+    correct: boolean;
+}>;
+/** How long one item takes to cross the stage, from the authored `speed`. */
+export declare function catchCorrectFallDurationMs(speed: number): number;
+/** A drop counts when its centre is within this fraction of the target's longer side. */
+export declare const SHADOW_MATCH_DROP_TOLERANCE = 0.42;
+/** A miss is blamed on the nearest other target within this fraction — feedback only. */
+export declare const SHADOW_MATCH_MISS_TOLERANCE = 0.5;
+export declare function isShadowMatchHit(distance: number, targetWidth: number, targetHeight: number): boolean;
+export declare function isShadowMatchNearMiss(distance: number, targetWidth: number, targetHeight: number): boolean;
+export type StageSize = {
+    width: number;
+    height: number;
+};
+export type BoardRect = {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+};
+/**
+ * How an authored board (`board_width` × `board_height`, zones in percent) is
+ * drawn on a stage. The background covers the stage — scaled up until both
+ * axes are filled, then centred — and every zone follows the picture. Without
+ * this the zones drift off the artwork whenever the stage's aspect differs
+ * from the board's.
+ */
+export type DragDropMatchSceneMetrics = {
+    viewportWidth: number;
+    viewportHeight: number;
+    sourceWidth: number;
+    sourceHeight: number;
+    coverScale: number;
+    renderWidth: number;
+    renderHeight: number;
+    offsetX: number;
+    offsetY: number;
+    /** Landscape keeps the leftmost 19% of the short side clear for the chrome. */
+    leftSafeInset: number;
+    /** On narrow stages a zone is widened to a tappable minimum. */
+    minZoneWidth: number;
+};
+export declare function getDragDropMatchSceneMetrics(viewportWidth: number, viewportHeight: number, sourceWidth: number, sourceHeight: number): DragDropMatchSceneMetrics | null;
+export declare function getDragDropMatchZoneRect(zone: Pick<DragDropMatchZone, "x" | "y" | "width" | "height">, metrics: DragDropMatchSceneMetrics): BoardRect;
+/** Zone rectangles in stage pixels, in `config.zones` order. Raw percentages until the stage is measured. */
+export declare function layoutDragDropMatchZones(stage: StageSize, config: Pick<DragDropMatchConfig, "zones" | "board_width" | "board_height">): BoardRect[];
+/**
+ * Select Option draws the board the same way, but its hotspots are things a
+ * child must be able to tap: tiny authored items are grown to a minimum
+ * extent and given a minimum touch box, and everything is kept off the
+ * stage edges.
+ */
+export type SelectOptionSceneMetrics = {
+    viewportWidth: number;
+    viewportHeight: number;
+    sourceWidth: number;
+    sourceHeight: number;
+    renderWidth: number;
+    renderHeight: number;
+    offsetX: number;
+    offsetY: number;
+    containScale: number;
+    visualScaleBoost: number;
+    minTouchWidth: number;
+    minTouchHeight: number;
+    safeInset: number;
+    leftSafeInset: number;
+    bottomSafeInset: number;
+    minVisualExtent: number;
+    maxVisualExtent: number;
+};
+export declare function getSelectOptionSceneMetrics(viewportWidth: number, viewportHeight: number, sourceWidth: number, sourceHeight: number): SelectOptionSceneMetrics | null;
+/** The touch box (`left/top/width/height`) plus the picture drawn centred inside it. */
+export type SelectOptionItemRect = BoardRect & {
+    visualWidth: number;
+    visualHeight: number;
+};
+export declare function getSelectOptionItemRect(item: Pick<SelectOptionItem, "x" | "y" | "width" | "height">, metrics: SelectOptionSceneMetrics): SelectOptionItemRect;
+/** Item touch boxes in stage pixels, in `config.items` order. Empty until the stage is measured. */
+export declare function layoutSelectOptionItems(stage: StageSize, config: Pick<SelectOptionConfig, "items" | "board_width" | "board_height">): Array<{
+    id: string;
+} & SelectOptionItemRect>;
+/**
+ * How long each game waits between an action and its consequence, in ms. Not
+ * a rule in the scoring sense, but a child who gets 650 ms to see a mistake on
+ * one device and 900 ms on another is playing two different games.
+ */
+export declare const GAME_TIMINGS: {
+    readonly answerChoice: {
+        readonly wrongFeedbackSingleMs: 700;
+        readonly wrongFeedbackMultiMs: 850;
+        readonly successSettleMs: 120;
+    };
+    readonly catchCorrect: {
+        readonly wrongShakeMs: 100;
+        readonly completionDelayMs: 0;
+    };
+    readonly countPick: {
+        readonly wrongFeedbackMs: 600;
+    };
+    readonly dragDropMatch: {
+        readonly wrongFeedbackMs: 420;
+        readonly successSettleMs: 140;
+    };
+    readonly imagesOrder: {
+        readonly wrongFillFeedbackMs: 900;
+    };
+    readonly jigsaw: {
+        readonly wrongFlashMs: 500;
+        readonly successSettleMs: 400;
+    };
+    readonly memoryCards: {
+        readonly matchRevealMs: 500;
+        readonly mismatchFlipBackMs: 1000;
+    };
+    readonly patternNext: {
+        readonly wrongFeedbackMs: 600;
+        readonly successSettleMs: 450;
+    };
+    readonly selectOption: {
+        readonly wrongFeedbackMs: 600;
+        readonly successSettleMs: 180;
+        readonly livesOutDelayMs: 260;
+    };
+    readonly shadowMatch: {
+        readonly correctLockMs: 220;
+        readonly successSettleMs: 220;
+        readonly wrongFeedbackMs: 620;
+        readonly wrongReturnMs: 220;
+        readonly wrongUnlockMs: 560;
+        readonly livesOutDelayMs: 640;
+    };
+    readonly sizeOrder: {
+        readonly successSettleMs: 350;
+    };
+    readonly sortBins: {
+        readonly wrongFeedbackMs: 600;
+        readonly successSettleMs: 350;
+    };
+    readonly svgAssemble: {
+        readonly wrongFeedbackMs: 560;
+        readonly flyMs: 620;
+        readonly successSettleMs: 260;
+        readonly timeoutSettleMs: 320;
+        readonly livesOutDelayMs: 320;
+    };
+};
+/**
+ * What each game reports with its result. The backend reads `hadMistake` to
+ * decide the first-attempt bonus; the rest is kept with the attempt for the
+ * admin progress panel. One shape per game, used by both renderers, so the
+ * stored rows do not depend on the device.
+ */
+export type AnswerChoiceMetrics = {
+    selectionMode: "single" | "multiple";
+    selectedOptionIds: string[];
+    correctOptionIds: string[];
+    hadMistake: boolean;
+    totalOptions: number;
+    timeLeft: number | null;
+    livesRemaining: number;
+};
+export type CatchCorrectMetrics = {
+    score: number;
+    target: number;
+    livesRemaining: number;
+    timeLeft: number | null;
+};
+export type CountPickMetrics = {
+    count: number;
+    hadMistake: boolean;
+    timeLeft: number | null;
+};
+export type DragDropMatchMetrics = {
+    placedCount: number;
+    totalZones: number;
+    hadMistake: boolean;
+    timeLeft: number | null;
+};
+export type ImageOrderMetrics = {
+    placements: Array<string | null>;
+    filledSlots: number;
+    totalItems: number;
+    showExample: number;
+    hadMistake: boolean;
+    timeLeft: number | null;
+    livesRemaining: number;
+};
+export type JigsawMetrics = {
+    pieces: number;
+    tries: number;
+    hadMistake: boolean;
+    timeLeft: number | null;
+};
+export type MemoryCardsMetrics = {
+    moves: number;
+    matchedCount: number;
+    maxMoves: number | null;
+    timeLeft: number | null;
+};
+export type PatternNextMetrics = {
+    patternLength: number;
+    sequenceLength: number;
+    hadMistake: boolean;
+    timeLeft: number | null;
+};
+export type SelectOptionMetrics = {
+    selectedOptionId: string | null;
+    correctOptionIds: string[];
+    hadMistake: boolean;
+    livesRemaining: number;
+    timeLeft: number | null;
+};
+export type ShadowMatchMetrics = {
+    score: number;
+    totalItems: number;
+    hadMistake: boolean;
+    livesRemaining: number;
+    timeLeft: number | null;
+};
+export type SizeOrderMetrics = {
+    moves: number;
+    steps: number;
+    hadMistake: boolean;
+    timeLeft: number | null;
+};
+export type SortBinsMetrics = {
+    sorted: number;
+    total: number;
+    hadMistake: boolean;
+    timeLeft: number | null;
+};
+export type SvgAssembleMetrics = {
+    selectedOptionId: string | null;
+    livesRemaining: number;
+    timeLeft: number | null;
+};
 export {};
