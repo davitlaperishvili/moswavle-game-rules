@@ -1659,3 +1659,40 @@ export const GAME_TIMINGS = {
         livesOutDelayMs: 320,
     },
 };
+/**
+ * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
+ * `RuntimeGameKind` without adding it here is a compile error, and so is a
+ * `GAME_TIMINGS` or `GameMetricsByKind` entry that goes missing — that is the
+ * point: a new game cannot ship without its timings and its metrics shape.
+ */
+export const GAME_KIND_KEYS = {
+    "answer-choice": "answerChoice",
+    "catch-correct": "catchCorrect",
+    "count-pick": "countPick",
+    "drag-drop-match": "dragDropMatch",
+    images_order: "imagesOrder",
+    jigsaw: "jigsaw",
+    "memory-cards": "memoryCards",
+    "pattern-next": "patternNext",
+    "select-option": "selectOption",
+    "shadow-match": "shadowMatch",
+    "size-order": "sizeOrder",
+    "sort-bins": "sortBins",
+    "svg-assemble": "svgAssemble",
+};
+/** The same timings, addressable by kind. Exhaustive by construction. */
+export const GAME_TIMINGS_BY_KIND = {
+    "answer-choice": GAME_TIMINGS.answerChoice,
+    "catch-correct": GAME_TIMINGS.catchCorrect,
+    "count-pick": GAME_TIMINGS.countPick,
+    "drag-drop-match": GAME_TIMINGS.dragDropMatch,
+    images_order: GAME_TIMINGS.imagesOrder,
+    jigsaw: GAME_TIMINGS.jigsaw,
+    "memory-cards": GAME_TIMINGS.memoryCards,
+    "pattern-next": GAME_TIMINGS.patternNext,
+    "select-option": GAME_TIMINGS.selectOption,
+    "shadow-match": GAME_TIMINGS.shadowMatch,
+    "size-order": GAME_TIMINGS.sizeOrder,
+    "sort-bins": GAME_TIMINGS.sortBins,
+    "svg-assemble": GAME_TIMINGS.svgAssemble,
+};

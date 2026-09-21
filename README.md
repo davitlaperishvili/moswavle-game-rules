@@ -51,3 +51,22 @@ onto the other.
 
 `npm test` — plain Node, no framework. They pin the decisions both players have to agree on, so
 a change that would make the two behave differently fails here first.
+
+## Adding a game
+
+The registry at the bottom of `src/index.ts` is deliberately strict: a new kind cannot be
+built until every piece is in place. In order:
+
+1. Add the kind to `RuntimeGameKind` and teach `resolveGameKind` its authored `game_type`.
+2. Add `<Name>Config` + `normalize<Name>Config(config)` — every field the renderers read, with
+   its default. Nothing else may read raw `game.data`.
+3. Add `GAME_TIMINGS.<name>` (every feedback delay) and its entry in `GAME_KIND_KEYS` and
+   `GAME_TIMINGS_BY_KIND`.
+4. Add `<Name>Metrics = BaseGameMetrics & {...}` and its entry in `GameMetricsByKind`.
+   `hadMistake` is mandatory and means "the game gave wrong feedback before the pass".
+5. Add tests in `tests/run.cjs`, build, tag, bump both consumers.
+
+The compiler enforces 1, 3 and 4. The full cross-repo checklist (backend choices, ACF fields,
+web and app renderers, the generator that scaffolds them) is
+`moswavle-platform/docs/new-game-checklist.md`; run `node tools/new-game.cjs` from the platform
+folder to scaffold both renderers.

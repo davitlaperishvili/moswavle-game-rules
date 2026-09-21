@@ -2520,104 +2520,166 @@ export const GAME_TIMINGS = {
 // --- Attempt metrics --------------------------------------------------------
 
 /**
- * What each game reports with its result. The backend reads `hadMistake` to
- * decide the first-attempt bonus; the rest is kept with the attempt for the
- * admin progress panel. One shape per game, used by both renderers, so the
- * stored rows do not depend on the device.
+ * What every game reports with its result, on both platforms.
+ *
+ * `hadMistake` is the one key the backend reads: a passed game with it set
+ * loses the first-attempt bonus and is not "perfect". The rule is the same
+ * for every game — it is true once the game has given the child wrong
+ * feedback (a life lost, a wrong flash, the `incorrect` sound) before the
+ * pass. A memory pair that did not match, a wrong catch, a piece dropped on
+ * the wrong cell: all mistakes. `timeLeft` is the countdown at the moment of
+ * the result, `null` for untimed games.
  */
-export type AnswerChoiceMetrics = {
+export type BaseGameMetrics = {
+  hadMistake: boolean;
+  timeLeft: number | null;
+};
+
+export type AnswerChoiceMetrics = BaseGameMetrics & {
   selectionMode: "single" | "multiple";
   selectedOptionIds: string[];
   correctOptionIds: string[];
-  hadMistake: boolean;
   totalOptions: number;
-  timeLeft: number | null;
   livesRemaining: number;
 };
 
-export type CatchCorrectMetrics = {
+export type CatchCorrectMetrics = BaseGameMetrics & {
   score: number;
   target: number;
   livesRemaining: number;
-  timeLeft: number | null;
 };
 
-export type CountPickMetrics = {
+export type CountPickMetrics = BaseGameMetrics & {
   count: number;
-  hadMistake: boolean;
-  timeLeft: number | null;
 };
 
-export type DragDropMatchMetrics = {
+export type DragDropMatchMetrics = BaseGameMetrics & {
   placedCount: number;
   totalZones: number;
-  hadMistake: boolean;
-  timeLeft: number | null;
 };
 
-export type ImageOrderMetrics = {
+export type ImageOrderMetrics = BaseGameMetrics & {
   placements: Array<string | null>;
   filledSlots: number;
   totalItems: number;
   showExample: number;
-  hadMistake: boolean;
-  timeLeft: number | null;
   livesRemaining: number;
 };
 
-export type JigsawMetrics = {
+export type JigsawMetrics = BaseGameMetrics & {
   pieces: number;
   tries: number;
-  hadMistake: boolean;
-  timeLeft: number | null;
 };
 
-export type MemoryCardsMetrics = {
+export type MemoryCardsMetrics = BaseGameMetrics & {
   moves: number;
   matchedCount: number;
   maxMoves: number | null;
-  timeLeft: number | null;
 };
 
-export type PatternNextMetrics = {
+export type PatternNextMetrics = BaseGameMetrics & {
   patternLength: number;
   sequenceLength: number;
-  hadMistake: boolean;
-  timeLeft: number | null;
 };
 
-export type SelectOptionMetrics = {
+export type SelectOptionMetrics = BaseGameMetrics & {
   selectedOptionId: string | null;
   correctOptionIds: string[];
-  hadMistake: boolean;
   livesRemaining: number;
-  timeLeft: number | null;
 };
 
-export type ShadowMatchMetrics = {
+export type ShadowMatchMetrics = BaseGameMetrics & {
   score: number;
   totalItems: number;
-  hadMistake: boolean;
   livesRemaining: number;
-  timeLeft: number | null;
 };
 
-export type SizeOrderMetrics = {
+export type SizeOrderMetrics = BaseGameMetrics & {
   moves: number;
   steps: number;
-  hadMistake: boolean;
-  timeLeft: number | null;
 };
 
-export type SortBinsMetrics = {
+export type SortBinsMetrics = BaseGameMetrics & {
   sorted: number;
   total: number;
-  hadMistake: boolean;
-  timeLeft: number | null;
 };
 
-export type SvgAssembleMetrics = {
+export type SvgAssembleMetrics = BaseGameMetrics & {
   selectedOptionId: string | null;
   livesRemaining: number;
-  timeLeft: number | null;
 };
+
+// --- The registry of playable kinds ----------------------------------------
+
+/** Every kind a renderer must implement. `generic` is the fallback, not a game. */
+export type PlayableGameKind = Exclude<RuntimeGameKind, "generic">;
+
+/**
+ * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
+ * `RuntimeGameKind` without adding it here is a compile error, and so is a
+ * `GAME_TIMINGS` or `GameMetricsByKind` entry that goes missing — that is the
+ * point: a new game cannot ship without its timings and its metrics shape.
+ */
+export const GAME_KIND_KEYS = {
+  "answer-choice": "answerChoice",
+  "catch-correct": "catchCorrect",
+  "count-pick": "countPick",
+  "drag-drop-match": "dragDropMatch",
+  images_order: "imagesOrder",
+  jigsaw: "jigsaw",
+  "memory-cards": "memoryCards",
+  "pattern-next": "patternNext",
+  "select-option": "selectOption",
+  "shadow-match": "shadowMatch",
+  "size-order": "sizeOrder",
+  "sort-bins": "sortBins",
+  "svg-assemble": "svgAssemble",
+} as const satisfies Record<PlayableGameKind, keyof typeof GAME_TIMINGS>;
+
+export type GameTimingKey = (typeof GAME_KIND_KEYS)[PlayableGameKind];
+
+/** The same timings, addressable by kind. Exhaustive by construction. */
+export const GAME_TIMINGS_BY_KIND: {
+  [K in PlayableGameKind]: (typeof GAME_TIMINGS)[(typeof GAME_KIND_KEYS)[K]];
+} = {
+  "answer-choice": GAME_TIMINGS.answerChoice,
+  "catch-correct": GAME_TIMINGS.catchCorrect,
+  "count-pick": GAME_TIMINGS.countPick,
+  "drag-drop-match": GAME_TIMINGS.dragDropMatch,
+  images_order: GAME_TIMINGS.imagesOrder,
+  jigsaw: GAME_TIMINGS.jigsaw,
+  "memory-cards": GAME_TIMINGS.memoryCards,
+  "pattern-next": GAME_TIMINGS.patternNext,
+  "select-option": GAME_TIMINGS.selectOption,
+  "shadow-match": GAME_TIMINGS.shadowMatch,
+  "size-order": GAME_TIMINGS.sizeOrder,
+  "sort-bins": GAME_TIMINGS.sortBins,
+  "svg-assemble": GAME_TIMINGS.svgAssemble,
+};
+
+/** Kind → what its result carries. Every entry extends `BaseGameMetrics`. */
+export type GameMetricsByKind = {
+  "answer-choice": AnswerChoiceMetrics;
+  "catch-correct": CatchCorrectMetrics;
+  "count-pick": CountPickMetrics;
+  "drag-drop-match": DragDropMatchMetrics;
+  images_order: ImageOrderMetrics;
+  jigsaw: JigsawMetrics;
+  "memory-cards": MemoryCardsMetrics;
+  "pattern-next": PatternNextMetrics;
+  "select-option": SelectOptionMetrics;
+  "shadow-match": ShadowMatchMetrics;
+  "size-order": SizeOrderMetrics;
+  "sort-bins": SortBinsMetrics;
+  "svg-assemble": SvgAssembleMetrics;
+};
+
+// Compile-time completeness: every playable kind has a metrics shape, and every
+// shape carries the base keys. A missing entry shows up here, not in production.
+type AssertMetricsComplete<T extends Record<PlayableGameKind, BaseGameMetrics>> = T;
+export type GameMetricsRegistryCheck = AssertMetricsComplete<GameMetricsByKind>;
+
+/** The result a game hands the player. Same shape on both platforms. */
+export type GameOutcome<K extends PlayableGameKind = PlayableGameKind> =
+  | { status: "passed"; reason: "success"; metrics: GameMetricsByKind[K] }
+  | { status: "failed"; reason: GameFailureReason; metrics: GameMetricsByKind[K] };

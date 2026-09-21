@@ -11,7 +11,7 @@
  * game scores differently depending on the device it is played on.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = void 0;
+exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = void 0;
 exports.getRuntimeConfig = getRuntimeConfig;
 exports.buildPreparedGame = buildPreparedGame;
 exports.normalizeAnswerChoiceConfig = normalizeAnswerChoiceConfig;
@@ -1691,4 +1691,41 @@ exports.GAME_TIMINGS = {
         timeoutSettleMs: 320,
         livesOutDelayMs: 320,
     },
+};
+/**
+ * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
+ * `RuntimeGameKind` without adding it here is a compile error, and so is a
+ * `GAME_TIMINGS` or `GameMetricsByKind` entry that goes missing — that is the
+ * point: a new game cannot ship without its timings and its metrics shape.
+ */
+exports.GAME_KIND_KEYS = {
+    "answer-choice": "answerChoice",
+    "catch-correct": "catchCorrect",
+    "count-pick": "countPick",
+    "drag-drop-match": "dragDropMatch",
+    images_order: "imagesOrder",
+    jigsaw: "jigsaw",
+    "memory-cards": "memoryCards",
+    "pattern-next": "patternNext",
+    "select-option": "selectOption",
+    "shadow-match": "shadowMatch",
+    "size-order": "sizeOrder",
+    "sort-bins": "sortBins",
+    "svg-assemble": "svgAssemble",
+};
+/** The same timings, addressable by kind. Exhaustive by construction. */
+exports.GAME_TIMINGS_BY_KIND = {
+    "answer-choice": exports.GAME_TIMINGS.answerChoice,
+    "catch-correct": exports.GAME_TIMINGS.catchCorrect,
+    "count-pick": exports.GAME_TIMINGS.countPick,
+    "drag-drop-match": exports.GAME_TIMINGS.dragDropMatch,
+    images_order: exports.GAME_TIMINGS.imagesOrder,
+    jigsaw: exports.GAME_TIMINGS.jigsaw,
+    "memory-cards": exports.GAME_TIMINGS.memoryCards,
+    "pattern-next": exports.GAME_TIMINGS.patternNext,
+    "select-option": exports.GAME_TIMINGS.selectOption,
+    "shadow-match": exports.GAME_TIMINGS.shadowMatch,
+    "size-order": exports.GAME_TIMINGS.sizeOrder,
+    "sort-bins": exports.GAME_TIMINGS.sortBins,
+    "svg-assemble": exports.GAME_TIMINGS.svgAssemble,
 };
