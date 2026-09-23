@@ -21,6 +21,7 @@ exports.normalizeShadowMatchConfig = normalizeShadowMatchConfig;
 exports.normalizeImageOrderConfig = normalizeImageOrderConfig;
 exports.normalizeSizeOrderConfig = normalizeSizeOrderConfig;
 exports.normalizeCountPickConfig = normalizeCountPickConfig;
+exports.fitCountPickBoard = fitCountPickBoard;
 exports.normalizePatternNextConfig = normalizePatternNextConfig;
 exports.normalizeSortBinsConfig = normalizeSortBinsConfig;
 exports.normalizeJigsawConfig = normalizeJigsawConfig;
@@ -852,16 +853,52 @@ function normalizeCountPickConfig(config) {
         value,
         isCorrect: value === count,
     }));
+    const clampPercent = (value) => Math.max(0, Math.min(100, value ?? 0));
+    const placements = (Array.isArray(config.placements) ? config.placements : [])
+        .map((raw) => {
+        const record = asRecord(raw);
+        const url = record ? extractMediaUrl(record.image) : null;
+        if (!record || !url) {
+            return null;
+        }
+        const x = clampPercent(extractNumber(record.x));
+        const y = clampPercent(extractNumber(record.y));
+        const width = Math.min(100 - x, clampPercent(extractNumber(record.width)));
+        const height = Math.min(100 - y, clampPercent(extractNumber(record.height)));
+        return width > 0 && height > 0 ? { image: url, x, y, width, height } : null;
+    })
+        .filter((placement) => Boolean(placement));
+    const boardWidth = extractNumber(config.board_width);
+    const boardHeight = extractNumber(config.board_height);
+    const board = placements.length > 0 && boardWidth && boardHeight && boardWidth > 0 && boardHeight > 0
+        ? { width: boardWidth, height: boardHeight }
+        : null;
+    const image = extractMediaUrl(config.image) ?? extractMediaUrl(config.question_image) ?? null;
     return {
-        image: extractMediaUrl(config.image) ??
-            extractMediaUrl(config.question_image) ??
-            null,
+        image,
         count,
         choices,
         bg_image: extractMediaUrl(config.bg_image),
         time_limit: extractNumber(config.time_limit),
         lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        placements,
+        board,
+        imageUris: [
+            ...new Set([extractMediaUrl(config.bg_image), image, ...placements.map((placement) => placement.image)].filter((uri) => Boolean(uri))),
+        ],
     };
+}
+/**
+ * The largest box of the board's aspect ratio that fits the space, for a
+ * composed count_pick scene: the whole background stays visible, so every
+ * placement is exactly where the author put it.
+ */
+function fitCountPickBoard(availableWidth, availableHeight, board) {
+    if (availableWidth <= 0 || availableHeight <= 0 || board.width <= 0 || board.height <= 0) {
+        return { width: 0, height: 0 };
+    }
+    const scale = Math.min(availableWidth / board.width, availableHeight / board.height);
+    return { width: board.width * scale, height: board.height * scale };
 }
 /**
  * What comes next in the row.

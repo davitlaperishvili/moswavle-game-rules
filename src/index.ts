@@ -163,16 +163,35 @@ export type CountPickChoice = {
   isCorrect: boolean;
 };
 
+/** One picture placed by the author, in percent of the board. */
+export type CountPickPlacement = {
+  image: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
 export type CountPickConfig = {
   /** The object to count. One picture, repeated. */
   image: string | null;
-  /** How many copies to lay out. */
+  /** How many copies to lay out — or, for a composed scene, how many placements are counted. */
   count: number;
   /** The numbers offered, already shuffled. */
   choices: CountPickChoice[];
   bg_image: string | null;
   time_limit: number | null;
   lives: number;
+  /**
+   * A scene built in the Scene Composer: every picture where the author put
+   * it, counted ones and decoys alike. Empty for the classic game, whose
+   * player lays out `count` copies of `image` itself.
+   */
+  placements: CountPickPlacement[];
+  /** The composed scene's background size; its aspect ratio is the board's. */
+  board: { width: number; height: number } | null;
+  /** Everything the game draws, for the players to preload. */
+  imageUris: string[];
 };
 
 export type PatternItem = {
@@ -1338,17 +1357,64 @@ export function normalizeCountPickConfig(
     isCorrect: value === count,
   }));
 
+  const clampPercent = (value: number | null) => Math.max(0, Math.min(100, value ?? 0));
+  const placements = (Array.isArray(config.placements) ? config.placements : [])
+    .map((raw): CountPickPlacement | null => {
+      const record = asRecord(raw);
+      const url = record ? extractMediaUrl(record.image) : null;
+      if (!record || !url) {
+        return null;
+      }
+      const x = clampPercent(extractNumber(record.x));
+      const y = clampPercent(extractNumber(record.y));
+      const width = Math.min(100 - x, clampPercent(extractNumber(record.width)));
+      const height = Math.min(100 - y, clampPercent(extractNumber(record.height)));
+      return width > 0 && height > 0 ? { image: url, x, y, width, height } : null;
+    })
+    .filter((placement): placement is CountPickPlacement => Boolean(placement));
+
+  const boardWidth = extractNumber(config.board_width);
+  const boardHeight = extractNumber(config.board_height);
+  const board =
+    placements.length > 0 && boardWidth && boardHeight && boardWidth > 0 && boardHeight > 0
+      ? { width: boardWidth, height: boardHeight }
+      : null;
+  const image = extractMediaUrl(config.image) ?? extractMediaUrl(config.question_image) ?? null;
+
   return {
-    image:
-      extractMediaUrl(config.image) ??
-      extractMediaUrl(config.question_image) ??
-      null,
+    image,
     count,
     choices,
     bg_image: extractMediaUrl(config.bg_image),
     time_limit: extractNumber(config.time_limit),
     lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    placements,
+    board,
+    imageUris: [
+      ...new Set(
+        [extractMediaUrl(config.bg_image), image, ...placements.map((placement) => placement.image)].filter(
+          (uri): uri is string => Boolean(uri),
+        ),
+      ),
+    ],
   };
+}
+
+/**
+ * The largest box of the board's aspect ratio that fits the space, for a
+ * composed count_pick scene: the whole background stays visible, so every
+ * placement is exactly where the author put it.
+ */
+export function fitCountPickBoard(
+  availableWidth: number,
+  availableHeight: number,
+  board: { width: number; height: number },
+): { width: number; height: number } {
+  if (availableWidth <= 0 || availableHeight <= 0 || board.width <= 0 || board.height <= 0) {
+    return { width: 0, height: 0 };
+  }
+  const scale = Math.min(availableWidth / board.width, availableHeight / board.height);
+  return { width: board.width * scale, height: board.height * scale };
 }
 
 /**

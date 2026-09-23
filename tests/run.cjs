@@ -370,5 +370,39 @@ section('svg_assemble lists the pictures a composed scene loads');
   check('a hand-made scene has nothing to load', Array.isArray(inline.imageUris) && inline.imageUris.length === 0, JSON.stringify(inline.imageUris));
 }
 
+section('count_pick: a scene composed by the author');
+
+{
+  const url = (name) => `https://example.test/uploads/${name}.webp`;
+  const composed = rules.normalizeCountPickConfig({
+    image: url('duck'),
+    count: 2,
+    bg_image: url('bg-pond'),
+    board_width: 1600,
+    board_height: 1200,
+    placements: [
+      { image: url('duck'), x: 10, y: 50, width: 20, height: 25 },
+      { image: url('duck'), x: 40, y: 55, width: 20, height: 25 },
+      { image: url('frog'), x: 90, y: 90, width: 20, height: 20 },
+      { image: '', x: 1, y: 1, width: 5, height: 5 },
+    ],
+  });
+
+  check('every valid placement is kept, counted and decoy', composed.placements.length === 3, JSON.stringify(composed.placements));
+  check('a placement over the edge is clipped to the board', composed.placements[2].width === 10 && composed.placements[2].height === 10);
+  check('the count is the authored one', composed.count === 2 && composed.choices.some((choice) => choice.isCorrect && choice.value === 2));
+  check('the board is the background size', composed.board && composed.board.width === 1600 && composed.board.height === 1200);
+  check('the pictures are listed for preloading, each once', JSON.stringify(composed.imageUris) === JSON.stringify([url('bg-pond'), url('duck'), url('frog')]), JSON.stringify(composed.imageUris));
+
+  const classic = rules.normalizeCountPickConfig({ image: url('duck'), count: 4 });
+  check('the classic game has no placements and no board', classic.placements.length === 0 && classic.board === null);
+  check('and still preloads its picture', JSON.stringify(classic.imageUris) === JSON.stringify([url('duck')]));
+
+  const fitted = rules.fitCountPickBoard(1000, 500, { width: 1600, height: 1200 });
+  check('the board keeps its aspect ratio inside the space', Math.round(fitted.width) === 667 && fitted.height === 500, JSON.stringify(fitted));
+  const wide = rules.fitCountPickBoard(400, 900, { width: 1600, height: 1200 });
+  check('and is limited by the narrower side', wide.width === 400 && wide.height === 300, JSON.stringify(wide));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

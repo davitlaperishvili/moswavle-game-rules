@@ -130,16 +130,37 @@ export type CountPickChoice = {
     value: number;
     isCorrect: boolean;
 };
+/** One picture placed by the author, in percent of the board. */
+export type CountPickPlacement = {
+    image: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
 export type CountPickConfig = {
     /** The object to count. One picture, repeated. */
     image: string | null;
-    /** How many copies to lay out. */
+    /** How many copies to lay out — or, for a composed scene, how many placements are counted. */
     count: number;
     /** The numbers offered, already shuffled. */
     choices: CountPickChoice[];
     bg_image: string | null;
     time_limit: number | null;
     lives: number;
+    /**
+     * A scene built in the Scene Composer: every picture where the author put
+     * it, counted ones and decoys alike. Empty for the classic game, whose
+     * player lays out `count` copies of `image` itself.
+     */
+    placements: CountPickPlacement[];
+    /** The composed scene's background size; its aspect ratio is the board's. */
+    board: {
+        width: number;
+        height: number;
+    } | null;
+    /** Everything the game draws, for the players to preload. */
+    imageUris: string[];
 };
 export type PatternItem = {
     id: string;
@@ -313,6 +334,18 @@ export declare function normalizeSizeOrderConfig(config: Record<string, unknown>
  * right, a child who eyeballs "a few" does not.
  */
 export declare function normalizeCountPickConfig(config: Record<string, unknown>): CountPickConfig;
+/**
+ * The largest box of the board's aspect ratio that fits the space, for a
+ * composed count_pick scene: the whole background stays visible, so every
+ * placement is exactly where the author put it.
+ */
+export declare function fitCountPickBoard(availableWidth: number, availableHeight: number, board: {
+    width: number;
+    height: number;
+}): {
+    width: number;
+    height: number;
+};
 /**
  * What comes next in the row.
  *
