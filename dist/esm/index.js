@@ -1328,6 +1328,18 @@ function normalizeSlotId(value) {
     }
     return trimmed;
 }
+const SVG_REMOTE_HREF = /\b(?:xlink:)?href\s*=\s*(["'])(https?:\/\/[^"']+)\1/gi;
+/** The http(s) pictures an SVG's `<image>` elements load, in document order. */
+export function extractSvgImageUris(svg) {
+    if (!svg) {
+        return [];
+    }
+    const uris = [];
+    for (const match of svg.matchAll(SVG_REMOTE_HREF)) {
+        uris.push(match[2].replace(/&amp;/g, "&"));
+    }
+    return uris;
+}
 export function normalizeSvgAssembleConfig(game, config) {
     const sceneSvg = extractText(config.question_svg) ??
         extractText(config.scene_svg) ??
@@ -1417,6 +1429,12 @@ export function normalizeSvgAssembleConfig(game, config) {
         requiredSlotIds,
         slot: slots[0],
         answers: playableAnswers,
+        imageUris: [
+            ...new Set([
+                ...extractSvgImageUris(sceneSvg),
+                ...playableAnswers.flatMap((answer) => extractSvgImageUris(answer.svg)),
+            ]),
+        ],
         bg_image: normalizeBackground(config),
         time_limit: extractNumber(config.time_limit) ?? extractNumber(config.svg_assemble_time_limit) ?? 60,
         lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? extractNumber(config.svg_assemble_lives) ?? 3)),

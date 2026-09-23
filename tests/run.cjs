@@ -344,5 +344,31 @@ check('each kind has timings', playableKinds.every((kind) => rules.GAME_TIMINGS_
 check('no timing key is orphaned', Object.keys(rules.GAME_TIMINGS).every((key) => Object.values(rules.GAME_KIND_KEYS).includes(key)));
 
 
+section('svg_assemble lists the pictures a composed scene loads');
+
+{
+  const url = (name) => `https://example.test/uploads/${name}.png`;
+  const piece = (name) => `<svg viewBox="0 0 10 10"><image href="${url(name)}" width="10" height="10"/></svg>`;
+  const config = rules.normalizeSvgAssembleConfig(game('svg_assemble', {}), {
+    question_svg: `<svg viewBox="0 0 400 300"><image href="${url('farm')}" width="400" height="300"/><image href="${url('cow')}"/><image id="slot_1" xlink:href="${url('dog-shadow')}?v=1&amp;x=2" x="1" y="1" width="80" height="120"/></svg>`,
+    slots: [{ id: 'slot_1', x: 1, y: 1, width: 80, height: 120 }],
+    answers: [
+      { id: 'dog', svg: piece('dog'), is_correct: true, slot: 'slot_1' },
+      { id: 'cat', svg: piece('cat'), is_correct: false },
+      { id: 'cow', svg: piece('cow'), is_correct: false },
+    ],
+  });
+
+  check('scene pictures first, then the pieces, each once', JSON.stringify(config.imageUris) === JSON.stringify([
+    url('farm'), url('cow'), `${url('dog-shadow')}?v=1&x=2`, url('dog'), url('cat'),
+  ]), JSON.stringify(config.imageUris));
+
+  const inline = rules.normalizeSvgAssembleConfig(game('svg_assemble', {}), {
+    question_svg: '<svg viewBox="0 0 10 10"><rect id="slot_1" width="5" height="5"/><image href="data:image/png;base64,AAAA"/><use href="#a"/></svg>',
+    answers: [{ svg: '<svg viewBox="0 0 5 5"><rect width="5" height="5"/></svg>', is_correct: true, slot: 'slot_1' }],
+  });
+  check('a hand-made scene has nothing to load', Array.isArray(inline.imageUris) && inline.imageUris.length === 0, JSON.stringify(inline.imageUris));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

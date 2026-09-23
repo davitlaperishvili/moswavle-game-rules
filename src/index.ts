@@ -322,6 +322,12 @@ export type SvgAssembleConfig = {
   bg_image: string | null;
   time_limit: number;
   lives: number;
+  /**
+   * Every remote picture the scene and the pieces draw — a scene composed
+   * from library pictures references them by URL. Preload these before the
+   * clock starts, as the other picture games do.
+   */
+  imageUris: string[];
 };
 
 type BuildPreparedGameOptions = {
@@ -1989,6 +1995,21 @@ function normalizeSlotId(value: unknown): string | null {
   return trimmed;
 }
 
+const SVG_REMOTE_HREF = /\b(?:xlink:)?href\s*=\s*(["'])(https?:\/\/[^"']+)\1/gi;
+
+/** The http(s) pictures an SVG's `<image>` elements load, in document order. */
+export function extractSvgImageUris(svg: string | null | undefined): string[] {
+  if (!svg) {
+    return [];
+  }
+
+  const uris: string[] = [];
+  for (const match of svg.matchAll(SVG_REMOTE_HREF)) {
+    uris.push(match[2].replace(/&amp;/g, "&"));
+  }
+  return uris;
+}
+
 export function normalizeSvgAssembleConfig(
   game: AuthoredGame,
   config: Record<string, unknown>,
@@ -2106,6 +2127,12 @@ export function normalizeSvgAssembleConfig(
     requiredSlotIds,
     slot: slots[0],
     answers: playableAnswers,
+    imageUris: [
+      ...new Set([
+        ...extractSvgImageUris(sceneSvg),
+        ...playableAnswers.flatMap((answer) => extractSvgImageUris(answer.svg)),
+      ]),
+    ],
     bg_image: normalizeBackground(config),
     time_limit:
       extractNumber(config.time_limit) ?? extractNumber(config.svg_assemble_time_limit) ?? 60,

@@ -271,6 +271,12 @@ export type SvgAssembleConfig = {
     bg_image: string | null;
     time_limit: number;
     lives: number;
+    /**
+     * Every remote picture the scene and the pieces draw — a scene composed
+     * from library pictures references them by URL. Preload these before the
+     * clock starts, as the other picture games do.
+     */
+    imageUris: string[];
 };
 type BuildPreparedGameOptions = {
     useFallbackLabels?: boolean;
@@ -349,6 +355,8 @@ export declare function normalizeDragDropMatchConfig(config: Record<string, unkn
 export declare function normalizeSelectOptionConfig(config: Record<string, unknown>): SelectOptionConfig;
 export declare function normalizeMemoryCardsConfig(config: Record<string, unknown>): MemoryCardsConfig;
 export declare function parseSvgViewBox(svg: unknown): SvgViewBox;
+/** The http(s) pictures an SVG's `<image>` elements load, in document order. */
+export declare function extractSvgImageUris(svg: string | null | undefined): string[];
 export declare function normalizeSvgAssembleConfig(game: AuthoredGame, config: Record<string, unknown>): SvgAssembleConfig;
 export declare function createClientEventId(): string;
 /**
