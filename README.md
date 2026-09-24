@@ -41,7 +41,10 @@ monorepo, not more tooling here.
 ## What belongs here
 
 Yes: reading authored config, defaults and fallbacks, correctness, lives, timers, shuffling,
-resolving a game type to a renderer kind.
+resolving a game type to a renderer kind, and scene geometry in stage pixels. Every game drawn
+as a scene goes through `layoutScene`: the background covers the stage, and two safe areas —
+the content (pictures, zones, slots) and the answers — never touch and never leave the stage;
+a picture the crop cuts is shrunk until it is whole (`fitSceneRect`).
 
 No: anything that draws, animates, plays audio, or touches the DOM or React Native. Those differ
 per platform by design, and dragging them in here would force one platform's idea of rendering

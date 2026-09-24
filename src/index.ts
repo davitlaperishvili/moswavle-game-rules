@@ -348,6 +348,12 @@ export type SvgAssembleConfig = {
   questionSvg: string | null;
   viewBox: SvgViewBox;
   slots: SvgAssembleSlot[];
+  /**
+   * A composed scene's other pictures (`<image id="layer_N">` in the markup),
+   * so they can be kept whole too. Null for a hand-made scene, which cannot be
+   * rearranged.
+   */
+  layers: SvgAssembleSlot[] | null;
   requiredSlotIds: string[];
   slot: SvgAssembleSlot;
   answers: SvgAssembleAnswer[];
@@ -1443,19 +1449,24 @@ export type ScenePercentBox = { x: number; y: number; width: number; height: num
 /** Where the background lands on the stage, in stage pixels; left/top are ≤ 0. */
 export type SceneCover = { left: number; top: number; width: number; height: number; scale: number };
 
+/** Stage edges taken by the player's own controls, in stage pixels. */
+export type SceneInsets = { top?: number; right?: number; bottom?: number; left?: number };
+
 /**
  * The background covering the whole stage, as every game must draw it.
  *
  * Covering crops the picture on the sides that do not fit. Instead of always
  * cropping evenly, the crop is shifted so the authored content (the boxes of
- * the scene's pictures, zones or slots) stays in view — centred on the stage
- * when it fits, and kept inside the picture either way.
+ * the scene's pictures, zones or slots) stays in view — centred in the part of
+ * the stage the controls leave free when it fits, and kept inside the picture
+ * either way.
  */
 export function coverSceneBoard(
   stageWidth: number,
   stageHeight: number,
   board: { width: number; height: number },
   content: ReadonlyArray<ScenePercentBox> = [],
+  insets: SceneInsets = {},
 ): SceneCover {
   if (stageWidth <= 0 || stageHeight <= 0 || board.width <= 0 || board.height <= 0) {
     return { left: 0, top: 0, width: 0, height: 0, scale: 0 };
@@ -1465,20 +1476,22 @@ export function coverSceneBoard(
   const width = board.width * scale;
   const height = board.height * scale;
 
-  const place = (stage: number, size: number, from: number, to: number) => {
+  const place = (stage: number, size: number, from: number, to: number, before: number, after: number) => {
     const excess = size - stage;
     if (excess <= 0) return 0;
-    // Centre the content, or the picture when there is no content.
+    // Centre the content in the free part of the stage, or the picture on the
+    // stage when there is no content.
     const centre = content.length > 0 ? ((from + to) / 2 / 100) * size : size / 2;
-    return Math.min(0, Math.max(-excess, stage / 2 - centre));
+    const middle = content.length > 0 ? (before + stage - after) / 2 : stage / 2;
+    return Math.min(0, Math.max(-excess, middle - centre));
   };
 
   const xs = content.map((box) => [box.x, box.x + box.width]).flat();
   const ys = content.map((box) => [box.y, box.y + box.height]).flat();
 
   return {
-    left: place(stageWidth, width, Math.min(...xs, 100), Math.max(...xs, 0)),
-    top: place(stageHeight, height, Math.min(...ys, 100), Math.max(...ys, 0)),
+    left: place(stageWidth, width, Math.min(...xs, 100), Math.max(...xs, 0), insets.left ?? 0, insets.right ?? 0),
+    top: place(stageHeight, height, Math.min(...ys, 100), Math.max(...ys, 0), insets.top ?? 0, insets.bottom ?? 0),
     width,
     height,
     scale,
@@ -1508,9 +1521,9 @@ export function placeSceneOverlay(
   overlayWidth: number,
   overlayHeight: number,
   avoid: ReadonlyArray<BoardRect>,
-  insets: { top?: number; right?: number; bottom?: number; left?: number } = {},
+  insets: SceneInsets = {},
 ): { left: number; top: number; spot: SceneOverlaySpot } {
-  const margin = Math.max(Math.min(stageWidth, stageHeight) * 0.025, 6);
+  const margin = sceneEdge(stageWidth, stageHeight);
   const minLeft = (insets.left ?? 0) + margin;
   const minTop = (insets.top ?? 0) + margin;
   const maxLeft = Math.max(stageWidth - (insets.right ?? 0) - margin - overlayWidth, minLeft);
@@ -1536,11 +1549,15 @@ export function placeSceneOverlay(
       return sum + (w > 0 && h > 0 ? w * h : 0);
     }, 0);
 
+  // Each step down the preferred order has to save a sliver of cover (an edge
+  // margin along the overlay's short side): a picture nudged aside is better
+  // than the answers jumping to the top over a pixel or two.
+  const preference = Math.min(overlayWidth, overlayHeight) * margin;
+
   let best = candidates[0];
   let bestScore = Number.POSITIVE_INFINITY;
   candidates.forEach((candidate, index) => {
-    // A tiny tie-breaker keeps the preferred order when nothing overlaps.
-    const score = overlap(candidate.left, candidate.top) + index * 0.001;
+    const score = overlap(candidate.left, candidate.top) + index * (preference + 0.001);
     if (score < bestScore) {
       bestScore = score;
       best = candidate;
@@ -1548,6 +1565,220 @@ export function placeSceneOverlay(
   });
 
   return best;
+}
+
+/**
+ * The two safe areas of every scene game: the content (pictures, zones, slots)
+ * and the answers never touch, and neither leaves the stage.
+ */
+export const SCENE_SAFE_AREA = {
+  /** Clear space between everything and the stage edge (or its controls), as a share of the short side. */
+  edge: 0.025,
+  /** Clear space between the content and the answers, as a share of the short side. */
+  gap: 0.04,
+  /**
+   * A picture that does not fit is shrunk, but not below this share of its
+   * size; past it, it is moved instead.
+   */
+  minScale: 0.55,
+} as const;
+
+function sceneEdge(stageWidth: number, stageHeight: number): number {
+  return Math.max(Math.min(stageWidth, stageHeight) * SCENE_SAFE_AREA.edge, 6);
+}
+
+function sceneGap(stageWidth: number, stageHeight: number): number {
+  return Math.max(Math.min(stageWidth, stageHeight) * SCENE_SAFE_AREA.gap, 16);
+}
+
+function rectsOverlap(a: BoardRect, b: BoardRect): boolean {
+  return Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left)
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top);
+}
+
+function growRect(rect: BoardRect, by: number): BoardRect {
+  return { left: rect.left - by, top: rect.top - by, width: rect.width + by * 2, height: rect.height + by * 2 };
+}
+
+/**
+ * A picture made to fit inside a region. It shrinks towards the side that is
+ * still in view, standing where it stood: a character cut at the top keeps
+ * its feet where they were, one cut on the left keeps its right side. One cut
+ * at the bottom cannot keep its feet anyway, so it moves up whole instead, and
+ * shrinks only if it then reaches the top. A picture that would have to shrink
+ * past `SCENE_SAFE_AREA.minScale` is moved as well.
+ */
+export function fitSceneRect(rect: BoardRect, region: BoardRect): BoardRect {
+  if (region.width <= 0 || region.height <= 0 || rect.width <= 0 || rect.height <= 0) {
+    return rect;
+  }
+
+  const epsilon = 1e-6;
+  const regionRight = region.left + region.width;
+  const regionBottom = region.top + region.height;
+  const sunk = rect.top + rect.height - regionBottom;
+  const lifted = sunk > epsilon ? { ...rect, top: rect.top - sunk } : rect;
+  const right = lifted.left + lifted.width;
+  const bottom = lifted.top + lifted.height;
+  const outLeft = lifted.left < region.left - epsilon;
+  const outRight = right > regionRight + epsilon;
+  const outTop = lifted.top < region.top - epsilon;
+  if (!outLeft && !outRight && !outTop) {
+    return lifted;
+  }
+
+  const pivotX = outLeft === outRight ? lifted.left + lifted.width / 2 : outLeft ? right : lifted.left;
+  const pivotY = bottom;
+
+  // The largest scale around the pivot that keeps each side inside.
+  let scale = 1;
+  const limit = (room: number, reach: number) => {
+    if (reach > epsilon) scale = Math.min(scale, room / reach);
+  };
+  limit(pivotX - region.left, pivotX - lifted.left);
+  limit(regionRight - pivotX, right - pivotX);
+  limit(pivotY - region.top, pivotY - lifted.top);
+  scale = Math.max(scale, SCENE_SAFE_AREA.minScale);
+  // Whatever happens, it has to fit.
+  scale = Math.min(scale, 1, region.width / lifted.width, region.height / lifted.height);
+
+  const width = lifted.width * scale;
+  const height = lifted.height * scale;
+  const left = pivotX - (pivotX - lifted.left) * scale;
+  const top = pivotY - (pivotY - lifted.top) * scale;
+
+  return {
+    left: Math.min(Math.max(left, region.left), regionRight - width),
+    top: Math.min(Math.max(top, region.top), regionBottom - height),
+    width,
+    height,
+  };
+}
+
+/**
+ * A picture moved out of the answers' way: above, below, left or right of
+ * them, whichever changes it least. It is shifted just clear, then fitted to
+ * what room that side has.
+ */
+function keepSceneRectClear(rect: BoardRect, frame: BoardRect, keepOut: BoardRect): BoardRect {
+  if (!rectsOverlap(rect, keepOut)) {
+    return rect;
+  }
+
+  const frameRight = frame.left + frame.width;
+  const frameBottom = frame.top + frame.height;
+  const keepRight = keepOut.left + keepOut.width;
+  const keepBottom = keepOut.top + keepOut.height;
+  const ways: Array<{ region: BoardRect; dx: number; dy: number }> = [
+    {
+      region: { left: frame.left, top: frame.top, width: frame.width, height: keepOut.top - frame.top },
+      dx: 0,
+      dy: Math.min(0, keepOut.top - (rect.top + rect.height)),
+    },
+    {
+      region: { left: frame.left, top: keepBottom, width: frame.width, height: frameBottom - keepBottom },
+      dx: 0,
+      dy: Math.max(0, keepBottom - rect.top),
+    },
+    {
+      region: { left: frame.left, top: frame.top, width: keepOut.left - frame.left, height: frame.height },
+      dx: Math.min(0, keepOut.left - (rect.left + rect.width)),
+      dy: 0,
+    },
+    {
+      region: { left: keepRight, top: frame.top, width: frameRight - keepRight, height: frame.height },
+      dx: Math.max(0, keepRight - rect.left),
+      dy: 0,
+    },
+  ];
+
+  let best = rect;
+  let bestCost = Number.POSITIVE_INFINITY;
+  for (const way of ways) {
+    if (way.region.width <= 0 || way.region.height <= 0) continue;
+    const moved = { ...rect, left: rect.left + way.dx, top: rect.top + way.dy };
+    const fitted = fitSceneRect(moved, way.region);
+    const shift = Math.hypot(
+      fitted.left + fitted.width / 2 - (rect.left + rect.width / 2),
+      fitted.top + fitted.height / 2 - (rect.top + rect.height / 2),
+    );
+    const cost = shift + (rect.width - fitted.width) + (rect.height - fitted.height);
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = fitted;
+    }
+  }
+
+  return best;
+}
+
+export type SceneLayout = {
+  /** Where the background goes: over the whole stage. */
+  cover: SceneCover;
+  /** The content's safe area: the stage less its controls and an edge margin. */
+  frame: BoardRect;
+  /** Every content box in stage pixels, in input order: whole, inside the frame, clear of the answers. */
+  content: BoardRect[];
+  /** Where the answers go, or null when there are none (or they are not measured yet). */
+  overlay: (BoardRect & { spot: SceneOverlaySpot }) | null;
+};
+
+/**
+ * The layout of every game drawn as a scene, in one place.
+ *
+ * The background covers the stage, and the content follows it, so a picture
+ * stands where the author put it. Covering crops the picture, and the answers
+ * float on it, so on top of that two safe areas are kept apart:
+ *
+ * - the answers go where they would push the fewest pictures away, inside the
+ *   stage and clear of its controls;
+ * - every content box stays inside the frame and at least a gap away from the
+ *   answers. A picture the crop cuts is shrunk until it is whole again; one in
+ *   the answers' way is moved clear of them (`fitSceneRect`).
+ *
+ * `content` is everything that must stay whole — the pictures of the scene as
+ * well as its zones and slots. `overlay` is the measured size of the answers.
+ */
+export function layoutScene(
+  stageWidth: number,
+  stageHeight: number,
+  board: { width: number; height: number },
+  content: ReadonlyArray<ScenePercentBox>,
+  overlay: { width: number; height: number } | null = null,
+  insets: SceneInsets = {},
+): SceneLayout {
+  const cover = coverSceneBoard(stageWidth, stageHeight, board, content, insets);
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const frame: BoardRect = {
+    left: (insets.left ?? 0) + edge,
+    top: (insets.top ?? 0) + edge,
+    width: Math.max(stageWidth - (insets.left ?? 0) - (insets.right ?? 0) - edge * 2, 0),
+    height: Math.max(stageHeight - (insets.top ?? 0) - (insets.bottom ?? 0) - edge * 2, 0),
+  };
+  const whole = content.map((box) => fitSceneRect(sceneBoxToStage(box, cover), frame));
+
+  if (cover.width <= 0 || !overlay || overlay.width <= 0 || overlay.height <= 0) {
+    return { cover, frame, content: whole, overlay: null };
+  }
+
+  const gap = sceneGap(stageWidth, stageHeight);
+  const spot = placeSceneOverlay(
+    stageWidth,
+    stageHeight,
+    overlay.width,
+    overlay.height,
+    whole.map((rect) => growRect(rect, gap)),
+    insets,
+  );
+  const placed = { left: spot.left, top: spot.top, width: overlay.width, height: overlay.height, spot: spot.spot };
+  const keepOut = growRect(placed, gap);
+
+  return {
+    cover,
+    frame,
+    content: whole.map((rect) => keepSceneRectClear(rect, frame, keepOut)),
+    overlay: placed,
+  };
 }
 
 /** Card geometry for the svg_assemble answer tray, in stage pixels. */
@@ -1566,6 +1797,8 @@ export type SvgAssembleSceneLayout = {
   /** The scene (its viewBox) drawn over the whole stage. */
   board: BoardRect;
   slots: Array<BoardRect & { id: string }>;
+  /** The scene's other pictures, where they are drawn; see `arrangeSvgAssembleScene`. */
+  layers: Array<BoardRect & { id: string }>;
   /** The panel behind the cards, floating on the scene. */
   tray: BoardRect;
   traySpot: SceneOverlaySpot;
@@ -1578,11 +1811,17 @@ export type SvgAssembleSceneLayout = {
 };
 
 /**
- * Where everything of an svg_assemble game goes on its stage. The scene covers
- * the whole stage — the crop keeps the slots in view — and the answer cards
- * float on it in a tray, where they cover the slots least. The source and the
- * target rects share the stage's coordinates, so a piece flies straight from
- * its card into its slot. `insets` keep the tray clear of the stage's controls.
+ * Where everything of an svg_assemble game goes on its stage, through
+ * `layoutScene`: the scene covers the whole stage and the answer cards float
+ * on it in a tray. The source and the target rects share the stage's
+ * coordinates, so a piece flies straight from its card into its slot.
+ * `insets` keep everything clear of the stage's controls.
+ *
+ * A composed scene passes its `layers` (the pictures that are not slots):
+ * those and the slots are then kept whole and clear of the tray, and
+ * `arrangeSvgAssembleScene` moves them in the markup to match. A hand-made
+ * scene (`layers` null) cannot be rearranged, so its slots follow the picture
+ * as they are.
  */
 export function layoutSvgAssembleScene(
   stageWidth: number,
@@ -1591,7 +1830,8 @@ export function layoutSvgAssembleScene(
   slots: ReadonlyArray<SvgAssembleSlot>,
   count: number,
   hasLabels: boolean,
-  insets: { top?: number; right?: number; bottom?: number; left?: number } = {},
+  insets: SceneInsets = {},
+  layers: ReadonlyArray<SvgAssembleSlot> | null = null,
 ): SvgAssembleSceneLayout | null {
   if (!stageWidth || !stageHeight || !count) {
     return null;
@@ -1599,14 +1839,14 @@ export function layoutSvgAssembleScene(
 
   const vbWidth = viewBox.width || 1;
   const vbHeight = viewBox.height || 1;
-  const boxes: ScenePercentBox[] = slots.map((slot) => ({
+  const toBox = (slot: SvgAssembleSlot): ScenePercentBox => ({
     x: ((slot.x - viewBox.minX) / vbWidth) * 100,
     y: ((slot.y - viewBox.minY) / vbHeight) * 100,
     width: (slot.width / vbWidth) * 100,
     height: (slot.height / vbHeight) * 100,
-  }));
-  const board = coverSceneBoard(stageWidth, stageHeight, { width: vbWidth, height: vbHeight }, boxes);
-  const slotRects = slots.map((slot, index) => ({ id: slot.id, ...sceneBoxToStage(boxes[index], board) }));
+  });
+  const slotBoxes = slots.map(toBox);
+  const layerBoxes = (layers ?? []).map(toBox);
 
   const { gap, imagePad, trayPad } = SVG_ASSEMBLE_CARD;
   const labelHeight = hasLabels ? SVG_ASSEMBLE_CARD.labelHeight : 0;
@@ -1627,7 +1867,21 @@ export function layoutSvgAssembleScene(
 
   const trayWidth = count * cardWidth + (count - 1) * gap + trayPad * 2;
   const trayHeight = cardHeight + trayPad * 2;
-  const spot = placeSceneOverlay(stageWidth, stageHeight, trayWidth, trayHeight, slotRects, insets);
+  const scene = layoutScene(
+    stageWidth,
+    stageHeight,
+    { width: vbWidth, height: vbHeight },
+    [...slotBoxes, ...layerBoxes],
+    { width: trayWidth, height: trayHeight },
+    insets,
+  );
+  const board = scene.cover;
+  const slotRects = slots.map((slot, index) => ({
+    id: slot.id,
+    ...(layers ? scene.content[index] : sceneBoxToStage(slotBoxes[index], board)),
+  }));
+  const layerRects = (layers ?? []).map((layer, index) => ({ id: layer.id, ...scene.content[slots.length + index] }));
+  const spot = scene.overlay ?? { left: 0, top: 0, spot: "bottom" as SceneOverlaySpot };
   const tray = { left: spot.left, top: spot.top, width: trayWidth, height: trayHeight };
 
   const cards: BoardRect[] = [];
@@ -1642,6 +1896,7 @@ export function layoutSvgAssembleScene(
   return {
     board: { left: board.left, top: board.top, width: board.width, height: board.height },
     slots: slotRects,
+    layers: layerRects,
     tray,
     traySpot: spot.spot,
     cards,
@@ -1649,6 +1904,43 @@ export function layoutSvgAssembleScene(
     imageSize,
     labelHeight,
   };
+}
+
+/**
+ * The scene markup with its pictures where `layoutSvgAssembleScene` put them:
+ * every `<image>` whose id is a slot or a layer gets the box of its stage rect,
+ * in viewBox units. Nothing else in the markup changes.
+ */
+export function arrangeSvgAssembleScene(
+  svg: string,
+  viewBox: SvgViewBox,
+  layout: Pick<SvgAssembleSceneLayout, "board" | "slots" | "layers">,
+): string {
+  const { board } = layout;
+  if (board.width <= 0 || board.height <= 0) {
+    return svg;
+  }
+
+  const unitX = (viewBox.width || 1) / board.width;
+  const unitY = (viewBox.height || 1) / board.height;
+  const format = (value: number) => String(Math.round(value * 100) / 100);
+
+  return [...layout.slots, ...layout.layers].reduce((markup, rect) => {
+    const box: Record<"x" | "y" | "width" | "height", number> = {
+      x: viewBox.minX + (rect.left - board.left) * unitX,
+      y: viewBox.minY + (rect.top - board.top) * unitY,
+      width: rect.width * unitX,
+      height: rect.height * unitY,
+    };
+    const id = rect.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    return markup.replace(new RegExp(`<image\\b[^>]*\\sid="${id}"[^>]*>`), (tag) =>
+      (Object.keys(box) as Array<keyof typeof box>).reduce(
+        (current, name) => current.replace(new RegExp(`(\\s${name}=")[^"]*(")`), `$1${format(box[name])}$2`),
+        tag,
+      ),
+    );
+  }, svg);
 }
 
 /**
@@ -2354,6 +2646,16 @@ export function normalizeSvgAssembleConfig(
 
   const slotIds = new Set(slots.map((slot) => slot.id));
 
+  // Sent only for a composed scene, whose pictures carry these ids in the markup.
+  const layers = Array.isArray(config.layers)
+    ? config.layers
+      .map((raw, index): SvgAssembleSlot | null => {
+        const slot = buildSlot(raw, index);
+        return slot ? { ...slot, id: extractText(asRecord(raw)?.id) ?? `layer_${index + 1}` } : null;
+      })
+      .filter((layer): layer is SvgAssembleSlot => Boolean(layer))
+    : null;
+
   const rawAnswers = Array.isArray(config.answers)
     ? config.answers
     : extractOptionsSource(config);
@@ -2425,6 +2727,7 @@ export function normalizeSvgAssembleConfig(
     questionSvg: sceneSvg,
     viewBox,
     slots,
+    layers,
     requiredSlotIds,
     slot: slots[0],
     answers: playableAnswers,

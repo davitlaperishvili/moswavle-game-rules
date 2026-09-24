@@ -299,6 +299,12 @@ export type SvgAssembleConfig = {
     questionSvg: string | null;
     viewBox: SvgViewBox;
     slots: SvgAssembleSlot[];
+    /**
+     * A composed scene's other pictures (`<image id="layer_N">` in the markup),
+     * so they can be kept whole too. Null for a hand-made scene, which cannot be
+     * rearranged.
+     */
+    layers: SvgAssembleSlot[] | null;
     requiredSlotIds: string[];
     slot: SvgAssembleSlot;
     answers: SvgAssembleAnswer[];
@@ -376,18 +382,26 @@ export type SceneCover = {
     height: number;
     scale: number;
 };
+/** Stage edges taken by the player's own controls, in stage pixels. */
+export type SceneInsets = {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+};
 /**
  * The background covering the whole stage, as every game must draw it.
  *
  * Covering crops the picture on the sides that do not fit. Instead of always
  * cropping evenly, the crop is shifted so the authored content (the boxes of
- * the scene's pictures, zones or slots) stays in view — centred on the stage
- * when it fits, and kept inside the picture either way.
+ * the scene's pictures, zones or slots) stays in view — centred in the part of
+ * the stage the controls leave free when it fits, and kept inside the picture
+ * either way.
  */
 export declare function coverSceneBoard(stageWidth: number, stageHeight: number, board: {
     width: number;
     height: number;
-}, content?: ReadonlyArray<ScenePercentBox>): SceneCover;
+}, content?: ReadonlyArray<ScenePercentBox>, insets?: SceneInsets): SceneCover;
 /** A percent box of the board as stage pixels, through the cover transform. */
 export declare function sceneBoxToStage(box: ScenePercentBox, cover: SceneCover): BoardRect;
 export type SceneOverlaySpot = "bottom" | "bottom-left" | "bottom-right" | "top" | "top-left" | "top-right" | "left" | "right";
@@ -396,16 +410,70 @@ export type SceneOverlaySpot = "bottom" | "bottom-left" | "bottom-right" | "top"
  * the candidate spot that covers the least of the content, preferring the
  * bottom centre. `insets` keep it clear of the stage's own controls.
  */
-export declare function placeSceneOverlay(stageWidth: number, stageHeight: number, overlayWidth: number, overlayHeight: number, avoid: ReadonlyArray<BoardRect>, insets?: {
-    top?: number;
-    right?: number;
-    bottom?: number;
-    left?: number;
-}): {
+export declare function placeSceneOverlay(stageWidth: number, stageHeight: number, overlayWidth: number, overlayHeight: number, avoid: ReadonlyArray<BoardRect>, insets?: SceneInsets): {
     left: number;
     top: number;
     spot: SceneOverlaySpot;
 };
+/**
+ * The two safe areas of every scene game: the content (pictures, zones, slots)
+ * and the answers never touch, and neither leaves the stage.
+ */
+export declare const SCENE_SAFE_AREA: {
+    /** Clear space between everything and the stage edge (or its controls), as a share of the short side. */
+    readonly edge: 0.025;
+    /** Clear space between the content and the answers, as a share of the short side. */
+    readonly gap: 0.04;
+    /**
+     * A picture that does not fit is shrunk, but not below this share of its
+     * size; past it, it is moved instead.
+     */
+    readonly minScale: 0.55;
+};
+/**
+ * A picture made to fit inside a region. It shrinks towards the side that is
+ * still in view, standing where it stood: a character cut at the top keeps
+ * its feet where they were, one cut on the left keeps its right side. One cut
+ * at the bottom cannot keep its feet anyway, so it moves up whole instead, and
+ * shrinks only if it then reaches the top. A picture that would have to shrink
+ * past `SCENE_SAFE_AREA.minScale` is moved as well.
+ */
+export declare function fitSceneRect(rect: BoardRect, region: BoardRect): BoardRect;
+export type SceneLayout = {
+    /** Where the background goes: over the whole stage. */
+    cover: SceneCover;
+    /** The content's safe area: the stage less its controls and an edge margin. */
+    frame: BoardRect;
+    /** Every content box in stage pixels, in input order: whole, inside the frame, clear of the answers. */
+    content: BoardRect[];
+    /** Where the answers go, or null when there are none (or they are not measured yet). */
+    overlay: (BoardRect & {
+        spot: SceneOverlaySpot;
+    }) | null;
+};
+/**
+ * The layout of every game drawn as a scene, in one place.
+ *
+ * The background covers the stage, and the content follows it, so a picture
+ * stands where the author put it. Covering crops the picture, and the answers
+ * float on it, so on top of that two safe areas are kept apart:
+ *
+ * - the answers go where they would push the fewest pictures away, inside the
+ *   stage and clear of its controls;
+ * - every content box stays inside the frame and at least a gap away from the
+ *   answers. A picture the crop cuts is shrunk until it is whole again; one in
+ *   the answers' way is moved clear of them (`fitSceneRect`).
+ *
+ * `content` is everything that must stay whole — the pictures of the scene as
+ * well as its zones and slots. `overlay` is the measured size of the answers.
+ */
+export declare function layoutScene(stageWidth: number, stageHeight: number, board: {
+    width: number;
+    height: number;
+}, content: ReadonlyArray<ScenePercentBox>, overlay?: {
+    width: number;
+    height: number;
+} | null, insets?: SceneInsets): SceneLayout;
 /** Card geometry for the svg_assemble answer tray, in stage pixels. */
 export declare const SVG_ASSEMBLE_CARD: {
     /** Space between two cards. */
@@ -423,6 +491,10 @@ export type SvgAssembleSceneLayout = {
     slots: Array<BoardRect & {
         id: string;
     }>;
+    /** The scene's other pictures, where they are drawn; see `arrangeSvgAssembleScene`. */
+    layers: Array<BoardRect & {
+        id: string;
+    }>;
     /** The panel behind the cards, floating on the scene. */
     tray: BoardRect;
     traySpot: SceneOverlaySpot;
@@ -434,18 +506,25 @@ export type SvgAssembleSceneLayout = {
     labelHeight: number;
 };
 /**
- * Where everything of an svg_assemble game goes on its stage. The scene covers
- * the whole stage — the crop keeps the slots in view — and the answer cards
- * float on it in a tray, where they cover the slots least. The source and the
- * target rects share the stage's coordinates, so a piece flies straight from
- * its card into its slot. `insets` keep the tray clear of the stage's controls.
+ * Where everything of an svg_assemble game goes on its stage, through
+ * `layoutScene`: the scene covers the whole stage and the answer cards float
+ * on it in a tray. The source and the target rects share the stage's
+ * coordinates, so a piece flies straight from its card into its slot.
+ * `insets` keep everything clear of the stage's controls.
+ *
+ * A composed scene passes its `layers` (the pictures that are not slots):
+ * those and the slots are then kept whole and clear of the tray, and
+ * `arrangeSvgAssembleScene` moves them in the markup to match. A hand-made
+ * scene (`layers` null) cannot be rearranged, so its slots follow the picture
+ * as they are.
  */
-export declare function layoutSvgAssembleScene(stageWidth: number, stageHeight: number, viewBox: SvgViewBox, slots: ReadonlyArray<SvgAssembleSlot>, count: number, hasLabels: boolean, insets?: {
-    top?: number;
-    right?: number;
-    bottom?: number;
-    left?: number;
-}): SvgAssembleSceneLayout | null;
+export declare function layoutSvgAssembleScene(stageWidth: number, stageHeight: number, viewBox: SvgViewBox, slots: ReadonlyArray<SvgAssembleSlot>, count: number, hasLabels: boolean, insets?: SceneInsets, layers?: ReadonlyArray<SvgAssembleSlot> | null): SvgAssembleSceneLayout | null;
+/**
+ * The scene markup with its pictures where `layoutSvgAssembleScene` put them:
+ * every `<image>` whose id is a slot or a layer gets the box of its stage rect,
+ * in viewBox units. Nothing else in the markup changes.
+ */
+export declare function arrangeSvgAssembleScene(svg: string, viewBox: SvgViewBox, layout: Pick<SvgAssembleSceneLayout, "board" | "slots" | "layers">): string;
 /**
  * What comes next in the row.
  *

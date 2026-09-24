@@ -488,5 +488,111 @@ section('svg_assemble scene layout');
   check('no answers, no layout', rules.layoutSvgAssembleScene(1000, 700, viewBox, slots, 0, false) === null);
 }
 
+section('scene safe areas: the content and the answers never touch, nothing leaves the stage');
+
+{
+  const inside = (rect, frame) => rect.left >= frame.left - 1e-6 && rect.top >= frame.top - 1e-6
+    && rect.left + rect.width <= frame.left + frame.width + 1e-6 && rect.top + rect.height <= frame.top + frame.height + 1e-6;
+  const overlaps = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left)
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top);
+  const distance = (a, b) => Math.max(
+    b.left - (a.left + a.width), a.left - (b.left + b.width),
+    b.top - (a.top + a.height), a.top - (b.top + b.height),
+  );
+
+  const frame = { left: 0, top: 0, width: 1000, height: 600 };
+  const tall = rules.fitSceneRect({ left: 400, top: -100, width: 200, height: 400 }, frame);
+  check('cut at the top: shrunk, feet where they were', inside(tall, frame) && tall.top === 0 && tall.top + tall.height === 300 && tall.width < 200, JSON.stringify(tall));
+  check('and it keeps its proportions', Math.abs(tall.width / tall.height - 0.5) < 1e-9);
+  const sunk = rules.fitSceneRect({ left: 400, top: 450, width: 200, height: 300 }, frame);
+  check('cut at the bottom: moved up whole', sunk.width === 200 && sunk.height === 300 && sunk.top === 300, JSON.stringify(sunk));
+  const side = rules.fitSceneRect({ left: -50, top: 100, width: 200, height: 200 }, frame);
+  check('cut on the left: shrunk towards its right side, standing where it stood', inside(side, frame) && side.left === 0 && side.left + side.width === 150 && side.top + side.height === 300, JSON.stringify(side));
+  const far = rules.fitSceneRect({ left: -190, top: 100, width: 200, height: 200 }, frame);
+  check('mostly out: shrunk no further than the minimum, then moved in', inside(far, frame) && Math.abs(far.width - 200 * rules.SCENE_SAFE_AREA.minScale) < 1e-9, JSON.stringify(far));
+  const kept = { left: 100, top: 100, width: 50, height: 50 };
+  check('a picture that fits is left alone', rules.fitSceneRect(kept, frame) === kept);
+
+  // The savanna scene: a tall giraffe at the top, a camel low on the right.
+  const board = { width: 1600, height: 1200 };
+  const content = [
+    { x: 73.5, y: 58.2, width: 20, height: 28.6 }, // camel
+    { x: 13.3, y: 21, width: 8.6, height: 14.7 }, // monkey
+    { x: 43.8, y: 4.7, width: 18.8, height: 45.6 }, // giraffe
+    { x: 11.5, y: 50.3, width: 19.6, height: 26 }, // cheetah
+  ];
+  for (const [width, height, insets] of [[1250, 747, {}], [844, 390, { top: 68 }], [1024, 768, {}], [700, 900, {}]]) {
+    const scene = rules.layoutScene(width, height, board, content, { width: 460, height: 150 }, insets);
+    const label = `${width}x${height}`;
+    check(`${label}: the background still covers the stage`, scene.cover.left <= 0 && scene.cover.top <= 0
+      && scene.cover.left + scene.cover.width >= width - 1e-6 && scene.cover.top + scene.cover.height >= height - 1e-6);
+    check(`${label}: every picture is whole, inside the frame`, scene.content.every((rect) => inside(rect, scene.frame)), JSON.stringify(scene.content));
+    check(`${label}: the frame keeps clear of the controls`, scene.frame.top >= (insets.top ?? 0));
+    check(`${label}: the answers keep a gap from every picture`,
+      scene.content.every((rect) => distance(rect, scene.overlay) >= Math.min(width, height) * rules.SCENE_SAFE_AREA.gap - 1e-6),
+      JSON.stringify({ overlay: scene.overlay, content: scene.content }));
+    check(`${label}: the answers stay on the stage`, inside(scene.overlay, { left: 0, top: insets.top ?? 0, width, height: height - (insets.top ?? 0) }));
+  }
+
+  const wide = rules.layoutScene(1250, 747, board, content, { width: 460, height: 150 });
+  const giraffe = rules.sceneBoxToStage(content[2], wide.cover);
+  check('the giraffe the crop cut is shrunk, its feet where they were', wide.content[2].height < giraffe.height
+    && Math.abs(wide.content[2].top + wide.content[2].height - (giraffe.top + giraffe.height)) < 1e-6, JSON.stringify({ giraffe, fitted: wide.content[2] }));
+  check('the answers stay at the bottom when a nudge clears them', wide.overlay.spot === 'bottom');
+
+  const bare = rules.layoutScene(1000, 600, board, content);
+  check('no answers: no overlay, and the pictures still fit', bare.overlay === null && bare.content.every((rect) => inside(rect, bare.frame)));
+
+  const insetCover = rules.coverSceneBoard(1000, 500, { width: 1600, height: 1200 }, [{ x: 40, y: 0, width: 20, height: 20 }], { top: 100 });
+  const plainCover = rules.coverSceneBoard(1000, 500, { width: 1600, height: 1200 }, [{ x: 40, y: 0, width: 20, height: 20 }]);
+  check('the crop centres content in the part the controls leave free', insetCover.top === 0 && plainCover.top === 0
+    && rules.coverSceneBoard(1000, 500, { width: 1600, height: 1200 }, [{ x: 40, y: 40, width: 20, height: 20 }], { top: 100 }).top
+      > rules.coverSceneBoard(1000, 500, { width: 1600, height: 1200 }, [{ x: 40, y: 40, width: 20, height: 20 }]).top);
+}
+
+section('svg_assemble: a composed scene is rearranged to its safe layout');
+
+{
+  const viewBox = { minX: 0, minY: 0, width: 1600, height: 1200 };
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1200">'
+    + '<image href="https://example.test/bg.png" x="0" y="0" width="1600" height="1200" preserveAspectRatio="none"/>'
+    + '<image id="layer_1" href="https://example.test/giraffe.png" x="700" y="56" width="300" height="547" preserveAspectRatio="none"/>'
+    + '<image id="slot_1" href="https://example.test/camel-shadow.png" x="1176" y="698" width="320" height="343" preserveAspectRatio="none"/>'
+    + '</svg>';
+  const config = rules.normalizeSvgAssembleConfig(game('svg_assemble', {}), {
+    question_svg: svg,
+    slots: [{ id: 'slot_1', x: 1176, y: 698, width: 320, height: 343 }],
+    layers: [{ id: 'layer_1', x: 700, y: 56, width: 300, height: 547 }],
+    answers: [
+      { id: 'a', svg: '<svg/>', is_correct: true, slot: 'slot_1' },
+      { id: 'b', svg: '<svg/>', is_correct: false },
+      { id: 'c', svg: '<svg/>', is_correct: false },
+    ],
+  });
+  check('the layers of a composed scene are read', Array.isArray(config.layers) && config.layers[0].id === 'layer_1' && config.layers[0].height === 547);
+  check('a hand-made scene has none', rules.normalizeSvgAssembleConfig(game('svg_assemble', {}), { question_svg: svg }).layers === null);
+
+  const layout = rules.layoutSvgAssembleScene(1250, 747, viewBox, config.slots, 3, false, {}, config.layers);
+  const frame = { left: 0, top: 0, width: 1250, height: 747 };
+  const within = (rect) => rect.left >= 0 && rect.top >= 0 && rect.left + rect.width <= frame.width && rect.top + rect.height <= frame.height;
+  check('the giraffe is whole on the stage', within(layout.layers[0]), JSON.stringify(layout.layers[0]));
+  const gap = (a, b) => Math.max(b.left - (a.left + a.width), a.left - (b.left + b.width), b.top - (a.top + a.height), a.top - (b.top + b.height));
+  check('the slot keeps a gap from the tray', gap(layout.slots[0], layout.tray) >= 747 * rules.SCENE_SAFE_AREA.gap - 1e-6, JSON.stringify({ slot: layout.slots[0], tray: layout.tray }));
+
+  const arranged = rules.arrangeSvgAssembleScene(svg, viewBox, layout);
+  const read = (id) => {
+    const tag = arranged.match(new RegExp(`<image[^>]*id="${id}"[^>]*>`))[0];
+    const value = (name) => Number(tag.match(new RegExp(`\\s${name}="([^"]*)"`))[1]);
+    return { x: value('x'), y: value('y'), width: value('width'), height: value('height') };
+  };
+  const unit = 1600 / layout.board.width;
+  const giraffe = read('layer_1');
+  check('the markup draws the giraffe where the layout put it', Math.abs(giraffe.y - (layout.layers[0].top - layout.board.top) * unit) < 0.01
+    && Math.abs(giraffe.height - layout.layers[0].height * unit) < 0.01, JSON.stringify(giraffe));
+  const shadow = read('slot_1');
+  check('and the silhouette where its slot is', Math.abs(shadow.x - (layout.slots[0].left - layout.board.left) * unit) < 0.01, JSON.stringify(shadow));
+  check('the background is untouched', arranged.includes('href="https://example.test/bg.png" x="0" y="0" width="1600" height="1200"'));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
