@@ -1550,6 +1550,107 @@ export function placeSceneOverlay(
   return best;
 }
 
+/** Card geometry for the svg_assemble answer tray, in stage pixels. */
+export const SVG_ASSEMBLE_CARD = {
+  /** Space between two cards. */
+  gap: 12,
+  /** Inset of the white tile inside a card. */
+  imagePad: 12,
+  /** Room under the tile for a label, when any answer has one. */
+  labelHeight: 22,
+  /** Padding of the tray panel around the cards. */
+  trayPad: 8,
+} as const;
+
+export type SvgAssembleSceneLayout = {
+  /** The scene (its viewBox) drawn over the whole stage. */
+  board: BoardRect;
+  slots: Array<BoardRect & { id: string }>;
+  /** The panel behind the cards, floating on the scene. */
+  tray: BoardRect;
+  traySpot: SceneOverlaySpot;
+  /** The card behind each answer, in answer order. */
+  cards: BoardRect[];
+  /** The tile inside each card; where a flying piece starts. */
+  options: BoardRect[];
+  imageSize: number;
+  labelHeight: number;
+};
+
+/**
+ * Where everything of an svg_assemble game goes on its stage. The scene covers
+ * the whole stage — the crop keeps the slots in view — and the answer cards
+ * float on it in a tray, where they cover the slots least. The source and the
+ * target rects share the stage's coordinates, so a piece flies straight from
+ * its card into its slot. `insets` keep the tray clear of the stage's controls.
+ */
+export function layoutSvgAssembleScene(
+  stageWidth: number,
+  stageHeight: number,
+  viewBox: SvgViewBox,
+  slots: ReadonlyArray<SvgAssembleSlot>,
+  count: number,
+  hasLabels: boolean,
+  insets: { top?: number; right?: number; bottom?: number; left?: number } = {},
+): SvgAssembleSceneLayout | null {
+  if (!stageWidth || !stageHeight || !count) {
+    return null;
+  }
+
+  const vbWidth = viewBox.width || 1;
+  const vbHeight = viewBox.height || 1;
+  const boxes: ScenePercentBox[] = slots.map((slot) => ({
+    x: ((slot.x - viewBox.minX) / vbWidth) * 100,
+    y: ((slot.y - viewBox.minY) / vbHeight) * 100,
+    width: (slot.width / vbWidth) * 100,
+    height: (slot.height / vbHeight) * 100,
+  }));
+  const board = coverSceneBoard(stageWidth, stageHeight, { width: vbWidth, height: vbHeight }, boxes);
+  const slotRects = slots.map((slot, index) => ({ id: slot.id, ...sceneBoxToStage(boxes[index], board) }));
+
+  const { gap, imagePad, trayPad } = SVG_ASSEMBLE_CARD;
+  const labelHeight = hasLabels ? SVG_ASSEMBLE_CARD.labelHeight : 0;
+  const usableWidth = stageWidth - (insets.left ?? 0) - (insets.right ?? 0);
+  const usableHeight = stageHeight - (insets.top ?? 0) - (insets.bottom ?? 0);
+  // The cards sit on the scene, so they take a smaller share than a tray of
+  // their own would: about a quarter of the height.
+  let cardHeight = Math.min(usableHeight * 0.26, 140);
+  let cardWidth = cardHeight - labelHeight;
+  const widest = (usableWidth * 0.94 - trayPad * 2 - gap * (count - 1)) / count;
+  if (cardWidth > widest) {
+    cardWidth = widest;
+    cardHeight = cardWidth + labelHeight;
+  }
+  cardWidth = Math.max(56, cardWidth);
+  cardHeight = Math.max(cardHeight, cardWidth + labelHeight);
+  const imageSize = cardWidth - imagePad * 2;
+
+  const trayWidth = count * cardWidth + (count - 1) * gap + trayPad * 2;
+  const trayHeight = cardHeight + trayPad * 2;
+  const spot = placeSceneOverlay(stageWidth, stageHeight, trayWidth, trayHeight, slotRects, insets);
+  const tray = { left: spot.left, top: spot.top, width: trayWidth, height: trayHeight };
+
+  const cards: BoardRect[] = [];
+  const options: BoardRect[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const left = tray.left + trayPad + index * (cardWidth + gap);
+    const top = tray.top + trayPad;
+    cards.push({ left, top, width: cardWidth, height: cardHeight });
+    options.push({ left: left + imagePad, top: top + imagePad, width: imageSize, height: imageSize });
+  }
+
+  return {
+    board: { left: board.left, top: board.top, width: board.width, height: board.height },
+    slots: slotRects,
+    tray,
+    traySpot: spot.spot,
+    cards,
+    options,
+    imageSize,
+    labelHeight,
+  };
+}
+
 /**
  * What comes next in the row.
  *

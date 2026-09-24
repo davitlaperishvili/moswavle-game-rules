@@ -462,5 +462,31 @@ section('answer overlays keep off the content');
   check('insets keep it clear of the stage controls', inset.top + 100 <= 600 - 50);
 }
 
+section('svg_assemble scene layout');
+
+{
+  const viewBox = { minX: 0, minY: 0, width: 1600, height: 900 };
+  const slots = [{ id: 'fox', x: 200, y: 100, width: 300, height: 300 }];
+  const layout = rules.layoutSvgAssembleScene(1000, 700, viewBox, slots, 3, false);
+  check('the scene covers the whole stage', layout.board.height === 700 && layout.board.width >= 1000 && layout.board.left <= 0 && layout.board.left + layout.board.width >= 1000, JSON.stringify(layout.board));
+  const slot = layout.slots[0];
+  check('the slot follows the scene', Math.abs(slot.left - (layout.board.left + 200 * layout.board.width / 1600)) < 1e-6 && Math.abs(slot.top - 100 * layout.board.height / 900) < 1e-6, JSON.stringify(slot));
+  check('the slot stays in view', slot.left >= 0 && slot.left + slot.width <= 1000);
+  const overlaps = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left)
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top);
+  check('the tray keeps off the slot', !overlaps(layout.tray, slot), JSON.stringify({ tray: layout.tray, slot }));
+  check('three cards inside the tray', layout.cards.length === 3 && layout.cards.every((card) => card.left >= layout.tray.left && card.left + card.width <= layout.tray.left + layout.tray.width + 1e-6 && card.top >= layout.tray.top && card.top + card.height <= layout.tray.top + layout.tray.height + 1e-6));
+  check('a piece starts from its tile in the card', layout.options[1].left === layout.cards[1].left + 12 && layout.options[1].width === layout.imageSize);
+
+  const lowSlots = [{ id: 'hen', x: 600, y: 600, width: 400, height: 280 }];
+  const low = rules.layoutSvgAssembleScene(1000, 700, viewBox, lowSlots, 2, true, { top: 80 });
+  check('a slot at the bottom sends the tray elsewhere', low.traySpot !== 'bottom' && !overlaps(low.tray, low.slots[0]), low.traySpot);
+  check('the inset keeps the tray under the stage controls', low.tray.top >= 80);
+  check('labels make the cards taller than wide', low.labelHeight === 22 && low.cards[0].height === low.cards[0].width + 22);
+
+  check('no stage yet, no layout', rules.layoutSvgAssembleScene(0, 700, viewBox, slots, 3, false) === null);
+  check('no answers, no layout', rules.layoutSvgAssembleScene(1000, 700, viewBox, slots, 0, false) === null);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

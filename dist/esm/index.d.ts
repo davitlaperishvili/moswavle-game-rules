@@ -406,6 +406,46 @@ export declare function placeSceneOverlay(stageWidth: number, stageHeight: numbe
     top: number;
     spot: SceneOverlaySpot;
 };
+/** Card geometry for the svg_assemble answer tray, in stage pixels. */
+export declare const SVG_ASSEMBLE_CARD: {
+    /** Space between two cards. */
+    readonly gap: 12;
+    /** Inset of the white tile inside a card. */
+    readonly imagePad: 12;
+    /** Room under the tile for a label, when any answer has one. */
+    readonly labelHeight: 22;
+    /** Padding of the tray panel around the cards. */
+    readonly trayPad: 8;
+};
+export type SvgAssembleSceneLayout = {
+    /** The scene (its viewBox) drawn over the whole stage. */
+    board: BoardRect;
+    slots: Array<BoardRect & {
+        id: string;
+    }>;
+    /** The panel behind the cards, floating on the scene. */
+    tray: BoardRect;
+    traySpot: SceneOverlaySpot;
+    /** The card behind each answer, in answer order. */
+    cards: BoardRect[];
+    /** The tile inside each card; where a flying piece starts. */
+    options: BoardRect[];
+    imageSize: number;
+    labelHeight: number;
+};
+/**
+ * Where everything of an svg_assemble game goes on its stage. The scene covers
+ * the whole stage — the crop keeps the slots in view — and the answer cards
+ * float on it in a tray, where they cover the slots least. The source and the
+ * target rects share the stage's coordinates, so a piece flies straight from
+ * its card into its slot. `insets` keep the tray clear of the stage's controls.
+ */
+export declare function layoutSvgAssembleScene(stageWidth: number, stageHeight: number, viewBox: SvgViewBox, slots: ReadonlyArray<SvgAssembleSlot>, count: number, hasLabels: boolean, insets?: {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+}): SvgAssembleSceneLayout | null;
 /**
  * What comes next in the row.
  *
