@@ -57,6 +57,9 @@ function normalizeDragDropZoneStyle(value) {
     if (["outline", "outlined", "ghost", "dashed", "transparent"].includes(normalized)) {
         return "outline";
     }
+    if (normalized === "scene") {
+        return "scene";
+    }
     return "card";
 }
 function normalizeDragDropPromptType(value) {
@@ -854,17 +857,19 @@ export function normalizeCountPickConfig(config) {
     };
 }
 /**
- * The largest box of the board's aspect ratio that fits the space, for a
- * composed count_pick scene: the whole background stays visible, so every
- * placement is exactly where the author put it.
+ * The largest box of the board's aspect ratio that fits the space, for a scene
+ * built in the Scene Composer: the whole background stays visible, so every
+ * picture and zone is exactly where the author put it.
  */
-export function fitCountPickBoard(availableWidth, availableHeight, board) {
+export function fitSceneBoard(availableWidth, availableHeight, board) {
     if (availableWidth <= 0 || availableHeight <= 0 || board.width <= 0 || board.height <= 0) {
         return { width: 0, height: 0 };
     }
     const scale = Math.min(availableWidth / board.width, availableHeight / board.height);
     return { width: board.width * scale, height: board.height * scale };
 }
+/** @deprecated Use fitSceneBoard; kept for 1.8.x callers. */
+export const fitCountPickBoard = fitSceneBoard;
 /**
  * What comes next in the row.
  *

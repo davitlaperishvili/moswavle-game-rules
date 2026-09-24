@@ -11,7 +11,7 @@
  * game scores differently depending on the device it is played on.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = void 0;
+exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.fitCountPickBoard = void 0;
 exports.getRuntimeConfig = getRuntimeConfig;
 exports.buildPreparedGame = buildPreparedGame;
 exports.normalizeAnswerChoiceConfig = normalizeAnswerChoiceConfig;
@@ -21,7 +21,7 @@ exports.normalizeShadowMatchConfig = normalizeShadowMatchConfig;
 exports.normalizeImageOrderConfig = normalizeImageOrderConfig;
 exports.normalizeSizeOrderConfig = normalizeSizeOrderConfig;
 exports.normalizeCountPickConfig = normalizeCountPickConfig;
-exports.fitCountPickBoard = fitCountPickBoard;
+exports.fitSceneBoard = fitSceneBoard;
 exports.normalizePatternNextConfig = normalizePatternNextConfig;
 exports.normalizeSortBinsConfig = normalizeSortBinsConfig;
 exports.normalizeJigsawConfig = normalizeJigsawConfig;
@@ -91,6 +91,9 @@ function normalizeDragDropZoneStyle(value) {
         .replace(/^_+|_+$/g, "");
     if (["outline", "outlined", "ghost", "dashed", "transparent"].includes(normalized)) {
         return "outline";
+    }
+    if (normalized === "scene") {
+        return "scene";
     }
     return "card";
 }
@@ -889,17 +892,19 @@ function normalizeCountPickConfig(config) {
     };
 }
 /**
- * The largest box of the board's aspect ratio that fits the space, for a
- * composed count_pick scene: the whole background stays visible, so every
- * placement is exactly where the author put it.
+ * The largest box of the board's aspect ratio that fits the space, for a scene
+ * built in the Scene Composer: the whole background stays visible, so every
+ * picture and zone is exactly where the author put it.
  */
-function fitCountPickBoard(availableWidth, availableHeight, board) {
+function fitSceneBoard(availableWidth, availableHeight, board) {
     if (availableWidth <= 0 || availableHeight <= 0 || board.width <= 0 || board.height <= 0) {
         return { width: 0, height: 0 };
     }
     const scale = Math.min(availableWidth / board.width, availableHeight / board.height);
     return { width: board.width * scale, height: board.height * scale };
 }
+/** @deprecated Use fitSceneBoard; kept for 1.8.x callers. */
+exports.fitCountPickBoard = fitSceneBoard;
 /**
  * What comes next in the row.
  *

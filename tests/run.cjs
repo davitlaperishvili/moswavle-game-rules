@@ -404,5 +404,19 @@ section('count_pick: a scene composed by the author');
   check('and is limited by the narrower side', wide.width === 400 && wide.height === 300, JSON.stringify(wide));
 }
 
+section('drag_drop_match: the scene zone style');
+
+{
+  const base = {
+    zones: [{ match_key: 'a', x: 10, y: 20, width: 30, height: 40, prompt_type: 'image', prompt_image: 'https://example.test/a-shadow.png' }],
+    items: [{ match_key: 'a', image: 'https://example.test/a.png' }],
+  };
+  check('scene is kept', rules.normalizeDragDropMatchConfig({ ...base, zone_style: 'scene' }).zone_style === 'scene');
+  check('outline and card still are what they were', rules.normalizeDragDropMatchConfig({ ...base, zone_style: 'outline' }).zone_style === 'outline'
+    && rules.normalizeDragDropMatchConfig({ ...base, zone_style: 'whatever' }).zone_style === 'card');
+  check('fitSceneBoard is what fitCountPickBoard was', rules.fitCountPickBoard === rules.fitSceneBoard
+    && JSON.stringify(rules.fitSceneBoard(1000, 500, { width: 1600, height: 1200 })) === JSON.stringify(rules.fitCountPickBoard(1000, 500, { width: 1600, height: 1200 })));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

@@ -217,7 +217,13 @@ export type JigsawConfig = {
     lives: number;
 };
 export type DragDropMatchPromptType = "text" | "image" | "number";
-export type DragDropMatchZoneStyle = "card" | "outline";
+/**
+ * How the drop zones are drawn. `card` and `outline` frame each zone on a
+ * cover-scaled board with a floating tray. `scene` is a Scene Composer game:
+ * the whole background (never cropped), each zone shown only as its
+ * silhouette or number, the placed picture filling it, and the tray below.
+ */
+export type DragDropMatchZoneStyle = "card" | "outline" | "scene";
 export type DragDropMatchItem = {
     id: string;
     image: string;
@@ -335,17 +341,19 @@ export declare function normalizeSizeOrderConfig(config: Record<string, unknown>
  */
 export declare function normalizeCountPickConfig(config: Record<string, unknown>): CountPickConfig;
 /**
- * The largest box of the board's aspect ratio that fits the space, for a
- * composed count_pick scene: the whole background stays visible, so every
- * placement is exactly where the author put it.
+ * The largest box of the board's aspect ratio that fits the space, for a scene
+ * built in the Scene Composer: the whole background stays visible, so every
+ * picture and zone is exactly where the author put it.
  */
-export declare function fitCountPickBoard(availableWidth: number, availableHeight: number, board: {
+export declare function fitSceneBoard(availableWidth: number, availableHeight: number, board: {
     width: number;
     height: number;
 }): {
     width: number;
     height: number;
 };
+/** @deprecated Use fitSceneBoard; kept for 1.8.x callers. */
+export declare const fitCountPickBoard: typeof fitSceneBoard;
 /**
  * What comes next in the row.
  *
