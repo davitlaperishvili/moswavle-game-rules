@@ -540,6 +540,15 @@ section('scene safe areas: the content and the answers never touch, nothing leav
     && Math.abs(wide.content[2].top + wide.content[2].height - (giraffe.top + giraffe.height)) < 1e-6, JSON.stringify({ giraffe, fitted: wide.content[2] }));
   check('the answers stay at the bottom when a nudge clears them', wide.overlay.spot === 'bottom');
 
+  // A voice button in the bottom-left corner, and the bottom centre taken.
+  const corner = { left: 0, top: 480, width: 120, height: 120 };
+  const busy = [{ x: 30, y: 60, width: 40, height: 40 }, { x: 5, y: 70, width: 20, height: 25 }];
+  const guarded = rules.layoutScene(1000, 600, { width: 1000, height: 600 }, busy, { width: 300, height: 110 }, {}, [corner]);
+  check('the answers never go over a player button', !overlaps(guarded.overlay, corner), JSON.stringify(guarded.overlay));
+  check('the pictures keep clear of it too', guarded.content.every((rect) => !overlaps(rect, corner)), JSON.stringify(guarded.content));
+  const blocked = rules.placeSceneOverlay(1000, 600, 300, 110, [{ left: 350, top: 400, width: 300, height: 200 }], {}, [corner]);
+  check('a spot over a button is skipped even when it covers nothing', blocked.spot !== 'bottom-left' && blocked.spot !== 'bottom', blocked.spot);
+
   const bare = rules.layoutScene(1000, 600, board, content);
   check('no answers: no overlay, and the pictures still fit', bare.overlay === null && bare.content.every((rect) => inside(rect, bare.frame)));
 

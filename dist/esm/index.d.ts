@@ -408,9 +408,11 @@ export type SceneOverlaySpot = "bottom" | "bottom-left" | "bottom-right" | "top"
 /**
  * Where to put an overlay (the answer tray, the number buttons) on a scene:
  * the candidate spot that covers the least of the content, preferring the
- * bottom centre. `insets` keep it clear of the stage's own controls.
+ * bottom centre. `insets` keep it clear of the stage's own controls along an
+ * edge; a spot over one of the `blocked` rects (a button in a corner) is
+ * taken only when every spot is.
  */
-export declare function placeSceneOverlay(stageWidth: number, stageHeight: number, overlayWidth: number, overlayHeight: number, avoid: ReadonlyArray<BoardRect>, insets?: SceneInsets): {
+export declare function placeSceneOverlay(stageWidth: number, stageHeight: number, overlayWidth: number, overlayHeight: number, avoid: ReadonlyArray<BoardRect>, insets?: SceneInsets, blocked?: ReadonlyArray<BoardRect>): {
     left: number;
     top: number;
     spot: SceneOverlaySpot;
@@ -466,6 +468,9 @@ export type SceneLayout = {
  *
  * `content` is everything that must stay whole — the pictures of the scene as
  * well as its zones and slots. `overlay` is the measured size of the answers.
+ * `insets` are edges the player's controls take; `controls` are buttons the
+ * player puts on the stage itself (the voice button in its corner): the
+ * answers never go over one, and the pictures keep an edge margin from them.
  */
 export declare function layoutScene(stageWidth: number, stageHeight: number, board: {
     width: number;
@@ -473,7 +478,7 @@ export declare function layoutScene(stageWidth: number, stageHeight: number, boa
 }, content: ReadonlyArray<ScenePercentBox>, overlay?: {
     width: number;
     height: number;
-} | null, insets?: SceneInsets): SceneLayout;
+} | null, insets?: SceneInsets, controls?: ReadonlyArray<BoardRect>): SceneLayout;
 /** Card geometry for the svg_assemble answer tray, in stage pixels. */
 export declare const SVG_ASSEMBLE_CARD: {
     /** Space between two cards. */
@@ -518,7 +523,7 @@ export type SvgAssembleSceneLayout = {
  * scene (`layers` null) cannot be rearranged, so its slots follow the picture
  * as they are.
  */
-export declare function layoutSvgAssembleScene(stageWidth: number, stageHeight: number, viewBox: SvgViewBox, slots: ReadonlyArray<SvgAssembleSlot>, count: number, hasLabels: boolean, insets?: SceneInsets, layers?: ReadonlyArray<SvgAssembleSlot> | null): SvgAssembleSceneLayout | null;
+export declare function layoutSvgAssembleScene(stageWidth: number, stageHeight: number, viewBox: SvgViewBox, slots: ReadonlyArray<SvgAssembleSlot>, count: number, hasLabels: boolean, insets?: SceneInsets, layers?: ReadonlyArray<SvgAssembleSlot> | null, controls?: ReadonlyArray<BoardRect>): SvgAssembleSceneLayout | null;
 /**
  * The scene markup with its pictures where `layoutSvgAssembleScene` put them:
  * every `<image>` whose id is a slot or a layer gets the box of its stage rect,

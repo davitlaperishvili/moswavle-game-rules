@@ -1513,7 +1513,9 @@ export type SceneOverlaySpot = "bottom" | "bottom-left" | "bottom-right" | "top"
 /**
  * Where to put an overlay (the answer tray, the number buttons) on a scene:
  * the candidate spot that covers the least of the content, preferring the
- * bottom centre. `insets` keep it clear of the stage's own controls.
+ * bottom centre. `insets` keep it clear of the stage's own controls along an
+ * edge; a spot over one of the `blocked` rects (a button in a corner) is
+ * taken only when every spot is.
  */
 export function placeSceneOverlay(
   stageWidth: number,
@@ -1522,6 +1524,7 @@ export function placeSceneOverlay(
   overlayHeight: number,
   avoid: ReadonlyArray<BoardRect>,
   insets: SceneInsets = {},
+  blocked: ReadonlyArray<BoardRect> = [],
 ): { left: number; top: number; spot: SceneOverlaySpot } {
   const margin = sceneEdge(stageWidth, stageHeight);
   const minLeft = (insets.left ?? 0) + margin;
@@ -1556,8 +1559,13 @@ export function placeSceneOverlay(
 
   let best = candidates[0];
   let bestScore = Number.POSITIVE_INFINITY;
+  const onControl = (left: number, top: number) =>
+    blocked.some((rect) => rectsOverlap({ left, top, width: overlayWidth, height: overlayHeight }, rect));
+
   candidates.forEach((candidate, index) => {
-    const score = overlap(candidate.left, candidate.top) + index * (preference + 0.001);
+    const score = overlap(candidate.left, candidate.top)
+      + index * (preference + 0.001)
+      + (onControl(candidate.left, candidate.top) ? stageWidth * stageHeight * 10 : 0);
     if (score < bestScore) {
       bestScore = score;
       best = candidate;
@@ -1738,6 +1746,9 @@ export type SceneLayout = {
  *
  * `content` is everything that must stay whole — the pictures of the scene as
  * well as its zones and slots. `overlay` is the measured size of the answers.
+ * `insets` are edges the player's controls take; `controls` are buttons the
+ * player puts on the stage itself (the voice button in its corner): the
+ * answers never go over one, and the pictures keep an edge margin from them.
  */
 export function layoutScene(
   stageWidth: number,
@@ -1746,6 +1757,7 @@ export function layoutScene(
   content: ReadonlyArray<ScenePercentBox>,
   overlay: { width: number; height: number } | null = null,
   insets: SceneInsets = {},
+  controls: ReadonlyArray<BoardRect> = [],
 ): SceneLayout {
   const cover = coverSceneBoard(stageWidth, stageHeight, board, content, insets);
   const edge = sceneEdge(stageWidth, stageHeight);
@@ -1755,7 +1767,10 @@ export function layoutScene(
     width: Math.max(stageWidth - (insets.left ?? 0) - (insets.right ?? 0) - edge * 2, 0),
     height: Math.max(stageHeight - (insets.top ?? 0) - (insets.bottom ?? 0) - edge * 2, 0),
   };
-  const whole = content.map((box) => fitSceneRect(sceneBoxToStage(box, cover), frame));
+  const controlKeepOuts = controls.map((rect) => growRect(rect, edge));
+  const clearOfControls = (rect: BoardRect) =>
+    controlKeepOuts.reduce((current, keepOut) => keepSceneRectClear(current, frame, keepOut), rect);
+  const whole = content.map((box) => clearOfControls(fitSceneRect(sceneBoxToStage(box, cover), frame)));
 
   if (cover.width <= 0 || !overlay || overlay.width <= 0 || overlay.height <= 0) {
     return { cover, frame, content: whole, overlay: null };
@@ -1769,6 +1784,7 @@ export function layoutScene(
     overlay.height,
     whole.map((rect) => growRect(rect, gap)),
     insets,
+    controlKeepOuts,
   );
   const placed = { left: spot.left, top: spot.top, width: overlay.width, height: overlay.height, spot: spot.spot };
   const keepOut = growRect(placed, gap);
@@ -1776,6 +1792,7 @@ export function layoutScene(
   return {
     cover,
     frame,
+    // Clear of the answers last: they are the bigger thing to keep apart from.
     content: whole.map((rect) => keepSceneRectClear(rect, frame, keepOut)),
     overlay: placed,
   };
@@ -1832,6 +1849,7 @@ export function layoutSvgAssembleScene(
   hasLabels: boolean,
   insets: SceneInsets = {},
   layers: ReadonlyArray<SvgAssembleSlot> | null = null,
+  controls: ReadonlyArray<BoardRect> = [],
 ): SvgAssembleSceneLayout | null {
   if (!stageWidth || !stageHeight || !count) {
     return null;
@@ -1874,6 +1892,7 @@ export function layoutSvgAssembleScene(
     [...slotBoxes, ...layerBoxes],
     { width: trayWidth, height: trayHeight },
     insets,
+    controls,
   );
   const board = scene.cover;
   const slotRects = slots.map((slot, index) => ({

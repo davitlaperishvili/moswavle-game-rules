@@ -918,9 +918,11 @@ export function sceneBoxToStage(box, cover) {
 /**
  * Where to put an overlay (the answer tray, the number buttons) on a scene:
  * the candidate spot that covers the least of the content, preferring the
- * bottom centre. `insets` keep it clear of the stage's own controls.
+ * bottom centre. `insets` keep it clear of the stage's own controls along an
+ * edge; a spot over one of the `blocked` rects (a button in a corner) is
+ * taken only when every spot is.
  */
-export function placeSceneOverlay(stageWidth, stageHeight, overlayWidth, overlayHeight, avoid, insets = {}) {
+export function placeSceneOverlay(stageWidth, stageHeight, overlayWidth, overlayHeight, avoid, insets = {}, blocked = []) {
     const margin = sceneEdge(stageWidth, stageHeight);
     const minLeft = (insets.left ?? 0) + margin;
     const minTop = (insets.top ?? 0) + margin;
@@ -949,8 +951,11 @@ export function placeSceneOverlay(stageWidth, stageHeight, overlayWidth, overlay
     const preference = Math.min(overlayWidth, overlayHeight) * margin;
     let best = candidates[0];
     let bestScore = Number.POSITIVE_INFINITY;
+    const onControl = (left, top) => blocked.some((rect) => rectsOverlap({ left, top, width: overlayWidth, height: overlayHeight }, rect));
     candidates.forEach((candidate, index) => {
-        const score = overlap(candidate.left, candidate.top) + index * (preference + 0.001);
+        const score = overlap(candidate.left, candidate.top)
+            + index * (preference + 0.001)
+            + (onControl(candidate.left, candidate.top) ? stageWidth * stageHeight * 10 : 0);
         if (score < bestScore) {
             bestScore = score;
             best = candidate;
@@ -1102,8 +1107,11 @@ function keepSceneRectClear(rect, frame, keepOut) {
  *
  * `content` is everything that must stay whole — the pictures of the scene as
  * well as its zones and slots. `overlay` is the measured size of the answers.
+ * `insets` are edges the player's controls take; `controls` are buttons the
+ * player puts on the stage itself (the voice button in its corner): the
+ * answers never go over one, and the pictures keep an edge margin from them.
  */
-export function layoutScene(stageWidth, stageHeight, board, content, overlay = null, insets = {}) {
+export function layoutScene(stageWidth, stageHeight, board, content, overlay = null, insets = {}, controls = []) {
     const cover = coverSceneBoard(stageWidth, stageHeight, board, content, insets);
     const edge = sceneEdge(stageWidth, stageHeight);
     const frame = {
@@ -1112,17 +1120,20 @@ export function layoutScene(stageWidth, stageHeight, board, content, overlay = n
         width: Math.max(stageWidth - (insets.left ?? 0) - (insets.right ?? 0) - edge * 2, 0),
         height: Math.max(stageHeight - (insets.top ?? 0) - (insets.bottom ?? 0) - edge * 2, 0),
     };
-    const whole = content.map((box) => fitSceneRect(sceneBoxToStage(box, cover), frame));
+    const controlKeepOuts = controls.map((rect) => growRect(rect, edge));
+    const clearOfControls = (rect) => controlKeepOuts.reduce((current, keepOut) => keepSceneRectClear(current, frame, keepOut), rect);
+    const whole = content.map((box) => clearOfControls(fitSceneRect(sceneBoxToStage(box, cover), frame)));
     if (cover.width <= 0 || !overlay || overlay.width <= 0 || overlay.height <= 0) {
         return { cover, frame, content: whole, overlay: null };
     }
     const gap = sceneGap(stageWidth, stageHeight);
-    const spot = placeSceneOverlay(stageWidth, stageHeight, overlay.width, overlay.height, whole.map((rect) => growRect(rect, gap)), insets);
+    const spot = placeSceneOverlay(stageWidth, stageHeight, overlay.width, overlay.height, whole.map((rect) => growRect(rect, gap)), insets, controlKeepOuts);
     const placed = { left: spot.left, top: spot.top, width: overlay.width, height: overlay.height, spot: spot.spot };
     const keepOut = growRect(placed, gap);
     return {
         cover,
         frame,
+        // Clear of the answers last: they are the bigger thing to keep apart from.
         content: whole.map((rect) => keepSceneRectClear(rect, frame, keepOut)),
         overlay: placed,
     };
@@ -1151,7 +1162,7 @@ export const SVG_ASSEMBLE_CARD = {
  * scene (`layers` null) cannot be rearranged, so its slots follow the picture
  * as they are.
  */
-export function layoutSvgAssembleScene(stageWidth, stageHeight, viewBox, slots, count, hasLabels, insets = {}, layers = null) {
+export function layoutSvgAssembleScene(stageWidth, stageHeight, viewBox, slots, count, hasLabels, insets = {}, layers = null, controls = []) {
     if (!stageWidth || !stageHeight || !count) {
         return null;
     }
@@ -1183,7 +1194,7 @@ export function layoutSvgAssembleScene(stageWidth, stageHeight, viewBox, slots, 
     const imageSize = cardWidth - imagePad * 2;
     const trayWidth = count * cardWidth + (count - 1) * gap + trayPad * 2;
     const trayHeight = cardHeight + trayPad * 2;
-    const scene = layoutScene(stageWidth, stageHeight, { width: vbWidth, height: vbHeight }, [...slotBoxes, ...layerBoxes], { width: trayWidth, height: trayHeight }, insets);
+    const scene = layoutScene(stageWidth, stageHeight, { width: vbWidth, height: vbHeight }, [...slotBoxes, ...layerBoxes], { width: trayWidth, height: trayHeight }, insets, controls);
     const board = scene.cover;
     const slotRects = slots.map((slot, index) => ({
         id: slot.id,
