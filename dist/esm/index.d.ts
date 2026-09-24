@@ -361,6 +361,51 @@ export declare function fitSceneBoard(availableWidth: number, availableHeight: n
 };
 /** @deprecated Use fitSceneBoard; kept for 1.8.x callers. */
 export declare const fitCountPickBoard: typeof fitSceneBoard;
+/** A box in percent of the board (the background's own proportions). */
+export type ScenePercentBox = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+/** Where the background lands on the stage, in stage pixels; left/top are ≤ 0. */
+export type SceneCover = {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    scale: number;
+};
+/**
+ * The background covering the whole stage, as every game must draw it.
+ *
+ * Covering crops the picture on the sides that do not fit. Instead of always
+ * cropping evenly, the crop is shifted so the authored content (the boxes of
+ * the scene's pictures, zones or slots) stays in view — centred on the stage
+ * when it fits, and kept inside the picture either way.
+ */
+export declare function coverSceneBoard(stageWidth: number, stageHeight: number, board: {
+    width: number;
+    height: number;
+}, content?: ReadonlyArray<ScenePercentBox>): SceneCover;
+/** A percent box of the board as stage pixels, through the cover transform. */
+export declare function sceneBoxToStage(box: ScenePercentBox, cover: SceneCover): BoardRect;
+export type SceneOverlaySpot = "bottom" | "bottom-left" | "bottom-right" | "top" | "top-left" | "top-right" | "left" | "right";
+/**
+ * Where to put an overlay (the answer tray, the number buttons) on a scene:
+ * the candidate spot that covers the least of the content, preferring the
+ * bottom centre. `insets` keep it clear of the stage's own controls.
+ */
+export declare function placeSceneOverlay(stageWidth: number, stageHeight: number, overlayWidth: number, overlayHeight: number, avoid: ReadonlyArray<BoardRect>, insets?: {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+}): {
+    left: number;
+    top: number;
+    spot: SceneOverlaySpot;
+};
 /**
  * What comes next in the row.
  *

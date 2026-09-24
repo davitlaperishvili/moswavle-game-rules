@@ -429,5 +429,38 @@ section('select_option: the scene layout');
   check('the authored box is kept as it is', scene.items[0].x === 10 && scene.items[0].y === 20 && scene.items[0].width === 30 && scene.items[0].height === 40, JSON.stringify(scene.items[0]));
 }
 
+section('scenes cover the whole stage');
+
+{
+  const board = { width: 1600, height: 1200 }; // 4:3
+  const plain = rules.coverSceneBoard(1000, 500, board);
+  check('the background covers the stage', plain.width >= 1000 && plain.height >= 500 && plain.width === 1000, JSON.stringify(plain));
+  check('with no content the crop is even', plain.left === 0 && Math.abs(plain.top - -(750 - 500) / 2) < 1e-9, JSON.stringify(plain));
+
+  const low = rules.coverSceneBoard(1000, 500, board, [{ x: 10, y: 70, width: 20, height: 25 }]);
+  const lowRect = rules.sceneBoxToStage({ x: 10, y: 70, width: 20, height: 25 }, low);
+  check('content low in the picture pulls the crop down so it stays in view', lowRect.top >= 0 && lowRect.top + lowRect.height <= 500 + 1e-9, JSON.stringify(lowRect));
+  check('but never past the picture\'s edge', low.top >= 500 - low.height - 1e-9 && low.top <= 0);
+
+  const wide = rules.coverSceneBoard(400, 900, board, [{ x: 0, y: 0, width: 100, height: 100 }]);
+  check('a tall stage covers by height and crops the sides', wide.height === 900 && wide.width === 1200 && wide.left < 0);
+
+  const empty = rules.coverSceneBoard(0, 500, board);
+  check('no stage yet, no board', empty.width === 0 && empty.scale === 0);
+}
+
+section('answer overlays keep off the content');
+
+{
+  const free = rules.placeSceneOverlay(1000, 600, 300, 100, []);
+  check('the bottom centre when nothing is in the way', free.spot === 'bottom' && Math.round(free.left) === 350);
+
+  const bottomBusy = rules.placeSceneOverlay(1000, 600, 300, 100, [{ left: 300, top: 420, width: 400, height: 170 }]);
+  check('another spot when the bottom centre covers content', bottomBusy.spot !== 'bottom', bottomBusy.spot);
+
+  const inset = rules.placeSceneOverlay(1000, 600, 300, 100, [], { bottom: 50 });
+  check('insets keep it clear of the stage controls', inset.top + 100 <= 600 - 50);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

@@ -22,6 +22,9 @@ exports.normalizeImageOrderConfig = normalizeImageOrderConfig;
 exports.normalizeSizeOrderConfig = normalizeSizeOrderConfig;
 exports.normalizeCountPickConfig = normalizeCountPickConfig;
 exports.fitSceneBoard = fitSceneBoard;
+exports.coverSceneBoard = coverSceneBoard;
+exports.sceneBoxToStage = sceneBoxToStage;
+exports.placeSceneOverlay = placeSceneOverlay;
 exports.normalizePatternNextConfig = normalizePatternNextConfig;
 exports.normalizeSortBinsConfig = normalizeSortBinsConfig;
 exports.normalizeJigsawConfig = normalizeJigsawConfig;
@@ -905,6 +908,88 @@ function fitSceneBoard(availableWidth, availableHeight, board) {
 }
 /** @deprecated Use fitSceneBoard; kept for 1.8.x callers. */
 exports.fitCountPickBoard = fitSceneBoard;
+/**
+ * The background covering the whole stage, as every game must draw it.
+ *
+ * Covering crops the picture on the sides that do not fit. Instead of always
+ * cropping evenly, the crop is shifted so the authored content (the boxes of
+ * the scene's pictures, zones or slots) stays in view — centred on the stage
+ * when it fits, and kept inside the picture either way.
+ */
+function coverSceneBoard(stageWidth, stageHeight, board, content = []) {
+    if (stageWidth <= 0 || stageHeight <= 0 || board.width <= 0 || board.height <= 0) {
+        return { left: 0, top: 0, width: 0, height: 0, scale: 0 };
+    }
+    const scale = Math.max(stageWidth / board.width, stageHeight / board.height);
+    const width = board.width * scale;
+    const height = board.height * scale;
+    const place = (stage, size, from, to) => {
+        const excess = size - stage;
+        if (excess <= 0)
+            return 0;
+        // Centre the content, or the picture when there is no content.
+        const centre = content.length > 0 ? ((from + to) / 2 / 100) * size : size / 2;
+        return Math.min(0, Math.max(-excess, stage / 2 - centre));
+    };
+    const xs = content.map((box) => [box.x, box.x + box.width]).flat();
+    const ys = content.map((box) => [box.y, box.y + box.height]).flat();
+    return {
+        left: place(stageWidth, width, Math.min(...xs, 100), Math.max(...xs, 0)),
+        top: place(stageHeight, height, Math.min(...ys, 100), Math.max(...ys, 0)),
+        width,
+        height,
+        scale,
+    };
+}
+/** A percent box of the board as stage pixels, through the cover transform. */
+function sceneBoxToStage(box, cover) {
+    return {
+        left: cover.left + (box.x / 100) * cover.width,
+        top: cover.top + (box.y / 100) * cover.height,
+        width: (box.width / 100) * cover.width,
+        height: (box.height / 100) * cover.height,
+    };
+}
+/**
+ * Where to put an overlay (the answer tray, the number buttons) on a scene:
+ * the candidate spot that covers the least of the content, preferring the
+ * bottom centre. `insets` keep it clear of the stage's own controls.
+ */
+function placeSceneOverlay(stageWidth, stageHeight, overlayWidth, overlayHeight, avoid, insets = {}) {
+    const margin = Math.max(Math.min(stageWidth, stageHeight) * 0.025, 6);
+    const minLeft = (insets.left ?? 0) + margin;
+    const minTop = (insets.top ?? 0) + margin;
+    const maxLeft = Math.max(stageWidth - (insets.right ?? 0) - margin - overlayWidth, minLeft);
+    const maxTop = Math.max(stageHeight - (insets.bottom ?? 0) - margin - overlayHeight, minTop);
+    const midLeft = Math.min(Math.max((stageWidth - overlayWidth) / 2, minLeft), maxLeft);
+    const midTop = Math.min(Math.max((stageHeight - overlayHeight) / 2, minTop), maxTop);
+    const candidates = [
+        { spot: "bottom", left: midLeft, top: maxTop },
+        { spot: "bottom-left", left: minLeft, top: maxTop },
+        { spot: "bottom-right", left: maxLeft, top: maxTop },
+        { spot: "top", left: midLeft, top: minTop },
+        { spot: "top-left", left: minLeft, top: minTop },
+        { spot: "top-right", left: maxLeft, top: minTop },
+        { spot: "left", left: minLeft, top: midTop },
+        { spot: "right", left: maxLeft, top: midTop },
+    ];
+    const overlap = (left, top) => avoid.reduce((sum, rect) => {
+        const w = Math.min(left + overlayWidth, rect.left + rect.width) - Math.max(left, rect.left);
+        const h = Math.min(top + overlayHeight, rect.top + rect.height) - Math.max(top, rect.top);
+        return sum + (w > 0 && h > 0 ? w * h : 0);
+    }, 0);
+    let best = candidates[0];
+    let bestScore = Number.POSITIVE_INFINITY;
+    candidates.forEach((candidate, index) => {
+        // A tiny tie-breaker keeps the preferred order when nothing overlaps.
+        const score = overlap(candidate.left, candidate.top) + index * 0.001;
+        if (score < bestScore) {
+            bestScore = score;
+            best = candidate;
+        }
+    });
+    return best;
+}
 /**
  * What comes next in the row.
  *
