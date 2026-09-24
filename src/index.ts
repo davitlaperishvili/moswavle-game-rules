@@ -312,6 +312,13 @@ export type SelectOptionConfig = {
   bg_image: string | null;
   board_width: number;
   board_height: number;
+  /**
+   * `free`: the background covers the stage and each picture is sized by the
+   * player (layoutSelectOptionItems). `scene`: a Scene Composer game — the
+   * whole background, never cropped, and every picture exactly the size and
+   * place the author gave it.
+   */
+  layout: "free" | "scene";
 };
 
 export type SvgViewBox = {
@@ -1975,6 +1982,7 @@ export function normalizeSelectOptionConfig(
     bg_image: normalizeBackground(config),
     board_width: Math.max(1, Math.round(boardWidth)),
     board_height: Math.max(1, Math.round(boardHeight)),
+    layout: extractText(config.layout) === "scene" ? "scene" : "free",
   };
 }
 

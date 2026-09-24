@@ -1294,6 +1294,7 @@ export function normalizeSelectOptionConfig(config) {
         bg_image: normalizeBackground(config),
         board_width: Math.max(1, Math.round(boardWidth)),
         board_height: Math.max(1, Math.round(boardHeight)),
+        layout: extractText(config.layout) === "scene" ? "scene" : "free",
     };
 }
 export function normalizeMemoryCardsConfig(config) {

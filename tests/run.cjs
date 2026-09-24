@@ -418,5 +418,16 @@ section('drag_drop_match: the scene zone style');
     && JSON.stringify(rules.fitSceneBoard(1000, 500, { width: 1600, height: 1200 })) === JSON.stringify(rules.fitCountPickBoard(1000, 500, { width: 1600, height: 1200 })));
 }
 
+section('select_option: the scene layout');
+
+{
+  const items = [{ image: 'https://example.test/a.png', x: 10, y: 20, width: 30, height: 40, is_correct: true }];
+  check('scene is kept', rules.normalizeSelectOptionConfig({ items, layout: 'scene' }).layout === 'scene');
+  check('anything else is the free layout', rules.normalizeSelectOptionConfig({ items }).layout === 'free'
+    && rules.normalizeSelectOptionConfig({ items, layout: 'grid' }).layout === 'free');
+  const scene = rules.normalizeSelectOptionConfig({ items, layout: 'scene' });
+  check('the authored box is kept as it is', scene.items[0].x === 10 && scene.items[0].y === 20 && scene.items[0].width === 30 && scene.items[0].height === 40, JSON.stringify(scene.items[0]));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
