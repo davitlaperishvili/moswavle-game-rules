@@ -11,10 +11,11 @@
  * game scores differently depending on the device it is played on.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = void 0;
+exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = void 0;
 exports.getRuntimeConfig = getRuntimeConfig;
 exports.buildPreparedGame = buildPreparedGame;
 exports.normalizeAnswerChoiceConfig = normalizeAnswerChoiceConfig;
+exports.layoutAnswerChoiceStack = layoutAnswerChoiceStack;
 exports.resolveGameKind = resolveGameKind;
 exports.normalizeCatchCorrectConfig = normalizeCatchCorrectConfig;
 exports.normalizeShadowMatchConfig = normalizeShadowMatchConfig;
@@ -473,6 +474,66 @@ function normalizeAnswerChoiceConfig(game, config) {
             extractNumber(config.answer_lives) ??
             extractNumber(config.ac_lives) ??
             3)),
+    };
+}
+/** Proportions of the stacked answer_choice layout, width over height. */
+exports.ANSWER_CHOICE_STACK = {
+    /** An answer card: nearly square, so the picture fills it. */
+    cardAspect: 1.15,
+    /** The question panel is wider than a card: most question pictures are. */
+    questionAspect: 1.35,
+    /** The question panel is at least this much taller than a card… */
+    minQuestionScale: 1.3,
+    /** …and grows into the room left over up to this much. */
+    maxQuestionScale: 1.8,
+    /** A card never grows past this height, however big the stage. */
+    maxCardHeight: 320,
+};
+/**
+ * The stacked answer_choice layout: the question picture on top, as the
+ * biggest thing on the stage, the answers under it as nearly square cards.
+ *
+ * Every column count is tried and the one giving the biggest cards wins — on
+ * a landscape screen that is usually every answer in one row, on a portrait
+ * one two columns. The question panel then takes the height left over, within
+ * `ANSWER_CHOICE_STACK`. Sizes are for the area the client lays the game out
+ * in (its padding already taken off).
+ */
+function layoutAnswerChoiceStack(areaWidth, areaHeight, answerCount) {
+    const width = Math.max(areaWidth, 1);
+    const height = Math.max(areaHeight, 1);
+    const count = Math.max(answerCount, 1);
+    const gap = clampNumber(Math.min(width, height) * 0.03, 8, 20);
+    const { cardAspect, questionAspect, minQuestionScale, maxQuestionScale, maxCardHeight } = exports.ANSWER_CHOICE_STACK;
+    let best = { columns: 1, rows: count, cardHeight: 0, complete: false };
+    for (let columns = 1; columns <= count; columns += 1) {
+        const rows = Math.ceil(count / columns);
+        const cardHeight = Math.min(
+        // The question panel and every row fit the height…
+        (height - rows * gap) / (minQuestionScale + rows), 
+        // …the cards of a row fit the width…
+        (width - (columns - 1) * gap) / columns / cardAspect, 
+        // …and so does the question panel.
+        width / (questionAspect * minQuestionScale), maxCardHeight);
+        const complete = count % columns === 0;
+        // Bigger cards win; on a tie, full rows, then fewer columns.
+        if (cardHeight > best.cardHeight + 0.5 ||
+            (Math.abs(cardHeight - best.cardHeight) <= 0.5 && complete && !best.complete)) {
+            best = { columns, rows, cardHeight, complete };
+        }
+    }
+    const cardHeight = Math.max(Math.floor(best.cardHeight), 1);
+    const cardWidth = Math.floor(cardHeight * cardAspect);
+    const questionHeight = Math.floor(Math.max(Math.min(height - best.rows * (cardHeight + gap), cardHeight * maxQuestionScale, width / questionAspect), 1));
+    return {
+        gap,
+        questionWidth: Math.floor(Math.min(questionHeight * questionAspect, width)),
+        questionHeight,
+        columns: best.columns,
+        rows: best.rows,
+        cardWidth,
+        cardHeight,
+        gridWidth: best.columns * cardWidth + (best.columns - 1) * gap,
     };
 }
 function normalizeGameTypeValue(type) {

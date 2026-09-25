@@ -324,6 +324,41 @@ type BuildPreparedGameOptions = {
 export declare function getRuntimeConfig(config: Record<string, unknown>): Record<string, unknown>;
 export declare function buildPreparedGame(game: AuthoredGame, config: Record<string, unknown>, fallbackOptionLabel: (index: number) => string, buildOptions?: BuildPreparedGameOptions): PreparedGame;
 export declare function normalizeAnswerChoiceConfig(game: AuthoredGame, config: Record<string, unknown>): AnswerChoiceConfig;
+/** Proportions of the stacked answer_choice layout, width over height. */
+export declare const ANSWER_CHOICE_STACK: {
+    /** An answer card: nearly square, so the picture fills it. */
+    readonly cardAspect: 1.15;
+    /** The question panel is wider than a card: most question pictures are. */
+    readonly questionAspect: 1.35;
+    /** The question panel is at least this much taller than a card… */
+    readonly minQuestionScale: 1.3;
+    /** …and grows into the room left over up to this much. */
+    readonly maxQuestionScale: 1.8;
+    /** A card never grows past this height, however big the stage. */
+    readonly maxCardHeight: 320;
+};
+export type AnswerChoiceStackLayout = {
+    gap: number;
+    questionWidth: number;
+    questionHeight: number;
+    columns: number;
+    rows: number;
+    cardWidth: number;
+    cardHeight: number;
+    /** The answer rows' width; an incomplete last row is centred in it. */
+    gridWidth: number;
+};
+/**
+ * The stacked answer_choice layout: the question picture on top, as the
+ * biggest thing on the stage, the answers under it as nearly square cards.
+ *
+ * Every column count is tried and the one giving the biggest cards wins — on
+ * a landscape screen that is usually every answer in one row, on a portrait
+ * one two columns. The question panel then takes the height left over, within
+ * `ANSWER_CHOICE_STACK`. Sizes are for the area the client lays the game out
+ * in (its padding already taken off).
+ */
+export declare function layoutAnswerChoiceStack(areaWidth: number, areaHeight: number, answerCount: number): AnswerChoiceStackLayout;
 export declare function resolveGameKind(type: string, config: Record<string, unknown>): RuntimeGameKind;
 export declare function normalizeCatchCorrectConfig(config: Record<string, unknown>): CatchCorrectConfig;
 export declare function normalizeShadowMatchConfig(config: Record<string, unknown>): ShadowMatchConfig;

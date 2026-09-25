@@ -488,6 +488,27 @@ section('svg_assemble scene layout');
   check('no answers, no layout', rules.layoutSvgAssembleScene(1000, 700, viewBox, slots, 0, false) === null);
 }
 
+section('answer_choice stacked: the question on top, nearly square answers under it');
+
+{
+  const fits = (layout, width, height) =>
+    layout.questionHeight + layout.rows * (layout.cardHeight + layout.gap) <= height + 1e-6
+    && layout.gridWidth <= width + 1e-6 && layout.questionWidth <= width + 1e-6;
+  const wide = rules.layoutAnswerChoiceStack(1100, 690, 4);
+  check('a landscape stage puts four answers in one row', wide.columns === 4 && wide.rows === 1, JSON.stringify(wide));
+  check('the cards are nearly square', Math.abs(wide.cardWidth / wide.cardHeight - rules.ANSWER_CHOICE_STACK.cardAspect) < 0.02);
+  check('the question is the biggest thing on the stage', wide.questionHeight >= wide.cardHeight * rules.ANSWER_CHOICE_STACK.minQuestionScale
+    && wide.questionHeight <= wide.cardHeight * rules.ANSWER_CHOICE_STACK.maxQuestionScale + 1);
+  const portrait = rules.layoutAnswerChoiceStack(360, 640, 4);
+  check('a portrait stage takes two columns', portrait.columns === 2 && portrait.rows === 2, JSON.stringify(portrait));
+  const five = rules.layoutAnswerChoiceStack(1100, 690, 5);
+  check('five answers: three and two, the cards bigger than five in a row', five.columns === 3 && five.rows === 2, JSON.stringify(five));
+  const cases = [[1100, 690, 2], [1100, 690, 3], [1100, 690, 6], [760, 280, 4], [760, 280, 6], [360, 640, 4], [1800, 950, 4], [500, 300, 3]];
+  check('everything fits the area', cases.every(([w, h, n]) => fits(rules.layoutAnswerChoiceStack(w, h, n), w, h)),
+    JSON.stringify(cases.filter(([w, h, n]) => !fits(rules.layoutAnswerChoiceStack(w, h, n), w, h))));
+  check('a card stops growing on a big stage', rules.layoutAnswerChoiceStack(3000, 2000, 2).cardHeight === rules.ANSWER_CHOICE_STACK.maxCardHeight);
+}
+
 section('scene safe areas: the content and the answers never touch, nothing leaves the stage');
 
 {
