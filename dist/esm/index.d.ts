@@ -78,6 +78,8 @@ export type CatchCorrectConfig = {
     items: Array<{
         label: string;
         correct: boolean;
+        /** A falling picture shown several times, at most CATCH_CORRECT_COPIES_MAX: catch the pairs. */
+        copies?: number;
     }>;
     target: number;
     lives: number;
@@ -358,6 +360,11 @@ type BuildPreparedGameOptions = {
  * belongs to count_pick, which has a whole scene to spread over.
  */
 export declare const PICTURE_COPIES_MAX = 6;
+/**
+ * The most copies a falling Catch Correct picture shows. It is counted on the
+ * move, at a glance: three is still a shape, four is already a count.
+ */
+export declare const CATCH_CORRECT_COPIES_MAX = 3;
 /** Share of each copy's cell left empty around it, so neighbours never touch. */
 export declare const PICTURE_COPIES_GAP = 0.12;
 /** A copy's box, in fractions of the card it sits in. */

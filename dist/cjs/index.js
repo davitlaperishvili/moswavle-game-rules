@@ -11,7 +11,7 @@
  * game scores differently depending on the device it is played on.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.PICTURE_COPIES_MAX = void 0;
+exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -363,6 +363,11 @@ function normalizeMemoryFace(value) {
  * belongs to count_pick, which has a whole scene to spread over.
  */
 exports.PICTURE_COPIES_MAX = 6;
+/**
+ * The most copies a falling Catch Correct picture shows. It is counted on the
+ * move, at a glance: three is still a shape, four is already a count.
+ */
+exports.CATCH_CORRECT_COPIES_MAX = 3;
 /** Share of each copy's cell left empty around it, so neighbours never touch. */
 exports.PICTURE_COPIES_GAP = 0.12;
 /** An authored copy count, whole and within 1…PICTURE_COPIES_MAX; 1 when unset. */
@@ -838,6 +843,10 @@ function normalizeCatchCorrectConfig(config) {
         return {
             label,
             correct,
+            // Only a picture repeats, and a falling one no more than a glance can count.
+            copies: isImageReference(label)
+                ? Math.min(exports.CATCH_CORRECT_COPIES_MAX, normalizePictureCopies(record.copies ?? record.cc_copies))
+                : 1,
         };
     })
         .filter((item) => Boolean(item));

@@ -801,6 +801,18 @@ section('several copies of one picture on a card');
     ],
     repeats: 2,
   });
+  // As the server serves them: `label` is a picture URL or a word.
+  const falling = rules.normalizeCatchCorrectConfig({ items: [
+    { label: 'https://x/apple.png', copies: 2, correct: true },
+    { label: 'https://x/apple.png', correct: false },
+    { label: 'https://x/pear.png', copies: 6, correct: false },
+    { label: 'ორი', copies: 2, correct: false },
+  ] });
+  check('a falling picture carries its copies, a word never repeats',
+    falling.items[0].copies === 2 && falling.items[1].copies === 1 && falling.items[3].copies === 1);
+  check('and a falling picture shows no more than a glance can count',
+    falling.items[2].copies === rules.CATCH_CORRECT_COPIES_MAX && rules.CATCH_CORRECT_COPIES_MAX === 3);
+
   check('a pattern of counts keeps them through the row, the answer and the choices',
     counts.sequence.map((item) => item.copies).join(',') === '1,2,1,2'
       && counts.answer.copies === 1

@@ -314,6 +314,11 @@ function normalizeMemoryFace(value) {
  * belongs to count_pick, which has a whole scene to spread over.
  */
 export const PICTURE_COPIES_MAX = 6;
+/**
+ * The most copies a falling Catch Correct picture shows. It is counted on the
+ * move, at a glance: three is still a shape, four is already a count.
+ */
+export const CATCH_CORRECT_COPIES_MAX = 3;
 /** Share of each copy's cell left empty around it, so neighbours never touch. */
 export const PICTURE_COPIES_GAP = 0.12;
 /** An authored copy count, whole and within 1…PICTURE_COPIES_MAX; 1 when unset. */
@@ -789,6 +794,10 @@ export function normalizeCatchCorrectConfig(config) {
         return {
             label,
             correct,
+            // Only a picture repeats, and a falling one no more than a glance can count.
+            copies: isImageReference(label)
+                ? Math.min(CATCH_CORRECT_COPIES_MAX, normalizePictureCopies(record.copies ?? record.cc_copies))
+                : 1,
         };
     })
         .filter((item) => Boolean(item));

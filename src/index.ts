@@ -104,6 +104,8 @@ export type CatchCorrectConfig = {
   items: Array<{
     label: string;
     correct: boolean;
+    /** A falling picture shown several times, at most CATCH_CORRECT_COPIES_MAX: catch the pairs. */
+    copies?: number;
   }>;
   target: number;
   lives: number;
@@ -779,6 +781,12 @@ function normalizeMemoryFace(value: unknown): MemoryFace | null {
  */
 export const PICTURE_COPIES_MAX = 6;
 
+/**
+ * The most copies a falling Catch Correct picture shows. It is counted on the
+ * move, at a glance: three is still a shape, four is already a count.
+ */
+export const CATCH_CORRECT_COPIES_MAX = 3;
+
 /** Share of each copy's cell left empty around it, so neighbours never touch. */
 export const PICTURE_COPIES_GAP = 0.12;
 
@@ -1383,9 +1391,13 @@ export function normalizeCatchCorrectConfig(
         return {
           label,
           correct,
+          // Only a picture repeats, and a falling one no more than a glance can count.
+          copies: isImageReference(label)
+            ? Math.min(CATCH_CORRECT_COPIES_MAX, normalizePictureCopies(record.copies ?? record.cc_copies))
+            : 1,
         };
       })
-      .filter((item): item is { label: string; correct: boolean } => Boolean(item));
+      .filter((item): item is { label: string; correct: boolean; copies: number } => Boolean(item));
 
   return {
     // A game authored without items would spawn nothing and could never be won.
