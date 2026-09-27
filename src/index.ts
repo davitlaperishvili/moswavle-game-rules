@@ -62,6 +62,7 @@ export type RuntimeGameKind =
   | "pattern-next"
   | "sort-bins"
   | "size-order"
+  | "connect-pairs"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -123,6 +124,27 @@ export type MemoryCardsConfig = {
   time_limit: number | null;
   max_moves: number | null;
   bg_image: string | null;
+};
+
+/** One pair to connect: what the left group shows, and its partner in the right group. */
+export type ConnectPairsPair = {
+  id: string;
+  left: MemoryFace;
+  right: MemoryFace;
+};
+
+export type ConnectPairsConfig = {
+  /** At most `CONNECT_PAIRS_MAX`, in authored order. */
+  pairs: ConnectPairsPair[];
+  /** Pair ids in the order the left group shows them. */
+  leftOrder: string[];
+  /** Pair ids in the order the right group shows them; no partner sits straight across. */
+  rightOrder: string[];
+  time_limit: number | null;
+  lives: number;
+  bg_image: string | null;
+  /** Every picture the child must see before the clock starts: the pictured faces and the background. */
+  imageUris: string[];
 };
 
 export type ImageOrderItem = {
@@ -1089,6 +1111,21 @@ export function resolveGameKind(
     "shadow_match_game",
   ].includes(normalizedType)) {
     return "shadow-match";
+  }
+
+  if ([
+    "connect_pairs",
+    "connectpairs",
+    "connect_the_pairs",
+    "match_pairs",
+    "matchpairs",
+    "matching_pairs",
+    "make_pairs",
+    "pair_match",
+    "pairmatch",
+    "draw_lines",
+  ].includes(normalizedType)) {
+    return "connect-pairs";
   }
 
   if ([
@@ -2655,6 +2692,93 @@ export function normalizeMemoryCardsConfig(
   };
 }
 
+/**
+ * Connect the pairs: two groups of pictures (or words), and the child joins
+ * each one to its partner.
+ *
+ * The pairs are read like memory pairs (`left`/`right`, or `a`/`b`), each face
+ * a picture or a word, and cut to `CONNECT_PAIRS_MAX`: more does not fit a
+ * phone at a size a child can hit. Both groups are shuffled, and the right one
+ * so that no partner sits straight across from its pair: a straight line would
+ * give the answer away.
+ */
+export function normalizeConnectPairsConfig(
+  config: Record<string, unknown>,
+): ConnectPairsConfig {
+  const rawPairs = Array.isArray(config.pairs)
+    ? config.pairs
+    : Array.isArray(config.cp_pairs)
+      ? config.cp_pairs
+      : [];
+  const seen = new Set<string>();
+
+  const pairs = rawPairs
+    .map((pair, index): ConnectPairsPair | null => {
+      const record = asRecord(pair);
+      if (!record) {
+        return null;
+      }
+
+      const left =
+        normalizeMemoryFace(record.left) ??
+        normalizeMemoryFace(record.a) ??
+        normalizeMemoryFace(record.first);
+      const right =
+        normalizeMemoryFace(record.right) ??
+        normalizeMemoryFace(record.b) ??
+        normalizeMemoryFace(record.second);
+
+      if (!left || !right) {
+        return null;
+      }
+
+      // Taps are told apart by pair id, so two pairs may never share one.
+      let id = extractText(record.id) ?? `pair_${index + 1}`;
+      while (seen.has(id)) {
+        id = `${id}_${index + 1}`;
+      }
+      seen.add(id);
+
+      return { id, left, right };
+    })
+    .filter((pair): pair is ConnectPairsPair => Boolean(pair))
+    .slice(0, CONNECT_PAIRS_MAX);
+
+  const ids = pairs.map((pair) => pair.id);
+  const leftOrder = shuffle(ids);
+  const bg = normalizeBackground(config);
+  const pictures = pairs.flatMap((pair) =>
+    [pair.left, pair.right].filter((face) => face.type === "image").map((face) => face.value),
+  );
+
+  return {
+    pairs,
+    leftOrder,
+    rightOrder: shuffleAcross(leftOrder),
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    bg_image: bg,
+    imageUris: Array.from(new Set(bg ? [...pictures, bg] : pictures)),
+  };
+}
+
+/** A shuffle of `order` where no id keeps its position (for two ids or more). */
+function shuffleAcross(order: readonly string[]): string[] {
+  if (order.length < 2) {
+    return [...order];
+  }
+
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const next = shuffle(order);
+    if (next.every((id, index) => id !== order[index])) {
+      return next;
+    }
+  }
+
+  // Practically unreachable; a rotation never keeps a position either.
+  return [...order.slice(1), order[0]];
+}
+
 const DEFAULT_SVG_VIEW_BOX: SvgViewBox = { minX: 0, minY: 0, width: 100, height: 100 };
 
 export function parseSvgViewBox(svg: unknown): SvgViewBox {
@@ -3231,6 +3355,12 @@ export function layoutSelectOptionItems(
 export const GAME_TIMINGS = {
   answerChoice: { wrongFeedbackSingleMs: 700, wrongFeedbackMultiMs: 850, successSettleMs: 120 },
   catchCorrect: { wrongShakeMs: 100, completionDelayMs: 0 },
+  /**
+   * A connected pair glows and bounces for `matchFeedbackMs` while its line is
+   * drawn over `lineDrawMs`; a wrong pair flashes red for `wrongFeedbackMs`;
+   * the last pair gets `successSettleMs` to be seen before the win.
+   */
+  connectPairs: { matchFeedbackMs: 650, lineDrawMs: 350, wrongFeedbackMs: 600, successSettleMs: 700 },
   countPick: { wrongFeedbackMs: 600 },
   dragDropMatch: { wrongFeedbackMs: 420, successSettleMs: 140 },
   imagesOrder: { wrongFillFeedbackMs: 900 },
@@ -3256,6 +3386,162 @@ export const GAME_TIMINGS = {
     livesOutDelayMs: 320,
   },
 } as const;
+
+// --- Connect the pairs ------------------------------------------------------
+
+/** More pairs than this do not fit a phone at a size a child can hit. */
+export const CONNECT_PAIRS_MAX = 6;
+
+export type ConnectPairsSide = "left" | "right";
+
+/** A card the child tapped: which group, and the pair it belongs to. */
+export type ConnectPairsPick = { side: ConnectPairsSide; pairId: string };
+
+export type ConnectPairsTapResult =
+  /** A card already connected: nothing happens. */
+  | { type: "ignored" }
+  /** Nothing was picked, or another card of the same group was: this one is picked now. */
+  | { type: "select"; pick: ConnectPairsPick }
+  /** The picked card again: the pick is dropped. */
+  | { type: "deselect" }
+  /** Partners: the pair is connected, the pick is dropped. */
+  | { type: "match"; pairId: string }
+  /** Not partners: a mistake, the pick is dropped. */
+  | { type: "mismatch"; leftPairId: string; rightPairId: string };
+
+/**
+ * What a tap on a card does, given the card picked so far and the pairs
+ * already connected. The whole play rule of the game, so both players follow
+ * it tap for tap: a card of the other group checks the pair, a card of the
+ * same group takes over the pick, the picked card again drops it.
+ */
+export function resolveConnectPairsTap(
+  picked: ConnectPairsPick | null,
+  connected: Iterable<string>,
+  tap: ConnectPairsPick,
+): ConnectPairsTapResult {
+  if (new Set(connected).has(tap.pairId)) {
+    return { type: "ignored" };
+  }
+
+  if (!picked) {
+    return { type: "select", pick: tap };
+  }
+
+  if (picked.side === tap.side) {
+    return picked.pairId === tap.pairId ? { type: "deselect" } : { type: "select", pick: tap };
+  }
+
+  const leftPairId = picked.side === "left" ? picked.pairId : tap.pairId;
+  const rightPairId = picked.side === "left" ? tap.pairId : picked.pairId;
+
+  return leftPairId === rightPairId
+    ? { type: "match", pairId: leftPairId }
+    : { type: "mismatch", leftPairId, rightPairId };
+}
+
+export const CONNECT_PAIRS_LAYOUT = {
+  /** A card never grows past this, in px, however large the stage. */
+  maxCard: 200,
+  /** Space between neighbouring cards of a group, as a share of a card: at least, at most. */
+  minGap: 0.14,
+  maxGap: 0.5,
+  /** The lane between the two groups, where the lines run, as a share of a card: at least, at most. */
+  minLane: 0.9,
+  maxLane: 3,
+  /** Kept clear along the stage's edges, as a share of its shorter side. */
+  margin: 0.04,
+} as const;
+
+export type ConnectPairsOrientation = "columns" | "rows";
+
+export type ConnectPairsLayout = {
+  /** Side by side (a left and a right column), or one above the other (a top and a bottom row). */
+  orientation: ConnectPairsOrientation;
+  /** Every card is a square of this side. */
+  card: number;
+  /** Where the left group's cards go, in display order (the top row when in rows). */
+  left: BoardRect[];
+  /** Where the right group's cards go, in display order (the bottom row when in rows). */
+  right: BoardRect[];
+};
+
+/**
+ * Where the cards of `count` pairs go on a stage. The two groups are either
+ * two columns or two rows, whichever lets the cards be larger: on a phone in
+ * landscape that is two rows, so six pairs stay big enough to tap. The cards
+ * grow up to `maxCard`; the space left widens the lane the lines cross and the
+ * gaps between cards, and the whole board is centred inside `insets`.
+ */
+export function layoutConnectPairs(
+  width: number,
+  height: number,
+  count: number,
+  insets: SceneInsets = {},
+): ConnectPairsLayout {
+  const n = clampNumber(Math.floor(count), 0, CONNECT_PAIRS_MAX);
+  const spec = CONNECT_PAIRS_LAYOUT;
+  const margin = Math.max(0, Math.min(width, height)) * spec.margin;
+  const originX = (insets.left ?? 0) + margin;
+  const originY = (insets.top ?? 0) + margin;
+  const freeWidth = Math.max(0, width - (insets.left ?? 0) - (insets.right ?? 0) - margin * 2);
+  const freeHeight = Math.max(0, height - (insets.top ?? 0) - (insets.bottom ?? 0) - margin * 2);
+
+  if (n === 0) {
+    return { orientation: "columns", card: 0, left: [], right: [] };
+  }
+
+  // Cards and gaps along a group; two cards and the lane across both.
+  const along = n + (n - 1) * spec.minGap;
+  const across = 2 + spec.minLane;
+  const columnsCard = Math.min(freeHeight / along, freeWidth / across);
+  const rowsCard = Math.min(freeWidth / along, freeHeight / across);
+  const orientation: ConnectPairsOrientation = rowsCard > columnsCard ? "rows" : "columns";
+  const card = Math.max(0, Math.min(spec.maxCard, Math.max(columnsCard, rowsCard)));
+
+  const alongSpace = orientation === "columns" ? freeHeight : freeWidth;
+  const acrossSpace = orientation === "columns" ? freeWidth : freeHeight;
+  const gap =
+    n > 1 ? clampNumber((alongSpace - n * card) / (n - 1), card * spec.minGap, card * spec.maxGap) : 0;
+  const lane = clampNumber(acrossSpace - 2 * card, card * spec.minLane, card * spec.maxLane);
+  const alongStart = (alongSpace - (n * card + (n - 1) * gap)) / 2;
+  const acrossStart = (acrossSpace - (2 * card + lane)) / 2;
+
+  const slot = (group: 0 | 1, index: number): BoardRect => {
+    const alongOffset = alongStart + index * (card + gap);
+    const acrossOffset = acrossStart + group * (card + lane);
+    return orientation === "columns"
+      ? { left: originX + acrossOffset, top: originY + alongOffset, width: card, height: card }
+      : { left: originX + alongOffset, top: originY + acrossOffset, width: card, height: card };
+  };
+
+  return {
+    orientation,
+    card,
+    left: Array.from({ length: n }, (_, index) => slot(0, index)),
+    right: Array.from({ length: n }, (_, index) => slot(1, index)),
+  };
+}
+
+/**
+ * The line that joins two connected cards: from the middle of the left card's
+ * edge facing the right group to the middle of the right card's facing edge.
+ */
+export function connectPairsLink(
+  orientation: ConnectPairsOrientation,
+  left: BoardRect,
+  right: BoardRect,
+): { from: { x: number; y: number }; to: { x: number; y: number } } {
+  return orientation === "columns"
+    ? {
+        from: { x: left.left + left.width, y: left.top + left.height / 2 },
+        to: { x: right.left, y: right.top + right.height / 2 },
+      }
+    : {
+        from: { x: left.left + left.width / 2, y: left.top + left.height },
+        to: { x: right.left + right.width / 2, y: right.top },
+      };
+}
 
 // --- Attempt metrics --------------------------------------------------------
 
@@ -3286,6 +3572,13 @@ export type AnswerChoiceMetrics = BaseGameMetrics & {
 export type CatchCorrectMetrics = BaseGameMetrics & {
   score: number;
   target: number;
+  livesRemaining: number;
+};
+
+export type ConnectPairsMetrics = BaseGameMetrics & {
+  connectedPairs: number;
+  totalPairs: number;
+  mismatches: number;
   livesRemaining: number;
 };
 
@@ -3363,6 +3656,7 @@ export type PlayableGameKind = Exclude<RuntimeGameKind, "generic">;
 export const GAME_KIND_KEYS = {
   "answer-choice": "answerChoice",
   "catch-correct": "catchCorrect",
+  "connect-pairs": "connectPairs",
   "count-pick": "countPick",
   "drag-drop-match": "dragDropMatch",
   images_order: "imagesOrder",
@@ -3384,6 +3678,7 @@ export const GAME_TIMINGS_BY_KIND: {
 } = {
   "answer-choice": GAME_TIMINGS.answerChoice,
   "catch-correct": GAME_TIMINGS.catchCorrect,
+  "connect-pairs": GAME_TIMINGS.connectPairs,
   "count-pick": GAME_TIMINGS.countPick,
   "drag-drop-match": GAME_TIMINGS.dragDropMatch,
   images_order: GAME_TIMINGS.imagesOrder,
@@ -3401,6 +3696,7 @@ export const GAME_TIMINGS_BY_KIND: {
 export type GameMetricsByKind = {
   "answer-choice": AnswerChoiceMetrics;
   "catch-correct": CatchCorrectMetrics;
+  "connect-pairs": ConnectPairsMetrics;
   "count-pick": CountPickMetrics;
   "drag-drop-match": DragDropMatchMetrics;
   images_order: ImageOrderMetrics;

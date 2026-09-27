@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -96,6 +96,25 @@ export type MemoryCardsConfig = {
     time_limit: number | null;
     max_moves: number | null;
     bg_image: string | null;
+};
+/** One pair to connect: what the left group shows, and its partner in the right group. */
+export type ConnectPairsPair = {
+    id: string;
+    left: MemoryFace;
+    right: MemoryFace;
+};
+export type ConnectPairsConfig = {
+    /** At most `CONNECT_PAIRS_MAX`, in authored order. */
+    pairs: ConnectPairsPair[];
+    /** Pair ids in the order the left group shows them. */
+    leftOrder: string[];
+    /** Pair ids in the order the right group shows them; no partner sits straight across. */
+    rightOrder: string[];
+    time_limit: number | null;
+    lives: number;
+    bg_image: string | null;
+    /** Every picture the child must see before the clock starts: the pictured faces and the background. */
+    imageUris: string[];
 };
 export type ImageOrderItem = {
     id: string;
@@ -606,6 +625,17 @@ export declare function normalizeJigsawConfig(config: Record<string, unknown>): 
 export declare function normalizeDragDropMatchConfig(config: Record<string, unknown>): DragDropMatchConfig;
 export declare function normalizeSelectOptionConfig(config: Record<string, unknown>): SelectOptionConfig;
 export declare function normalizeMemoryCardsConfig(config: Record<string, unknown>): MemoryCardsConfig;
+/**
+ * Connect the pairs: two groups of pictures (or words), and the child joins
+ * each one to its partner.
+ *
+ * The pairs are read like memory pairs (`left`/`right`, or `a`/`b`), each face
+ * a picture or a word, and cut to `CONNECT_PAIRS_MAX`: more does not fit a
+ * phone at a size a child can hit. Both groups are shuffled, and the right one
+ * so that no partner sits straight across from its pair: a straight line would
+ * give the answer away.
+ */
+export declare function normalizeConnectPairsConfig(config: Record<string, unknown>): ConnectPairsConfig;
 export declare function parseSvgViewBox(svg: unknown): SvgViewBox;
 /** The http(s) pictures an SVG's `<image>` elements load, in document order. */
 export declare function extractSvgImageUris(svg: string | null | undefined): string[];
@@ -746,6 +776,17 @@ export declare const GAME_TIMINGS: {
         readonly wrongShakeMs: 100;
         readonly completionDelayMs: 0;
     };
+    /**
+     * A connected pair glows and bounces for `matchFeedbackMs` while its line is
+     * drawn over `lineDrawMs`; a wrong pair flashes red for `wrongFeedbackMs`;
+     * the last pair gets `successSettleMs` to be seen before the win.
+     */
+    readonly connectPairs: {
+        readonly matchFeedbackMs: 650;
+        readonly lineDrawMs: 350;
+        readonly wrongFeedbackMs: 600;
+        readonly successSettleMs: 700;
+    };
     readonly countPick: {
         readonly wrongFeedbackMs: 600;
     };
@@ -796,6 +837,91 @@ export declare const GAME_TIMINGS: {
         readonly livesOutDelayMs: 320;
     };
 };
+/** More pairs than this do not fit a phone at a size a child can hit. */
+export declare const CONNECT_PAIRS_MAX = 6;
+export type ConnectPairsSide = "left" | "right";
+/** A card the child tapped: which group, and the pair it belongs to. */
+export type ConnectPairsPick = {
+    side: ConnectPairsSide;
+    pairId: string;
+};
+export type ConnectPairsTapResult = 
+/** A card already connected: nothing happens. */
+{
+    type: "ignored";
+}
+/** Nothing was picked, or another card of the same group was: this one is picked now. */
+ | {
+    type: "select";
+    pick: ConnectPairsPick;
+}
+/** The picked card again: the pick is dropped. */
+ | {
+    type: "deselect";
+}
+/** Partners: the pair is connected, the pick is dropped. */
+ | {
+    type: "match";
+    pairId: string;
+}
+/** Not partners: a mistake, the pick is dropped. */
+ | {
+    type: "mismatch";
+    leftPairId: string;
+    rightPairId: string;
+};
+/**
+ * What a tap on a card does, given the card picked so far and the pairs
+ * already connected. The whole play rule of the game, so both players follow
+ * it tap for tap: a card of the other group checks the pair, a card of the
+ * same group takes over the pick, the picked card again drops it.
+ */
+export declare function resolveConnectPairsTap(picked: ConnectPairsPick | null, connected: Iterable<string>, tap: ConnectPairsPick): ConnectPairsTapResult;
+export declare const CONNECT_PAIRS_LAYOUT: {
+    /** A card never grows past this, in px, however large the stage. */
+    readonly maxCard: 200;
+    /** Space between neighbouring cards of a group, as a share of a card: at least, at most. */
+    readonly minGap: 0.14;
+    readonly maxGap: 0.5;
+    /** The lane between the two groups, where the lines run, as a share of a card: at least, at most. */
+    readonly minLane: 0.9;
+    readonly maxLane: 3;
+    /** Kept clear along the stage's edges, as a share of its shorter side. */
+    readonly margin: 0.04;
+};
+export type ConnectPairsOrientation = "columns" | "rows";
+export type ConnectPairsLayout = {
+    /** Side by side (a left and a right column), or one above the other (a top and a bottom row). */
+    orientation: ConnectPairsOrientation;
+    /** Every card is a square of this side. */
+    card: number;
+    /** Where the left group's cards go, in display order (the top row when in rows). */
+    left: BoardRect[];
+    /** Where the right group's cards go, in display order (the bottom row when in rows). */
+    right: BoardRect[];
+};
+/**
+ * Where the cards of `count` pairs go on a stage. The two groups are either
+ * two columns or two rows, whichever lets the cards be larger: on a phone in
+ * landscape that is two rows, so six pairs stay big enough to tap. The cards
+ * grow up to `maxCard`; the space left widens the lane the lines cross and the
+ * gaps between cards, and the whole board is centred inside `insets`.
+ */
+export declare function layoutConnectPairs(width: number, height: number, count: number, insets?: SceneInsets): ConnectPairsLayout;
+/**
+ * The line that joins two connected cards: from the middle of the left card's
+ * edge facing the right group to the middle of the right card's facing edge.
+ */
+export declare function connectPairsLink(orientation: ConnectPairsOrientation, left: BoardRect, right: BoardRect): {
+    from: {
+        x: number;
+        y: number;
+    };
+    to: {
+        x: number;
+        y: number;
+    };
+};
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -821,6 +947,12 @@ export type AnswerChoiceMetrics = BaseGameMetrics & {
 export type CatchCorrectMetrics = BaseGameMetrics & {
     score: number;
     target: number;
+    livesRemaining: number;
+};
+export type ConnectPairsMetrics = BaseGameMetrics & {
+    connectedPairs: number;
+    totalPairs: number;
+    mismatches: number;
     livesRemaining: number;
 };
 export type CountPickMetrics = BaseGameMetrics & {
@@ -883,6 +1015,7 @@ export type PlayableGameKind = Exclude<RuntimeGameKind, "generic">;
 export declare const GAME_KIND_KEYS: {
     readonly "answer-choice": "answerChoice";
     readonly "catch-correct": "catchCorrect";
+    readonly "connect-pairs": "connectPairs";
     readonly "count-pick": "countPick";
     readonly "drag-drop-match": "dragDropMatch";
     readonly images_order: "imagesOrder";
@@ -904,6 +1037,7 @@ export declare const GAME_TIMINGS_BY_KIND: {
 export type GameMetricsByKind = {
     "answer-choice": AnswerChoiceMetrics;
     "catch-correct": CatchCorrectMetrics;
+    "connect-pairs": ConnectPairsMetrics;
     "count-pick": CountPickMetrics;
     "drag-drop-match": DragDropMatchMetrics;
     images_order: ImageOrderMetrics;

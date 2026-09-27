@@ -331,14 +331,14 @@ const tinyHotspot = rules.layoutSelectOptionItems({ width: 1600, height: 900 }, 
 check('a tiny hotspot is grown to a tappable size', tinyHotspot.width >= 900 * 0.08 - 0.001);
 check('no hotspots before the stage is measured', rules.layoutSelectOptionItems({ width: 0, height: 0 }, { items: [{ id: 'a', x: 1, y: 1, width: 1, height: 1 }], board_width: 1, board_height: 1 }).length === 0);
 
-check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 13);
+check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 14);
 check('failure reasons are named', rules.FAILURE_REASON.wrongCatch === 'wrong_catch' && rules.FAILURE_REASON.livesOut === 'lives_out');
 
 
 section('every playable kind is registered');
 
 const playableKinds = Object.keys(rules.GAME_KIND_KEYS);
-check('thirteen kinds, generic excluded', playableKinds.length === 13 && !playableKinds.includes('generic'));
+check('fourteen kinds, generic excluded', playableKinds.length === 14 && !playableKinds.includes('generic'));
 check('each kind resolves to itself', playableKinds.every((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) === kind), playableKinds.filter((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) !== kind).join());
 check('each kind has timings', playableKinds.every((kind) => rules.GAME_TIMINGS_BY_KIND[kind] === rules.GAME_TIMINGS[rules.GAME_KIND_KEYS[kind]]));
 check('no timing key is orphaned', Object.keys(rules.GAME_TIMINGS).every((key) => Object.values(rules.GAME_KIND_KEYS).includes(key)));
@@ -622,6 +622,95 @@ section('svg_assemble: a composed scene is rearranged to its safe layout');
   const shadow = read('slot_1');
   check('and the silhouette where its slot is', Math.abs(shadow.x - (layout.slots[0].left - layout.board.left) * unit) < 0.01, JSON.stringify(shadow));
   check('the background is untouched', arranged.includes('href="https://example.test/bg.png" x="0" y="0" width="1600" height="1200"'));
+}
+
+section('connect_pairs: two groups, joined pair by pair');
+
+{
+  ['connect_pairs', 'match_pairs', 'matching_pairs', 'make_pairs', 'pair_match', 'draw_lines'].forEach((type) => {
+    check(`${type} resolves to connect-pairs`, rules.resolveGameKind(type, { pairs: [] }) === 'connect-pairs');
+  });
+  check('memory keeps its own type even with pairs', rules.resolveGameKind('memory_cards', { pairs: [] }) === 'memory-cards');
+
+  const face = (value) => (value.startsWith('http') ? { type: 'image', value } : { type: 'text', value });
+  const authored = {
+    bg_image: 'https://example.test/room.png',
+    time_limit: '60',
+    pairs: [
+      { id: 'sock', left: face('https://example.test/sock.png'), right: face('https://example.test/shoe.png') },
+      { id: 'key', a: 'https://example.test/key.png', b: 'https://example.test/lock.png' },
+      { id: 'cup', left: face('https://example.test/cup.png'), right: face('saucer') },
+      { id: 'broken', left: face('https://example.test/bed.png') },
+      { id: 'sock', left: face('A'), right: face('a') },
+    ],
+  };
+  const config = rules.normalizeConnectPairsConfig(authored);
+  check('a pair needs both faces', config.pairs.length === 4, JSON.stringify(config.pairs.map((pair) => pair.id)));
+  check('pairs read from left/right or a/b', config.pairs[1].left.value === 'https://example.test/key.png' && config.pairs[1].right.value === 'https://example.test/lock.png');
+  check('a face may be a word', config.pairs[2].right.type === 'text' && config.pairs[2].right.value === 'saucer');
+  check('ids stay unique', new Set(config.pairs.map((pair) => pair.id)).size === 4, JSON.stringify(config.pairs.map((pair) => pair.id)));
+  check('lives default to three, the timer is read', config.lives === 3 && config.time_limit === 60);
+  check('every picture is preloaded, words are not', config.imageUris.length === 6 && config.imageUris.includes('https://example.test/room.png') && !config.imageUris.includes('saucer'), JSON.stringify(config.imageUris));
+
+  const many = rules.normalizeConnectPairsConfig({
+    pairs: Array.from({ length: 9 }, (_, index) => ({ id: `p${index}`, left: face(`L${index}`), right: face(`R${index}`) })),
+  });
+  check(`at most ${rules.CONNECT_PAIRS_MAX} pairs`, rules.CONNECT_PAIRS_MAX === 6 && many.pairs.length === 6);
+
+  let orders = true;
+  let across = true;
+  for (let round = 0; round < 200; round += 1) {
+    const shuffled = rules.normalizeConnectPairsConfig({
+      pairs: Array.from({ length: 2 + (round % 5) }, (_, index) => ({ id: `p${index}`, left: face(`L${index}`), right: face(`R${index}`) })),
+    });
+    const ids = shuffled.pairs.map((pair) => pair.id).sort().join();
+    orders = orders && [...shuffled.leftOrder].sort().join() === ids && [...shuffled.rightOrder].sort().join() === ids;
+    across = across && shuffled.rightOrder.every((id, index) => id !== shuffled.leftOrder[index]);
+  }
+  check('both groups show every pair once', orders);
+  check('no partner ever sits straight across', across);
+
+  const tap = rules.resolveConnectPairsTap;
+  const L = (pairId) => ({ side: 'left', pairId });
+  const R = (pairId) => ({ side: 'right', pairId });
+  check('a first tap picks the card', JSON.stringify(tap(null, [], L('a'))) === JSON.stringify({ type: 'select', pick: L('a') }));
+  check('the picked card again drops the pick', tap(L('a'), [], L('a')).type === 'deselect');
+  check('another card of the same group takes the pick', JSON.stringify(tap(L('a'), [], L('b'))) === JSON.stringify({ type: 'select', pick: L('b') }));
+  check('either group may start', JSON.stringify(tap(R('b'), [], L('b'))) === JSON.stringify({ type: 'match', pairId: 'b' }));
+  check('partners connect', JSON.stringify(tap(L('a'), [], R('a'))) === JSON.stringify({ type: 'match', pairId: 'a' }));
+  check('strangers are a mistake, named left then right', JSON.stringify(tap(R('b'), [], L('a'))) === JSON.stringify({ type: 'mismatch', leftPairId: 'a', rightPairId: 'b' }));
+  check('a connected card ignores taps', tap(null, ['a'], L('a')).type === 'ignored' && tap(L('b'), new Set(['a']), R('a')).type === 'ignored');
+
+  const inside = (rect, width, height, insets = {}) =>
+    rect.left >= (insets.left || 0) - 1e-6 && rect.top >= (insets.top || 0) - 1e-6
+    && rect.left + rect.width <= width - (insets.right || 0) + 1e-6 && rect.top + rect.height <= height - (insets.bottom || 0) + 1e-6;
+  const overlap = (a, b) => a.left < b.left + b.width && b.left < a.left + a.width && a.top < b.top + b.height && b.top < a.top + a.height;
+
+  const phone = rules.layoutConnectPairs(844, 330, 6, { top: 0 });
+  check('six pairs on a phone in landscape go in two rows', phone.orientation === 'rows', phone.orientation);
+  check('and stay big enough to tap', phone.card >= 100, String(phone.card));
+  const cards = [...phone.left, ...phone.right];
+  check('every card is on the stage', cards.every((rect) => inside(rect, 844, 330)), JSON.stringify(cards));
+  check('no two cards overlap', cards.every((a, i) => cards.every((b, j) => i === j || !overlap(a, b))));
+  check('the top row is the left group', phone.left.every((rect) => rect.top < phone.right[0].top));
+
+  const tall = rules.layoutConnectPairs(600, 900, 6);
+  check('a tall stage gets two columns', tall.orientation === 'columns' && tall.left.every((rect) => rect.left < tall.right[0].left));
+  const big = rules.layoutConnectPairs(1500, 850, 3);
+  check('cards stop growing on a large stage', big.card === rules.CONNECT_PAIRS_LAYOUT.maxCard, String(big.card));
+  const insets = { top: 70, left: 10, right: 10, bottom: 10 };
+  const chrome = rules.layoutConnectPairs(844, 390, 5, insets);
+  check('the board keeps inside the insets', [...chrome.left, ...chrome.right].every((rect) => inside(rect, 844, 390, insets)));
+  check('nothing to lay out, nothing laid out', rules.layoutConnectPairs(800, 600, 0).left.length === 0);
+
+  const link = rules.connectPairsLink('columns', tall.left[0], tall.right[2]);
+  check('a line runs from the left card\'s inner edge to the right card\'s', link.from.x === tall.left[0].left + tall.left[0].width && link.to.x === tall.right[2].left
+    && link.to.y === tall.right[2].top + tall.right[2].height / 2);
+  const rowLink = rules.connectPairsLink('rows', phone.left[1], phone.right[4]);
+  check('in rows, from the bottom edge to the top edge', rowLink.from.y === phone.left[1].top + phone.left[1].height && rowLink.to.y === phone.right[4].top);
+
+  const t = rules.GAME_TIMINGS.connectPairs;
+  check('a connected pair is drawn within its glow', t.lineDrawMs <= t.matchFeedbackMs && t.wrongFeedbackMs > 0 && t.successSettleMs > 0);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
