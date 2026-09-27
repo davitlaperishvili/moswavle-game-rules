@@ -45,7 +45,7 @@ resolving a game type to a renderer kind, and scene geometry in stage pixels. Ev
 as a scene goes through `layoutScene`: the background covers the stage, and two safe areas —
 the content (pictures, zones, slots) and the answers — never touch and never leave the stage;
 a picture the crop cuts is shrunk until it is whole (`fitSceneRect`). A card that shows one
-picture several times — three apples on a memory card, two cats on an answer card — places the
+picture several times — three apples on a memory card, two cats on an answer card, a pattern of counts — places the
 copies with `layoutPictureCopies`, so a count looks the same on every device.
 
 No: anything that draws, animates, plays audio, or touches the DOM or React Native. Those differ

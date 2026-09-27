@@ -1478,6 +1478,7 @@ function normalizePatternNextConfig(config) {
         return {
             id: extractText(record.id) ?? `pattern-${index + 1}`,
             image,
+            copies: normalizePictureCopies(record.copies ?? record.pn_copies),
         };
     })
         .filter((item) => item !== null);
@@ -1498,7 +1499,7 @@ function normalizePatternNextConfig(config) {
     const sequence = [];
     for (let index = 0; index < length; index += 1) {
         const source = pattern[index % pattern.length];
-        sequence.push({ id: `${source.id}-${index + 1}`, image: source.image });
+        sequence.push({ id: `${source.id}-${index + 1}`, image: source.image, copies: source.copies });
     }
     const answer = pattern[length % pattern.length];
     return {
@@ -1538,7 +1539,7 @@ function normalizeSortBinsConfig(config) {
         if (!label && !image) {
             return null;
         }
-        return { id, label, image };
+        return { id, label, image, copies: normalizePictureCopies(record.copies ?? record.sb_bin_copies) };
     })
         .filter((bin) => bin !== null);
     const binIds = new Set(bins.map((bin) => bin.id));
@@ -1563,6 +1564,7 @@ function normalizeSortBinsConfig(config) {
             image,
             label: extractText(record.label),
             binId,
+            copies: normalizePictureCopies(record.copies ?? record.sb_item_copies),
         };
     })
         .filter((item) => item !== null);

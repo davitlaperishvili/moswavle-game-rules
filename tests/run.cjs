@@ -777,6 +777,34 @@ section('several copies of one picture on a card');
     'https://x/apple.png',
   ] });
   check('an order step carries its copies', order.items.map((item) => item.copies).join(',') === '1,2,1');
+
+  const bins = rules.normalizeSortBinsConfig({
+    bins: [
+      { id: 'two', label: '2' },
+      { id: 'three', image: 'https://x/apple.png', sb_bin_copies: 3 },
+    ],
+    items: [
+      { image: 'https://x/cat.png', sb_item_copies: 2, sb_bin_id: 'two' },
+      { image: 'https://x/cat.png', copies: 3, binId: 'three' },
+      { image: 'https://x/dog.png', binId: 'two' },
+    ],
+  });
+  const copiesOfItem = (image, bin) => bins.items.find((item) => item.image === image && item.binId === bin).copies;
+  check('a thing to sort carries its copies', copiesOfItem('https://x/cat.png', 'two') === 2 && copiesOfItem('https://x/cat.png', 'three') === 3
+    && copiesOfItem('https://x/dog.png', 'two') === 1);
+  check('and so does a bin\'s picture: the "three" bin as three apples', bins.bins[1].copies === 3 && bins.bins[0].copies === 1);
+
+  const counts = rules.normalizePatternNextConfig({
+    pattern: [
+      { id: 'one', image: 'https://x/apple.png', copies: 1 },
+      { id: 'two', image: 'https://x/apple.png', pn_copies: 2 },
+    ],
+    repeats: 2,
+  });
+  check('a pattern of counts keeps them through the row, the answer and the choices',
+    counts.sequence.map((item) => item.copies).join(',') === '1,2,1,2'
+      && counts.answer.copies === 1
+      && counts.choices.map((item) => item.copies).sort().join(',') === '1,2');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

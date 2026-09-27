@@ -190,6 +190,8 @@ export type CountPickConfig = {
 export type PatternItem = {
     id: string;
     image: string;
+    /** How many times the picture is shown: a pattern of counts, one-two-one-two. */
+    copies?: number;
 };
 export type PatternNextConfig = {
     /** The repeating unit: A-B, or A-B-C, or A-A-B. */
@@ -208,12 +210,16 @@ export type SortBin = {
     id: string;
     label: string | null;
     image: string | null;
+    /** A bin's picture shown several times: the "three" bin as three apples, for children who read no digits. */
+    copies?: number;
 };
 export type SortBinsItem = {
     id: string;
     image: string;
     label: string | null;
     binId: string;
+    /** How many times the thing shows its picture: sorting by how many. */
+    copies?: number;
 };
 export type SortBinsConfig = {
     bins: SortBin[];

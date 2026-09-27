@@ -225,6 +225,8 @@ export type CountPickConfig = {
 export type PatternItem = {
   id: string;
   image: string;
+  /** How many times the picture is shown: a pattern of counts, one-two-one-two. */
+  copies?: number;
 };
 
 export type PatternNextConfig = {
@@ -245,6 +247,8 @@ export type SortBin = {
   id: string;
   label: string | null;
   image: string | null;
+  /** A bin's picture shown several times: the "three" bin as three apples, for children who read no digits. */
+  copies?: number;
 };
 
 export type SortBinsItem = {
@@ -252,6 +256,8 @@ export type SortBinsItem = {
   image: string;
   label: string | null;
   binId: string;
+  /** How many times the thing shows its picture: sorting by how many. */
+  copies?: number;
 };
 
 export type SortBinsConfig = {
@@ -2231,6 +2237,7 @@ export function normalizePatternNextConfig(
       return {
         id: extractText(record.id) ?? `pattern-${index + 1}`,
         image,
+        copies: normalizePictureCopies(record.copies ?? record.pn_copies),
       };
     })
     .filter((item): item is PatternItem => item !== null);
@@ -2254,7 +2261,7 @@ export function normalizePatternNextConfig(
   const sequence: PatternItem[] = [];
   for (let index = 0; index < length; index += 1) {
     const source = pattern[index % pattern.length];
-    sequence.push({ id: `${source.id}-${index + 1}`, image: source.image });
+    sequence.push({ id: `${source.id}-${index + 1}`, image: source.image, copies: source.copies });
   }
 
   const answer = pattern[length % pattern.length];
@@ -2307,7 +2314,7 @@ export function normalizeSortBinsConfig(
         return null;
       }
 
-      return { id, label, image };
+      return { id, label, image, copies: normalizePictureCopies(record.copies ?? record.sb_bin_copies) };
     })
     .filter((bin): bin is SortBin => bin !== null);
 
@@ -2341,6 +2348,7 @@ export function normalizeSortBinsConfig(
         image,
         label: extractText(record.label),
         binId,
+        copies: normalizePictureCopies(record.copies ?? record.sb_item_copies),
       };
     })
     .filter((item): item is SortBinsItem => item !== null);
