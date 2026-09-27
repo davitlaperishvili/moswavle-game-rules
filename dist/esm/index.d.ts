@@ -49,6 +49,8 @@ export type AnswerChoiceOption = {
     image: string;
     label: string | null;
     isCorrect: boolean;
+    /** How many times the card shows its picture (`layoutPictureCopies`); 1 when unset. */
+    copies?: number;
 };
 export type AnswerChoiceLayout = "stacked" | "split";
 export type AnswerChoiceConfig = {
@@ -64,6 +66,8 @@ export type AnswerChoiceConfig = {
 export type MemoryFace = {
     type: "image" | "text";
     value: string;
+    /** An image face may show its picture several times: three apples on one card. */
+    copies?: number;
 };
 export type MemoryPair = {
     id: string;
@@ -120,6 +124,8 @@ export type ImageOrderItem = {
     id: string;
     image: string;
     label: string | null;
+    /** How many times the step shows its picture: one apple, two apples, three. */
+    copies?: number;
 };
 export type ImageOrderConfig = {
     items: ImageOrderItem[];
@@ -340,6 +346,34 @@ export type SvgAssembleConfig = {
 type BuildPreparedGameOptions = {
     useFallbackLabels?: boolean;
 };
+/**
+ * The most copies of one picture a card shows. Six is a 3 × 2 grid — still a
+ * picture each a child can tell apart and count on a phone; counting further
+ * belongs to count_pick, which has a whole scene to spread over.
+ */
+export declare const PICTURE_COPIES_MAX = 6;
+/** Share of each copy's cell left empty around it, so neighbours never touch. */
+export declare const PICTURE_COPIES_GAP = 0.12;
+/** A copy's box, in fractions of the card it sits in. */
+export type PictureCopyBox = {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+};
+/** An authored copy count, whole and within 1…PICTURE_COPIES_MAX; 1 when unset. */
+export declare function normalizePictureCopies(value: unknown): number;
+/**
+ * Where each copy of a picture sits on a card of the given width / height.
+ *
+ * All copies are the same size — a count must not look like a size question
+ * — and as big as the card allows: rows are tried one by one and the
+ * arrangement with the biggest copies wins, ties going to fewer rows. Rows
+ * are centred, the fuller ones at the bottom, so three is a little pyramid and
+ * five sits as two over three: shapes a child counts at a glance. One copy
+ * fills the card, exactly as a card without copies does.
+ */
+export declare function layoutPictureCopies(count: number, aspect?: number): PictureCopyBox[];
 export declare function getRuntimeConfig(config: Record<string, unknown>): Record<string, unknown>;
 export declare function buildPreparedGame(game: AuthoredGame, config: Record<string, unknown>, fallbackOptionLabel: (index: number) => string, buildOptions?: BuildPreparedGameOptions): PreparedGame;
 export declare function normalizeAnswerChoiceConfig(game: AuthoredGame, config: Record<string, unknown>): AnswerChoiceConfig;

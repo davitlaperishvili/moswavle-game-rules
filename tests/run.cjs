@@ -713,5 +713,71 @@ section('connect_pairs: two groups, joined pair by pair');
   check('a connected pair is drawn within its glow', t.lineDrawMs <= t.matchFeedbackMs && t.wrongFeedbackMs > 0 && t.successSettleMs > 0);
 }
 
+section('several copies of one picture on a card');
+
+{
+  const within = (box) => box.left >= -1e-9 && box.top >= -1e-9 && box.left + box.width <= 1 + 1e-9 && box.top + box.height <= 1 + 1e-9;
+  const apart = (boxes) => boxes.every((a, i) => boxes.every((b, j) => i === j
+    || a.left + a.width <= b.left + 1e-9 || b.left + b.width <= a.left + 1e-9
+    || a.top + a.height <= b.top + 1e-9 || b.top + b.height <= a.top + 1e-9));
+  const shapes = [0.6, 1, 1.4, 2.2];
+  let everyCase = true;
+
+  for (let count = 1; count <= rules.PICTURE_COPIES_MAX; count++) {
+    for (const aspect of shapes) {
+      const boxes = rules.layoutPictureCopies(count, aspect);
+      // In pixels a copy is square: its width on the card times the card's aspect equals its height.
+      // One copy is the exception: it fills the card, as a picture without copies does.
+      const square = count === 1 || boxes.every((box) => Math.abs(box.width * aspect - box.height) < 1e-9);
+      const same = boxes.every((box) => Math.abs(box.height - boxes[0].height) < 1e-9);
+
+      if (boxes.length !== count || !boxes.every(within) || !apart(boxes) || !square || !same) {
+        everyCase = false;
+        console.log(`    ${count} on ${aspect}: ${JSON.stringify(boxes)}`);
+      }
+    }
+  }
+
+  check('every count on every card shape: that many copies, all the same size, inside the card, none touching', everyCase);
+  check('one copy fills the card like a plain picture', JSON.stringify(rules.layoutPictureCopies(1, 1.3)) === JSON.stringify([{ left: 0, top: 0, width: 1, height: 1 }]));
+
+  const two = rules.layoutPictureCopies(2, 1);
+  check('two on a square card sit side by side', Math.abs(two[0].top - two[1].top) < 1e-9);
+  const tall = rules.layoutPictureCopies(2, 0.6);
+  check('two on a tall card stand one over the other', Math.abs(tall[0].left - tall[1].left) < 1e-9);
+  const three = rules.layoutPictureCopies(3, 1);
+  check('three on a square card make a pyramid, one over two', three[0].top < three[1].top && Math.abs(three[1].top - three[2].top) < 1e-9);
+  const wide = rules.layoutPictureCopies(3, 2.2);
+  check('three on a wide card make a row', three.length === 3 && wide.every((box) => Math.abs(box.top - wide[0].top) < 1e-9));
+  const six = rules.layoutPictureCopies(6, 1);
+  // A third of the card, less the gap: still a picture, not a speck.
+  check('six on a square card are each close to a third of it', six[0].width > 0.28, String(six[0].width));
+
+  check('copies are whole and capped', rules.normalizePictureCopies('3') === 3 && rules.normalizePictureCopies(2.7) === 2
+    && rules.normalizePictureCopies(40) === rules.PICTURE_COPIES_MAX && rules.normalizePictureCopies(0) === 1
+    && rules.normalizePictureCopies(undefined) === 1 && rules.normalizePictureCopies('') === 1);
+
+  const memory = rules.normalizeMemoryCardsConfig({ pairs: [
+    { id: 'p1', a: { type: 'image', value: 'https://x/digit-3.png' }, b: { type: 'image', value: 'https://x/apple.png', copies: 3 } },
+    { id: 'p2', a: { type: 'text', value: 'ორი', copies: 4 }, b: { type: 'image', value: 'https://x/cat.png', copies: '2' } },
+  ] });
+  check('a memory face carries its copies', memory.pairs[0].b.copies === 3 && memory.pairs[0].a.copies === 1 && memory.pairs[1].b.copies === 2);
+  check('a written word is never repeated', memory.pairs[1].a.copies === 1);
+
+  const answers = rules.normalizeAnswerChoiceConfig(game('answer_choice', {}), { answers: [
+    { image: 'https://x/cat.png', copies: 3, is_correct: true },
+    { image: 'https://x/cat.png', copies: 2 },
+    { image: 'https://x/cat.png' },
+  ] });
+  check('an answer card carries its copies', answers.answers.map((answer) => answer.copies).join(',') === '3,2,1');
+
+  const order = rules.normalizeImageOrderConfig({ items: [
+    { image: 'https://x/apple.png', copies: 1 },
+    { image: 'https://x/apple.png', copies: 2 },
+    'https://x/apple.png',
+  ] });
+  check('an order step carries its copies', order.items.map((item) => item.copies).join(',') === '1,2,1');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

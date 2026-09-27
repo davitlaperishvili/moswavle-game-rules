@@ -282,6 +282,8 @@ function normalizeMemoryFace(value) {
             return {
                 type: directRecord.type,
                 value: resolvedValue,
+                // A word is written once; only a picture repeats.
+                copies: directRecord.type === "image" ? normalizePictureCopies(directRecord.copies) : 1,
             };
         }
     }
@@ -290,6 +292,7 @@ function normalizeMemoryFace(value) {
         return {
             type: "image",
             value: image,
+            copies: 1,
         };
     }
     const text = extractText(value);
@@ -297,9 +300,78 @@ function normalizeMemoryFace(value) {
         return {
             type: "text",
             value: text,
+            copies: 1,
         };
     }
     return null;
+}
+/* ---------------------------------------------------------------------------
+ * Several copies of one picture on a card
+ * ------------------------------------------------------------------------ */
+/**
+ * The most copies of one picture a card shows. Six is a 3 × 2 grid — still a
+ * picture each a child can tell apart and count on a phone; counting further
+ * belongs to count_pick, which has a whole scene to spread over.
+ */
+export const PICTURE_COPIES_MAX = 6;
+/** Share of each copy's cell left empty around it, so neighbours never touch. */
+export const PICTURE_COPIES_GAP = 0.12;
+/** An authored copy count, whole and within 1…PICTURE_COPIES_MAX; 1 when unset. */
+export function normalizePictureCopies(value) {
+    const count = extractNumber(value);
+    if (count === null || !Number.isFinite(count)) {
+        return 1;
+    }
+    return Math.min(PICTURE_COPIES_MAX, Math.max(1, Math.floor(count)));
+}
+/**
+ * Where each copy of a picture sits on a card of the given width / height.
+ *
+ * All copies are the same size — a count must not look like a size question
+ * — and as big as the card allows: rows are tried one by one and the
+ * arrangement with the biggest copies wins, ties going to fewer rows. Rows
+ * are centred, the fuller ones at the bottom, so three is a little pyramid and
+ * five sits as two over three: shapes a child counts at a glance. One copy
+ * fills the card, exactly as a card without copies does.
+ */
+export function layoutPictureCopies(count, aspect = 1) {
+    const copies = normalizePictureCopies(count);
+    const ratio = Number.isFinite(aspect) && aspect > 0 ? aspect : 1;
+    if (copies === 1) {
+        return [{ left: 0, top: 0, width: 1, height: 1 }];
+    }
+    // Worked in a box `ratio` wide and 1 high.
+    let best = { rows: 1, cell: 0 };
+    for (let rows = 1; rows <= copies; rows++) {
+        const columns = Math.ceil(copies / rows);
+        // A whole row left empty is the same arrangement with a gap in it.
+        if (columns * rows - copies >= columns) {
+            continue;
+        }
+        const cell = Math.min(ratio / columns, 1 / rows);
+        if (cell > best.cell + 1e-9) {
+            best = { rows, cell };
+        }
+    }
+    const { rows, cell } = best;
+    const base = Math.floor(copies / rows);
+    const fuller = copies % rows;
+    const inset = (cell * PICTURE_COPIES_GAP) / 2;
+    const top = (1 - rows * cell) / 2;
+    const boxes = [];
+    for (let row = 0; row < rows; row++) {
+        const inRow = base + (row >= rows - fuller ? 1 : 0);
+        const left = (ratio - inRow * cell) / 2;
+        for (let column = 0; column < inRow; column++) {
+            boxes.push({
+                left: (left + column * cell + inset) / ratio,
+                top: top + row * cell + inset,
+                width: (cell - 2 * inset) / ratio,
+                height: cell - 2 * inset,
+            });
+        }
+    }
+    return boxes;
 }
 export function getRuntimeConfig(config) {
     const parsedConfig = parseMaybeJson(config);
@@ -412,6 +484,7 @@ export function normalizeAnswerChoiceConfig(game, config) {
             isCorrect: record
                 ? extractBoolean(record.is_correct) ?? extractBoolean(record.correct) ?? false
                 : false,
+            copies: record ? normalizePictureCopies(record.copies) : 1,
         };
     })
         .filter((answer) => Boolean(answer));
@@ -783,6 +856,7 @@ export function normalizeImageOrderConfig(config) {
                         id: `images_order-${index + 1}`,
                         image: directImage,
                         label: null,
+                        copies: 1,
                     }
                     : null;
             }
@@ -805,6 +879,7 @@ export function normalizeImageOrderConfig(config) {
                     extractText(record.title) ??
                     extractText(record.name) ??
                     null,
+                copies: normalizePictureCopies(record.copies),
             };
         })
             .filter((item) => Boolean(item)),
