@@ -331,14 +331,14 @@ const tinyHotspot = rules.layoutSelectOptionItems({ width: 1600, height: 900 }, 
 check('a tiny hotspot is grown to a tappable size', tinyHotspot.width >= 900 * 0.08 - 0.001);
 check('no hotspots before the stage is measured', rules.layoutSelectOptionItems({ width: 0, height: 0 }, { items: [{ id: 'a', x: 1, y: 1, width: 1, height: 1 }], board_width: 1, board_height: 1 }).length === 0);
 
-check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 14);
+check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 15);
 check('failure reasons are named', rules.FAILURE_REASON.wrongCatch === 'wrong_catch' && rules.FAILURE_REASON.livesOut === 'lives_out');
 
 
 section('every playable kind is registered');
 
 const playableKinds = Object.keys(rules.GAME_KIND_KEYS);
-check('fourteen kinds, generic excluded', playableKinds.length === 14 && !playableKinds.includes('generic'));
+check('fifteen kinds, generic excluded', playableKinds.length === 15 && !playableKinds.includes('generic'));
 check('each kind resolves to itself', playableKinds.every((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) === kind), playableKinds.filter((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) !== kind).join());
 check('each kind has timings', playableKinds.every((kind) => rules.GAME_TIMINGS_BY_KIND[kind] === rules.GAME_TIMINGS[rules.GAME_KIND_KEYS[kind]]));
 check('no timing key is orphaned', Object.keys(rules.GAME_TIMINGS).every((key) => Object.values(rules.GAME_KIND_KEYS).includes(key)));
@@ -817,6 +817,169 @@ section('several copies of one picture on a card');
     counts.sequence.map((item) => item.copies).join(',') === '1,2,1,2'
       && counts.answer.copies === 1
       && counts.choices.map((item) => item.copies).sort().join(',') === '1,2');
+}
+
+section('math_equation: an example with a place or two to fill');
+
+{
+  ['math_equation', 'math_example', 'number_sentence', 'compare_numbers', 'Math Equation'].forEach((type) => {
+    check(`${type} resolves to math-equation`, rules.resolveGameKind(type, {}) === 'math-equation');
+  });
+
+  const n = (value, extra = {}) => ({ type: 'number', value, ...extra });
+  const s = (value, extra = {}) => ({ type: 'sign', value, ...extra });
+  const url = (name) => `https://x/${name}.webp`;
+  const glyphs = {};
+  ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].forEach((d) => { glyphs[d] = url(`digit-${d}`); });
+  Object.assign(glyphs, { '+': url('plus-sign'), '-': url('minus-sign'), '=': url('equals-sign'), '?': url('question-mark') });
+
+  const values = (config) => config.cards.map((card) => card.value);
+  const numbers = (config) => config.cards.filter((card) => card.kind === 'number').map((card) => card.value).sort((a, b) => a - b);
+
+  // 1 + ? = 3
+  const plus = rules.normalizeMathEquationConfig({ terms: [n(1), s('+'), n(2, { missing: true }), s('='), n(3)], glyphs, bg_image: url('bg-classroom') });
+  check('the terms alternate as authored', plus.terms.map((term) => `${term.kind}:${term.value}`).join(' ') === 'number:1 sign:+ number:2 sign:= number:3');
+  check('the missing place is the one to fill', plus.blankIds.join() === 'term_3');
+  check('three number cards by default, the answer among them', numbers(plus).length === 3 && numbers(plus).includes(2));
+  check('the wrong cards are near the answer', numbers(plus).join() === '1,2,3', numbers(plus).join());
+  check('defaults: lives 3, no timer', plus.lives === 3 && plus.time_limit === null);
+  check('the pictures the example draws are preloaded, and only those',
+    plus.imageUris.includes(url('bg-classroom')) && plus.imageUris.includes(url('digit-1')) && plus.imageUris.includes(url('plus-sign'))
+      && plus.imageUris.includes(url('question-mark')) && !plus.imageUris.includes(url('digit-7')) && !plus.imageUris.includes(url('minus-sign')));
+
+  const tap = rules.resolveMathEquationTap;
+  const card = (config, value) => config.cards.find((item) => item.value === value).id;
+  check('the answer goes in and finishes the example', JSON.stringify(tap(plus, {}, card(plus, 2))) === JSON.stringify({ type: 'place', termId: 'term_3', complete: true }));
+  check('a wrong number is a mistake', tap(plus, {}, card(plus, 3)).type === 'wrong');
+  check('nothing happens once every place is filled', tap(plus, { term_3: card(plus, 2) }, card(plus, 1)).type === 'ignored');
+
+  // No place marked: the answer is the one to find.
+  const unmarked = rules.normalizeMathEquationConfig({ terms: [n(2), s('+'), n(2), s('='), n(4)] });
+  check('with no place marked, the last number is missing', unmarked.blankIds.join() === 'term_5');
+
+  // 5 > ? — every smaller number is right, so no smaller number is offered as wrong.
+  const greater = rules.normalizeMathEquationConfig({ terms: [n(5), s('>'), n(3, { missing: true })] });
+  check('5 > ?: no other card may also be right', numbers(greater).filter((value) => value < 5).join() === '3', numbers(greater).join());
+  check('5 > ?: the wrong cards are 5 and up', numbers(greater).every((value) => value === 3 || value >= 5));
+  check('5 > ?: exactly one way to finish it', rules.countMathEquationCompletions(greater) === 1);
+
+  // Right is right: an author's "wrong" 4 in 5 > ? still makes it true, and is taken.
+  const lenient = rules.normalizeMathEquationConfig({ terms: [n(5), s('>'), n(3, { missing: true })], wrong_answers: '4, 7' });
+  check('authored wrong answers are offered', numbers(lenient).join() === '3,4,7' || numbers(lenient).join() === '3,4,6,7');
+  check('a card that makes the example true is never a mistake', tap(lenient, {}, card(lenient, 4)).type === 'place');
+  check('one that does not, is', tap(lenient, {}, card(lenient, 7)).type === 'wrong');
+
+  // 1 ? 3 — the comparison is missing: the three comparison signs are the cards.
+  const compare = rules.normalizeMathEquationConfig({ terms: [n(1), s('<', { missing: true }), n(3)], glyphs });
+  check('a missing comparison offers <, = and >, in that order', values(compare).join(' ') === '< = >');
+  check('1 ? 3 takes <', tap(compare, {}, 'sign_<').type === 'place' && tap(compare, {}, 'sign_>').type === 'wrong' && tap(compare, {}, 'sign_=').type === 'wrong');
+  check('a sign the library has no picture of is simply not preloaded', !compare.imageUris.some((uri) => uri.includes('less')));
+
+  // 1 + 4 ? 5
+  const sums = rules.normalizeMathEquationConfig({ terms: [n(1), s('+'), n(4), s('=', { missing: true }), n(5)] });
+  check('1 + 4 ? 5 takes =', tap(sums, {}, 'sign_=').type === 'place' && tap(sums, {}, 'sign_<').type === 'wrong');
+
+  // A missing operation offers + and −.
+  const operation = rules.normalizeMathEquationConfig({ terms: [n(3), s('-', { missing: true }), n(2), s('='), n(1)] });
+  check('a missing operation offers + and −', values(operation).join(' ') === '+ -');
+  check('3 ? 2 = 1 takes −', tap(operation, {}, 'sign_-').type === 'place' && tap(operation, {}, 'sign_+').type === 'wrong');
+  check('the minus is read from any dash', rules.normalizeMathEquationConfig({ terms: [n(3), s('−'), n(1), s('='), n(2, { missing: true })] }).terms[1].value === '-');
+
+  // Two places: ? + ? = 5 with 2 and 3 — either order is right.
+  const two = rules.normalizeMathEquationConfig({ terms: [n(2, { missing: true }), s('+'), n(3, { missing: true }), s('='), n(5)], choice_count: 4 });
+  check('two places, filled left to right', two.blankIds.join() === 'term_1,term_3');
+  check('four number cards: both answers and two wrong ones', numbers(two).length === 4 && numbers(two).includes(2) && numbers(two).includes(3));
+  check('? + ? = 5 has one pair of cards that completes it, either way round', rules.countMathEquationCompletions(two) === 2);
+  const first = tap(two, {}, card(two, 3));
+  check('3 first is right too', first.type === 'place' && first.termId === 'term_1' && !first.complete);
+  check('then only 2 finishes it', tap(two, { term_1: card(two, 3) }, card(two, 2)).type === 'place'
+    && tap(two, { term_1: card(two, 3) }, card(two, 2)).complete
+    && numbers(two).filter((value) => value !== 2 && value !== 3).every((value) => tap(two, { term_1: card(two, 3) }, card(two, value)).type === 'wrong'));
+  check('a card already in the example cannot be tapped again', tap(two, { term_1: card(two, 3) }, card(two, 3)).type === 'ignored');
+  check('a first card that leaves no way to finish is wrong', numbers(two).filter((value) => value !== 2 && value !== 3)
+    .every((value) => tap(two, {}, card(two, value)).type === 'wrong'));
+
+  // A number and a sign missing: 3 ? 2 = ?
+  const mixed = rules.normalizeMathEquationConfig({ terms: [n(3), s('+', { missing: true }), n(2), s('='), n(5, { missing: true })] });
+  check('a sign and a number missing: + and − then the numbers', mixed.cards.filter((c) => c.kind === 'sign').map((c) => c.value).join(' ') === '+ -'
+    && numbers(mixed).includes(5));
+  check('a number is not a sign', tap(mixed, {}, card(mixed, 5)).type === 'wrong');
+  check('− could still work if 1 were offered; it is not, so − is wrong', numbers(mixed).includes(1) || tap(mixed, {}, 'sign_-').type === 'wrong');
+  check('and the numbers never give a second way out', rules.countMathEquationCompletions(mixed) === 1);
+
+  check('at most two places', rules.normalizeMathEquationConfig({ terms: [n(1, { missing: true }), s('+'), n(1, { missing: true }), s('+'), n(1, { missing: true }), s('='), n(3)] }).blankIds.length === 2);
+
+  // Three cows = ?
+  const cows = rules.normalizeMathEquationConfig({ terms: [n(3, { image: url('cow') }), s('='), n(3, { missing: true })], glyphs });
+  check('a number may be drawn as pictures', cows.terms[0].image === url('cow') && cows.imageUris.includes(url('cow')));
+  check('a number drawn as pictures needs no digit pictures', !cows.imageUris.includes(url('digit-3')) || cows.cards.some((c) => c.value === 3));
+  check('a number past ten, or zero, is drawn in digits', rules.normalizeMathEquationConfig({ terms: [n(12, { image: url('cow') }), s('='), n(12, { missing: true })] }).terms[0].image === null
+    && rules.normalizeMathEquationConfig({ terms: [n(0, { image: url('cow') }), s('='), n(0, { missing: true })] }).terms[0].image === null);
+  const asPictures = rules.normalizeMathEquationConfig({ terms: [n(2), s('+'), n(1), s('='), n(3, { missing: true })], answer_image: url('apple') });
+  check('answer cards may be drawn as pictures, from one up', asPictures.cards.every((c) => c.image === url('apple') && c.value >= 1 && c.value <= 10));
+
+  const big = rules.normalizeMathEquationConfig({ terms: [n(7), s('+'), n(8), s('<'), n(16, { missing: true })] });
+  check('7 + 8 < ?: only numbers from 16 up are right, and only one is offered', numbers(big).filter((value) => value > 15).join() === '16', numbers(big).join());
+
+  // Glyphs, pieces and the layout.
+  check('a number is written digit by digit', rules.mathNumberGlyphs(15).join() === '1,5' && rules.mathNumberGlyphs(0).join() === '0');
+  const within = (box) => box.left >= -1e-9 && box.top >= -1e-9 && box.left + box.width <= 1 + 1e-9 && box.top + box.height <= 1 + 1e-9;
+  const pieces15 = rules.mathEquationPieces({ kind: 'number', value: 15 }, rules.mathEquationItemUnits({ kind: 'number', value: 15 }));
+  check('15 is two digit pictures, side by side, filling its box', pieces15.length === 2 && pieces15.map((p) => p.glyph).join() === '1,5'
+    && pieces15.every((p) => within(p.box)) && Math.abs(pieces15[0].box.left) < 1e-9 && Math.abs(pieces15[1].box.left + pieces15[1].box.width - 1) < 1e-9);
+  const centred3 = rules.mathEquationPieces({ kind: 'number', value: 3 }, 1.6)[0].box;
+  check('a one-digit card in a two-digit place sits in the middle', Math.abs(centred3.left - (1 - centred3.width) / 2) < 1e-9);
+  const sevenItem = { kind: 'number', value: 7, image: url('cow') };
+  const small = rules.MATH_EQUATION_LAYOUT.pictureSmall;
+  const sevenCows = rules.mathEquationPieces(sevenItem, rules.mathEquationItemUnits(sevenItem, small), small);
+  check('seven cows are seven pictures in the box, three over four', sevenCows.length === 7
+    && sevenCows.every((p) => p.image === url('cow') && p.glyph === null && within(p.box))
+    && sevenCows.filter((p) => p.box.top < 0.5).length === 3);
+  check('up to three copies anywhere in a game: big, in one row', rules.mathEquationPictureCell(cows) === rules.MATH_EQUATION_LAYOUT.pictureLarge);
+  check('more than three anywhere: every copy small', rules.mathEquationPictureCell(asPictures) === small);
+  const sameSize = asPictures.cards.map((c) => rules.mathEquationPieces(c, 2, small).map((p) => p.box.height)).flat();
+  check('every copy in a game is the same size, so a count never looks like a size', sameSize.every((h) => Math.abs(h - sameSize[0]) < 1e-9));
+  const onePiece = rules.mathEquationPieces({ kind: 'number', value: 1, image: url('cow') }, 0.9)[0].box;
+  check('one big copy is its cell less the gap', Math.abs(onePiece.height - rules.MATH_EQUATION_LAYOUT.pictureLarge * (1 - rules.PICTURE_COPIES_GAP)) < 1e-9);
+  const sign = rules.mathEquationPieces({ kind: 'sign', value: '<' }, 1.6);
+  check('a sign is centred in its box, a little lower than a digit', sign.length === 1 && sign[0].glyph === '<' && within(sign[0].box) && sign[0].box.height < 1);
+  check('an empty place shows a "?"', rules.mathEquationPieces({ kind: 'blank' }, 0.8)[0].glyph === '?');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left)
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top);
+  const inStage = (rect, w, h, insets = {}) => rect.left >= (insets.left || 0) - 1e-6 && rect.top >= (insets.top || 0) - 1e-6
+    && rect.left + rect.width <= w - (insets.right || 0) + 1e-6 && rect.top + rect.height <= h - (insets.bottom || 0) + 1e-6;
+  const stages = [[844, 322, { top: 68 }], [1250, 750, {}], [390, 700, {}], [1024, 768, {}], [667, 300, { top: 60 }]];
+  const configs = [plus, greater, compare, two, mixed, cows, big, asPictures];
+  let whole = true;
+  stages.forEach(([w, h, insets]) => configs.forEach((config, index) => {
+    const layout = rules.layoutMathEquation(w, h, config, insets);
+    const ok = layout
+      && inStage(layout.panel, w, h, insets) && inStage(layout.tray, w, h, insets)
+      && !overlap(layout.panel, layout.tray)
+      && layout.terms.every((rect) => inStage(rect, w, h, insets) && rect.left >= layout.panel.left - 1e-6 && rect.left + rect.width <= layout.panel.left + layout.panel.width + 1e-6)
+      && layout.cards.every((rect) => inStage(rect, w, h, insets))
+      && layout.cards.length === config.cards.length
+      && layout.contents.every((rect, i) => rect.width > 0 && rect.height > 0 && overlap(rect, layout.cards[i]));
+    if (!ok) {
+      whole = false;
+      console.log(`    ${w}x${h} config ${index}: ${JSON.stringify(layout && { panel: layout.panel, tray: layout.tray })}`);
+    }
+  }));
+  check('on every stage: the example and the cards are inside, apart, and every card has its place', whole);
+
+  const phone = rules.layoutMathEquation(844, 322, plus, { top: 68 });
+  check('the cards are a little smaller than the example', phone.contents[0].height < phone.row && phone.contents[0].height >= phone.row * 0.5);
+  check('the example and the cards keep a gap', phone.tray.top - (phone.panel.top + phone.panel.height) >= 16 - 1e-6);
+  const blank = phone.terms.find((rect) => rect.id === 'term_3');
+  check('an empty place is as wide as the widest card', Math.abs(blank.units - phone.contentUnits) < 1e-9);
+  const desk = rules.layoutMathEquation(2400, 1400, plus);
+  check('the row stops growing on a big screen', desk.row === rules.MATH_EQUATION_LAYOUT.maxRow);
+  check('nothing to draw, nothing laid out', rules.layoutMathEquation(0, 0, plus) === null);
+
+  const t = rules.GAME_TIMINGS.mathEquation;
+  check('math_equation has its timings', t.flyMs > 0 && t.wrongFeedbackMs > 0 && t.successSettleMs > 0 && t.livesOutDelayMs > 0
+    && rules.GAME_TIMINGS_BY_KIND['math-equation'] === t);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

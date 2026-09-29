@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -349,6 +349,50 @@ export type SvgAssembleConfig = {
      * from library pictures references them by URL. Preload these before the
      * clock starts, as the other picture games do.
      */
+    imageUris: string[];
+};
+/** The signs an example is written with. `-` is the minus, whatever dash the author typed. */
+export type MathEquationSign = "+" | "-" | "=" | "<" | ">";
+/** Every character an example is drawn with, each a picture from the library when there is one. */
+export type MathEquationGlyph = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | MathEquationSign | "?";
+/** One place in the example, left to right: a number or a sign, shown or left for the child to fill. */
+export type MathEquationTerm = {
+    id: string;
+    kind: "number";
+    value: number;
+    /** Drawn as `value` copies of this picture (three cows) instead of digits. */
+    image: string | null;
+    missing: boolean;
+} | {
+    id: string;
+    kind: "sign";
+    value: MathEquationSign;
+    missing: boolean;
+};
+/** An answer card: a number (in digits, or as that many copies of a picture) or a sign. */
+export type MathEquationCard = {
+    id: string;
+    kind: "number";
+    value: number;
+    image: string | null;
+} | {
+    id: string;
+    kind: "sign";
+    value: MathEquationSign;
+};
+export type MathEquationConfig = {
+    /** The example, left to right; numbers and signs alternate, with exactly one comparison sign. */
+    terms: MathEquationTerm[];
+    /** The missing terms, left to right: the order the child fills them in. One or two. */
+    blankIds: string[];
+    /** Number cards first (shuffled), then sign cards in their natural order. */
+    cards: MathEquationCard[];
+    /** The library picture of each glyph; a glyph without one is drawn as a character. */
+    glyphs: Partial<Record<MathEquationGlyph, string>>;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** Every picture the example and the cards draw, and the background: preload before the clock. */
     imageUris: string[];
 };
 type BuildPreparedGameOptions = {
@@ -883,6 +927,17 @@ export declare const GAME_TIMINGS: {
         readonly timeoutSettleMs: 320;
         readonly livesOutDelayMs: 320;
     };
+    /**
+     * A right card flies into its place over `flyMs`; a wrong one shakes for
+     * `wrongFeedbackMs`. The finished example stays `successSettleMs` so the
+     * child sees it whole before the win.
+     */
+    readonly mathEquation: {
+        readonly wrongFeedbackMs: 560;
+        readonly flyMs: 620;
+        readonly successSettleMs: 600;
+        readonly livesOutDelayMs: 320;
+    };
 };
 /** More pairs than this do not fit a phone at a size a child can hit. */
 export declare const CONNECT_PAIRS_MAX = 6;
@@ -969,6 +1024,166 @@ export declare function connectPairsLink(orientation: ConnectPairsOrientation, l
         y: number;
     };
 };
+/** The most places an example leaves to fill: more is a puzzle, not a sum. */
+export declare const MATH_EQUATION_BLANKS_MAX = 2;
+/** Number cards offered: below two there is no choice, above four the tray outgrows a phone. */
+export declare const MATH_EQUATION_CHOICES_MIN = 2;
+export declare const MATH_EQUATION_CHOICES_MAX = 4;
+/** The most copies of a picture one number shows: counting to ten. */
+export declare const MATH_EQUATION_PICTURES_MAX = 10;
+/** The largest number an example holds. */
+export declare const MATH_EQUATION_NUMBER_MAX = 99;
+/** Whether a sign compares the two sides (`<`, `=`, `>`) rather than adding or taking away. */
+export declare function isMathComparison(sign: MathEquationSign): boolean;
+/** The glyphs a number is written with: 15 is "1" then "5". */
+export declare function mathNumberGlyphs(value: number): MathEquationGlyph[];
+/**
+ * How many ways the places still open can be filled from the cards not yet
+ * used so that the example reads true, counting no further than `limit`.
+ * `placed` maps a filled place to the card in it.
+ */
+export declare function countMathEquationCompletions(config: Pick<MathEquationConfig, "terms" | "cards">, placed?: Readonly<Record<string, string>>, limit?: number): number;
+/**
+ * The example as the players draw it.
+ *
+ * `terms` are the places left to right, each a number (`value`, optionally an
+ * `image` to show it as that many pictures) or a sign, and `missing` for the
+ * one or two the child fills. With none marked, the last number is missing.
+ *
+ * The cards: every missing number, then the author's `wrong_answers`, then
+ * numbers near the answer that cannot complete the example, until there are
+ * `choice_count` number cards. A missing sign brings all the signs of its
+ * family: `<`, `=`, `>` for a comparison, `+`, `−` for a sum. `answer_image`
+ * draws the number cards as that many pictures instead of digits.
+ */
+export declare function normalizeMathEquationConfig(config: Record<string, unknown>): MathEquationConfig;
+export type MathEquationTapResult = 
+/** Nothing left to fill, or the card is already in the example. */
+{
+    type: "ignored";
+}
+/** The card goes into `termId`; `complete` when that was the last place. */
+ | {
+    type: "place";
+    termId: string;
+    complete: boolean;
+}
+/** The card cannot make the example true in `termId`: a mistake. */
+ | {
+    type: "wrong";
+    termId: string;
+};
+/** The place the child fills next: the first missing one still empty, or null when all are filled. */
+export declare function nextMathEquationBlank(config: Pick<MathEquationConfig, "blankIds">, placed: Readonly<Record<string, string>>): string | null;
+/**
+ * What a tap on a card does. The places are filled left to right; the card
+ * goes into the next one when, with it there, the cards left can still make
+ * the example true. The whole play rule, so both players follow it tap for tap.
+ */
+export declare function resolveMathEquationTap(config: Pick<MathEquationConfig, "terms" | "blankIds" | "cards">, placed: Readonly<Record<string, string>>, cardId: string): MathEquationTapResult;
+/**
+ * Proportions of the example and its cards. Widths and heights are shares of
+ * the height they are drawn at: a digit of a row 100 px high is 80 px wide.
+ */
+export declare const MATH_EQUATION_LAYOUT: {
+    /** One digit's cell. The library digits are about 0.65–0.8 as wide as they are high. */
+    readonly digit: 0.8;
+    /** A sign's cell, and the height its picture is fitted into. */
+    readonly sign: 0.78;
+    readonly signHeight: 0.62;
+    /** The "?" in an empty place. */
+    readonly blankMark: 0.62;
+    /**
+     * A copy of a picture in a number drawn as pictures. Every copy in a game is
+     * the same size, so a count never looks like a size question: big, in one
+     * row, while no number in the game shows more than `pictureLargeUpTo`;
+     * otherwise small, in two rows.
+     */
+    readonly pictureLarge: 0.9;
+    readonly pictureSmall: 0.5;
+    readonly pictureLargeUpTo: 3;
+    /** Space between two places of the example. */
+    readonly gap: 0.16;
+    /** The panel's padding around the example. */
+    readonly pad: 0.18;
+    /** The row never grows past this, in px… */
+    readonly maxRow: 170;
+    /** …nor its panel past this share of the free height. */
+    readonly maxPanelShare: 0.42;
+    /** A card's number, next to the example's: a little smaller, so the example reads first. */
+    readonly cardShare: 0.8;
+    /** A card's number never grows past this, in px, nor past this share of the free height. */
+    readonly maxCard: 110;
+    readonly maxCardShare: 0.26;
+    /** In px: the card's colour around its white tile, the tile around the number, between cards, the tray around them. */
+    readonly cardPad: 10;
+    readonly tilePad: 6;
+    readonly cardGap: 12;
+    readonly trayPad: 8;
+};
+/** Something drawn in one box: a number, a sign, or an empty place. */
+export type MathEquationItem = {
+    kind: "number";
+    value: number;
+    image?: string | null;
+} | {
+    kind: "sign";
+    value: MathEquationSign;
+} | {
+    kind: "blank";
+};
+/**
+ * The size of one copy for every number a game draws as pictures, as a share
+ * of the height it is drawn at: see `MATH_EQUATION_LAYOUT.pictureLarge`.
+ */
+export declare function mathEquationPictureCell(config: Pick<MathEquationConfig, "terms" | "cards">): number;
+/** How wide an item is drawn, as a share of its height; `pictureCell` from `mathEquationPictureCell`. */
+export declare function mathEquationItemUnits(item: MathEquationItem, pictureCell?: number): number;
+/** One picture of an item: a digit, a sign, the "?" or one copy of a picture. */
+export type MathEquationPiece = {
+    key: string;
+    /** The glyph to draw; null for a copy of `image`. */
+    glyph: MathEquationGlyph | null;
+    image: string | null;
+    /** In fractions of the box, which is `units` times as wide as it is high. Fit the picture inside. */
+    box: PictureCopyBox;
+};
+/**
+ * Where each picture of an item goes in a box `units` times as wide as it is
+ * high, centred. Fractions of the box, so the same pieces serve a card, a
+ * place in the example and a card flying between the two.
+ */
+export declare function mathEquationPieces(item: MathEquationItem, units: number, pictureCell?: number): MathEquationPiece[];
+export type MathEquationLayout = {
+    /** The panel the example sits on, floating on the background. */
+    panel: BoardRect;
+    /** Height of the example's row, in px. */
+    row: number;
+    /** Each place of the example, in `terms` order; an empty place is the slot a card flies into. */
+    terms: Array<BoardRect & {
+        id: string;
+        units: number;
+    }>;
+    /** The panel behind the cards. */
+    tray: BoardRect;
+    /** In `cards` order: the card, its white tile, and where its number or sign is drawn (where a flying card starts). */
+    cards: BoardRect[];
+    tiles: BoardRect[];
+    contents: BoardRect[];
+    /** How wide every card's content box is, as a share of its height. */
+    contentUnits: number;
+    /** The copy size of every number drawn as pictures: pass it to `mathEquationPieces`. */
+    pictureCell: number;
+};
+/**
+ * Where everything of a math example goes on its stage. The background covers
+ * the whole stage; the example sits on a panel above, the cards in a tray
+ * below — two safe areas a gap apart, both inside the stage less `insets` and
+ * an edge margin. The example is sized first and the cards a little smaller,
+ * so it is what the child reads first. An empty place is as wide as the
+ * widest card of its kind, so its size gives nothing away.
+ */
+export declare function layoutMathEquation(stageWidth: number, stageHeight: number, config: Pick<MathEquationConfig, "terms" | "cards">, insets?: SceneInsets): MathEquationLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -1014,6 +1229,12 @@ export type ImageOrderMetrics = BaseGameMetrics & {
     filledSlots: number;
     totalItems: number;
     showExample: number;
+    livesRemaining: number;
+};
+export type MathEquationMetrics = BaseGameMetrics & {
+    /** Places the example left to fill, and how many were filled. */
+    blanks: number;
+    filled: number;
     livesRemaining: number;
 };
 export type JigsawMetrics = BaseGameMetrics & {
@@ -1067,6 +1288,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "drag-drop-match": "dragDropMatch";
     readonly images_order: "imagesOrder";
     readonly jigsaw: "jigsaw";
+    readonly "math-equation": "mathEquation";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -1089,6 +1311,7 @@ export type GameMetricsByKind = {
     "drag-drop-match": DragDropMatchMetrics;
     images_order: ImageOrderMetrics;
     jigsaw: JigsawMetrics;
+    "math-equation": MathEquationMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

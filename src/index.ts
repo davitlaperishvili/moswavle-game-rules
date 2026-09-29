@@ -63,6 +63,7 @@ export type RuntimeGameKind =
   | "sort-bins"
   | "size-order"
   | "connect-pairs"
+  | "math-equation"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -401,6 +402,48 @@ export type SvgAssembleConfig = {
    * from library pictures references them by URL. Preload these before the
    * clock starts, as the other picture games do.
    */
+  imageUris: string[];
+};
+
+/** The signs an example is written with. `-` is the minus, whatever dash the author typed. */
+export type MathEquationSign = "+" | "-" | "=" | "<" | ">";
+
+/** Every character an example is drawn with, each a picture from the library when there is one. */
+export type MathEquationGlyph =
+  | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+  | MathEquationSign
+  | "?";
+
+/** One place in the example, left to right: a number or a sign, shown or left for the child to fill. */
+export type MathEquationTerm =
+  | {
+      id: string;
+      kind: "number";
+      value: number;
+      /** Drawn as `value` copies of this picture (three cows) instead of digits. */
+      image: string | null;
+      missing: boolean;
+    }
+  | { id: string; kind: "sign"; value: MathEquationSign; missing: boolean };
+
+/** An answer card: a number (in digits, or as that many copies of a picture) or a sign. */
+export type MathEquationCard =
+  | { id: string; kind: "number"; value: number; image: string | null }
+  | { id: string; kind: "sign"; value: MathEquationSign };
+
+export type MathEquationConfig = {
+  /** The example, left to right; numbers and signs alternate, with exactly one comparison sign. */
+  terms: MathEquationTerm[];
+  /** The missing terms, left to right: the order the child fills them in. One or two. */
+  blankIds: string[];
+  /** Number cards first (shuffled), then sign cards in their natural order. */
+  cards: MathEquationCard[];
+  /** The library picture of each glyph; a glyph without one is drawn as a character. */
+  glyphs: Partial<Record<MathEquationGlyph, string>>;
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+  /** Every picture the example and the cards draw, and the background: preload before the clock. */
   imageUris: string[];
 };
 
@@ -1239,6 +1282,19 @@ export function resolveGameKind(
     "draw_lines",
   ].includes(normalizedType)) {
     return "connect-pairs";
+  }
+
+  if ([
+    "math_equation",
+    "mathequation",
+    "math_example",
+    "math_examples",
+    "math_problem",
+    "equation",
+    "number_sentence",
+    "compare_numbers",
+  ].includes(normalizedType)) {
+    return "math-equation";
   }
 
   if ([
@@ -3506,6 +3562,17 @@ export const GAME_TIMINGS = {
     timeoutSettleMs: 320,
     livesOutDelayMs: 320,
   },
+  /**
+   * A right card flies into its place over `flyMs`; a wrong one shakes for
+   * `wrongFeedbackMs`. The finished example stays `successSettleMs` so the
+   * child sees it whole before the win.
+   */
+  mathEquation: {
+    wrongFeedbackMs: 560,
+    flyMs: 620,
+    successSettleMs: 600,
+    livesOutDelayMs: 320,
+  },
 } as const;
 
 // --- Connect the pairs ------------------------------------------------------
@@ -3664,6 +3731,652 @@ export function connectPairsLink(
       };
 }
 
+// --- Math equation ----------------------------------------------------------
+//
+// An example — `1 + ? = 3`, `3 ? 5`, three cows `= ?` — with one or two places
+// left for the child. A card is right when, put in the place being filled,
+// the example can still be made true with the cards that are left. So `5 > ?`
+// takes a 3 or a 4 alike, and `? + ? = 5` takes 1 then 4 or 4 then 1: the
+// child is never told off for an answer that is right.
+
+/** The most places an example leaves to fill: more is a puzzle, not a sum. */
+export const MATH_EQUATION_BLANKS_MAX = 2;
+/** Number cards offered: below two there is no choice, above four the tray outgrows a phone. */
+export const MATH_EQUATION_CHOICES_MIN = 2;
+export const MATH_EQUATION_CHOICES_MAX = 4;
+/** The most copies of a picture one number shows: counting to ten. */
+export const MATH_EQUATION_PICTURES_MAX = 10;
+/** The largest number an example holds. */
+export const MATH_EQUATION_NUMBER_MAX = 99;
+
+const MATH_OPERATIONS: readonly MathEquationSign[] = ["+", "-"];
+const MATH_COMPARISONS: readonly MathEquationSign[] = ["<", "=", ">"];
+const MATH_SIGN_ORDER: readonly MathEquationSign[] = ["+", "-", "<", "=", ">"];
+const MATH_GLYPHS: readonly MathEquationGlyph[] = [
+  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "-", "=", "<", ">", "?",
+];
+
+/** Whether a sign compares the two sides (`<`, `=`, `>`) rather than adding or taking away. */
+export function isMathComparison(sign: MathEquationSign): boolean {
+  return sign === "<" || sign === "=" || sign === ">";
+}
+
+function normalizeMathSign(value: unknown): MathEquationSign | null {
+  const text = extractText(value);
+  if (!text) {
+    return null;
+  }
+
+  const raw = text.trim();
+  const symbols: Record<string, MathEquationSign> = { "+": "+", "-": "-", "−": "-", "–": "-", "—": "-", "=": "=", "<": "<", ">": ">" };
+  if (symbols[raw]) return symbols[raw];
+
+  const word = raw.toLowerCase().replace(/[\s_-]+/g, "_");
+  if (["plus", "add"].includes(word)) return "+";
+  if (["minus", "subtract"].includes(word)) return "-";
+  if (["equals", "equal", "eq"].includes(word)) return "=";
+  if (["less", "less_than", "lt", "smaller"].includes(word)) return "<";
+  if (["greater", "greater_than", "gt", "more", "more_than", "bigger"].includes(word)) return ">";
+  return null;
+}
+
+/** The glyphs a number is written with: 15 is "1" then "5". */
+export function mathNumberGlyphs(value: number): MathEquationGlyph[] {
+  return String(Math.max(0, Math.floor(value))).split("") as MathEquationGlyph[];
+}
+
+/** A number drawn as pictures: only a count a child can see, one to ten. */
+function mathPictureFor(image: string | null, value: number): string | null {
+  return image && value >= 1 && value <= MATH_EQUATION_PICTURES_MAX ? image : null;
+}
+
+type MathValue = { kind: "number"; value: number } | { kind: "sign"; value: MathEquationSign };
+
+/**
+ * Whether an example reads true, the way a child reckons it: numbers and signs
+ * alternate, there is exactly one comparison, each side is added up left to
+ * right, and no running total goes below zero.
+ */
+function isMathStatementTrue(values: ReadonlyArray<MathValue>): boolean {
+  if (values.length < 3 || values.length % 2 === 0) {
+    return false;
+  }
+
+  let comparison: MathEquationSign | null = null;
+  let left = 0;
+  let total = 0;
+  let operation: MathEquationSign = "+";
+
+  for (let index = 0; index < values.length; index += 1) {
+    const item = values[index];
+
+    if (index % 2 === 0) {
+      if (item.kind !== "number") return false;
+      total = operation === "-" ? total - item.value : total + item.value;
+      if (total < 0) return false;
+      continue;
+    }
+
+    if (item.kind !== "sign") return false;
+
+    if (isMathComparison(item.value)) {
+      if (comparison) return false;
+      comparison = item.value;
+      left = total;
+      total = 0;
+      operation = "+";
+    } else {
+      operation = item.value;
+    }
+  }
+
+  if (!comparison) {
+    return false;
+  }
+
+  return comparison === "=" ? left === total : comparison === "<" ? left < total : left > total;
+}
+
+/** A card fits a place when it is the same kind — and, for a sign, the same family of signs. */
+function mathCardFits(term: MathEquationTerm, card: MathEquationCard): boolean {
+  if (term.kind === "number") {
+    return card.kind === "number";
+  }
+
+  return card.kind === "sign" && isMathComparison(card.value) === isMathComparison(term.value);
+}
+
+/**
+ * How many ways the places still open can be filled from the cards not yet
+ * used so that the example reads true, counting no further than `limit`.
+ * `placed` maps a filled place to the card in it.
+ */
+export function countMathEquationCompletions(
+  config: Pick<MathEquationConfig, "terms" | "cards">,
+  placed: Readonly<Record<string, string>> = {},
+  limit = Number.POSITIVE_INFINITY,
+): number {
+  const cardsById = new Map(config.cards.map((card) => [card.id, card]));
+  const open = config.terms.filter((term) => term.missing && !placed[term.id]);
+  const assignment: Record<string, MathEquationCard> = {};
+
+  for (const [termId, cardId] of Object.entries(placed)) {
+    const card = cardsById.get(cardId);
+    if (card) assignment[termId] = card;
+  }
+
+  const used = new Set(Object.values(placed));
+  let count = 0;
+
+  const visit = (depth: number) => {
+    if (count >= limit) return;
+
+    if (depth === open.length) {
+      const values = config.terms.map((term): MathValue | null => {
+        const card = term.missing ? assignment[term.id] : null;
+        if (term.missing && !card) return null;
+        const source = card ?? term;
+        return source.kind === "number"
+          ? { kind: "number", value: source.value }
+          : { kind: "sign", value: source.value };
+      });
+
+      if (values.every((value): value is MathValue => value !== null) && isMathStatementTrue(values)) {
+        count += 1;
+      }
+      return;
+    }
+
+    const term = open[depth];
+    for (const card of config.cards) {
+      if (used.has(card.id) || !mathCardFits(term, card)) continue;
+      used.add(card.id);
+      assignment[term.id] = card;
+      visit(depth + 1);
+      delete assignment[term.id];
+      used.delete(card.id);
+    }
+  };
+
+  visit(0);
+  return count;
+}
+
+/**
+ * The example as the players draw it.
+ *
+ * `terms` are the places left to right, each a number (`value`, optionally an
+ * `image` to show it as that many pictures) or a sign, and `missing` for the
+ * one or two the child fills. With none marked, the last number is missing.
+ *
+ * The cards: every missing number, then the author's `wrong_answers`, then
+ * numbers near the answer that cannot complete the example, until there are
+ * `choice_count` number cards. A missing sign brings all the signs of its
+ * family: `<`, `=`, `>` for a comparison, `+`, `−` for a sum. `answer_image`
+ * draws the number cards as that many pictures instead of digits.
+ */
+export function normalizeMathEquationConfig(config: Record<string, unknown>): MathEquationConfig {
+  const rawTerms = Array.isArray(config.terms) ? config.terms : [];
+  const terms: MathEquationTerm[] = [];
+
+  rawTerms.forEach((raw, index) => {
+    const record = asRecord(raw);
+    const rawValue = record ? record.value : raw;
+    const type = record ? extractText(record.type)?.toLowerCase() ?? null : null;
+    const id = `term_${index + 1}`;
+    const missing = record ? extractBoolean(record.missing) ?? false : false;
+
+    const sign = type === "number" ? null : normalizeMathSign(rawValue);
+    if (sign) {
+      terms.push({ id, kind: "sign", value: sign, missing });
+      return;
+    }
+
+    const number = type === "sign" ? null : extractNumber(rawValue);
+    if (number !== null && number >= 0) {
+      const value = Math.min(MATH_EQUATION_NUMBER_MAX, Math.floor(number));
+      terms.push({
+        id,
+        kind: "number",
+        value,
+        image: mathPictureFor(record ? extractMediaUrl(record.image) : null, value),
+        missing,
+      });
+    }
+  });
+
+  // One or two places to fill, the first ones marked; none marked means the answer.
+  let missingSeen = 0;
+  terms.forEach((term) => {
+    if (term.missing) {
+      missingSeen += 1;
+      term.missing = missingSeen <= MATH_EQUATION_BLANKS_MAX;
+    }
+  });
+  if (missingSeen === 0) {
+    const last = [...terms].reverse().find((term) => term.kind === "number");
+    if (last) last.missing = true;
+  }
+
+  const blanks = terms.filter((term) => term.missing);
+  const answerImage = extractMediaUrl(config.answer_image);
+  const numberCards: MathEquationCard[] = [];
+  const addNumber = (value: number) => {
+    if (numberCards.some((card) => card.value === value)) return;
+    numberCards.push({ id: `number_${value}`, kind: "number", value, image: mathPictureFor(answerImage, value) });
+  };
+
+  const signs = new Set<MathEquationSign>();
+  blanks.forEach((term) => {
+    if (term.kind === "number") {
+      addNumber(term.value);
+    } else {
+      (isMathComparison(term.value) ? MATH_COMPARISONS : MATH_OPERATIONS).forEach((sign) => signs.add(sign));
+    }
+  });
+  const signCards: MathEquationCard[] = MATH_SIGN_ORDER
+    .filter((sign) => signs.has(sign))
+    .map((sign) => ({ id: `sign_${sign}`, kind: "sign", value: sign }));
+
+  const numberBlanks = blanks.filter((term) => term.kind === "number");
+  if (numberBlanks.length > 0) {
+    const rawWrong = typeof config.wrong_answers === "string"
+      ? config.wrong_answers.split(/[\s,;]+/)
+      : Array.isArray(config.wrong_answers) ? config.wrong_answers : [];
+    rawWrong
+      .map((value) => extractNumber(value))
+      .filter((value): value is number => value !== null && value >= 0 && value <= MATH_EQUATION_NUMBER_MAX)
+      .forEach((value) => {
+        if (numberCards.length < MATH_EQUATION_CHOICES_MAX) addNumber(Math.floor(value));
+      });
+
+    const wanted = Math.max(
+      numberCards.length > MATH_EQUATION_CHOICES_MAX ? numberCards.length : 0,
+      Math.min(
+        MATH_EQUATION_CHOICES_MAX,
+        Math.max(MATH_EQUATION_CHOICES_MIN, numberBlanks.length + 1, Math.floor(extractNumber(config.choice_count) ?? 3)),
+      ),
+    );
+
+    // Numbers near the answer, nearest first, that add no new way to complete
+    // the example: a card that is also right would not be a wrong answer.
+    const answers = numberBlanks.map((term) => term.value);
+    const lowest = answerImage ? 1 : 0;
+    const highest = answerImage
+      ? MATH_EQUATION_PICTURES_MAX
+      : Math.min(MATH_EQUATION_NUMBER_MAX, Math.max(10, ...answers.map((value) => value + 5)));
+    const completions = (cards: MathEquationCard[]) =>
+      countMathEquationCompletions({ terms, cards: [...cards, ...signCards] }, {}, 4);
+
+    for (let distance = 1; numberCards.length < wanted && distance <= highest; distance += 1) {
+      for (const answer of answers) {
+        for (const candidate of [answer - distance, answer + distance]) {
+          if (numberCards.length >= wanted) break;
+          if (candidate < lowest || candidate > highest || numberCards.some((card) => card.value === candidate)) continue;
+          const before = completions(numberCards);
+          const trial = [...numberCards, { id: `number_${candidate}`, kind: "number" as const, value: candidate, image: null }];
+          if (completions(trial) === before) addNumber(candidate);
+        }
+      }
+    }
+  }
+
+  const cards = [...shuffle(numberCards), ...signCards];
+  const glyphSource = asRecord(config.glyphs) ?? {};
+  const glyphs: Partial<Record<MathEquationGlyph, string>> = {};
+  MATH_GLYPHS.forEach((glyph) => {
+    const url = extractMediaUrl(glyphSource[glyph]);
+    if (url) glyphs[glyph] = url;
+  });
+
+  // Only the pictures this example actually draws.
+  const drawn = new Set<MathEquationGlyph>();
+  const note = (item: MathEquationTerm | MathEquationCard) => {
+    if (item.kind === "sign") drawn.add(item.value);
+    else if (!item.image) mathNumberGlyphs(item.value).forEach((glyph) => drawn.add(glyph));
+  };
+  terms.forEach(note);
+  cards.forEach(note);
+  if (blanks.length > 0) drawn.add("?");
+
+  const bg = extractMediaUrl(config.bg_image);
+  const imageUris = [
+    bg,
+    ...terms.map((term) => (term.kind === "number" ? term.image : null)),
+    ...cards.map((card) => (card.kind === "number" ? card.image : null)),
+    ...MATH_GLYPHS.filter((glyph) => drawn.has(glyph)).map((glyph) => glyphs[glyph] ?? null),
+  ].filter((uri): uri is string => Boolean(uri));
+
+  return {
+    terms,
+    blankIds: blanks.map((term) => term.id),
+    cards,
+    glyphs,
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    imageUris: [...new Set(imageUris)],
+  };
+}
+
+export type MathEquationTapResult =
+  /** Nothing left to fill, or the card is already in the example. */
+  | { type: "ignored" }
+  /** The card goes into `termId`; `complete` when that was the last place. */
+  | { type: "place"; termId: string; complete: boolean }
+  /** The card cannot make the example true in `termId`: a mistake. */
+  | { type: "wrong"; termId: string };
+
+/** The place the child fills next: the first missing one still empty, or null when all are filled. */
+export function nextMathEquationBlank(
+  config: Pick<MathEquationConfig, "blankIds">,
+  placed: Readonly<Record<string, string>>,
+): string | null {
+  return config.blankIds.find((id) => !placed[id]) ?? null;
+}
+
+/**
+ * What a tap on a card does. The places are filled left to right; the card
+ * goes into the next one when, with it there, the cards left can still make
+ * the example true. The whole play rule, so both players follow it tap for tap.
+ */
+export function resolveMathEquationTap(
+  config: Pick<MathEquationConfig, "terms" | "blankIds" | "cards">,
+  placed: Readonly<Record<string, string>>,
+  cardId: string,
+): MathEquationTapResult {
+  const termId = nextMathEquationBlank(config, placed);
+  const card = config.cards.find((item) => item.id === cardId);
+  const term = config.terms.find((item) => item.id === termId);
+
+  if (!termId || !term || !card || Object.values(placed).includes(cardId)) {
+    return { type: "ignored" };
+  }
+
+  const next = { ...placed, [termId]: cardId };
+  if (!mathCardFits(term, card) || countMathEquationCompletions(config, next, 1) === 0) {
+    return { type: "wrong", termId };
+  }
+
+  return { type: "place", termId, complete: nextMathEquationBlank(config, next) === null };
+}
+
+/**
+ * Proportions of the example and its cards. Widths and heights are shares of
+ * the height they are drawn at: a digit of a row 100 px high is 80 px wide.
+ */
+export const MATH_EQUATION_LAYOUT = {
+  /** One digit's cell. The library digits are about 0.65–0.8 as wide as they are high. */
+  digit: 0.8,
+  /** A sign's cell, and the height its picture is fitted into. */
+  sign: 0.78,
+  signHeight: 0.62,
+  /** The "?" in an empty place. */
+  blankMark: 0.62,
+  /**
+   * A copy of a picture in a number drawn as pictures. Every copy in a game is
+   * the same size, so a count never looks like a size question: big, in one
+   * row, while no number in the game shows more than `pictureLargeUpTo`;
+   * otherwise small, in two rows.
+   */
+  pictureLarge: 0.9,
+  pictureSmall: 0.5,
+  pictureLargeUpTo: 3,
+  /** Space between two places of the example. */
+  gap: 0.16,
+  /** The panel's padding around the example. */
+  pad: 0.18,
+  /** The row never grows past this, in px… */
+  maxRow: 170,
+  /** …nor its panel past this share of the free height. */
+  maxPanelShare: 0.42,
+  /** A card's number, next to the example's: a little smaller, so the example reads first. */
+  cardShare: 0.8,
+  /** A card's number never grows past this, in px, nor past this share of the free height. */
+  maxCard: 110,
+  maxCardShare: 0.26,
+  /** In px: the card's colour around its white tile, the tile around the number, between cards, the tray around them. */
+  cardPad: 10,
+  tilePad: 6,
+  cardGap: 12,
+  trayPad: 8,
+} as const;
+
+/** Something drawn in one box: a number, a sign, or an empty place. */
+export type MathEquationItem =
+  | { kind: "number"; value: number; image?: string | null }
+  | { kind: "sign"; value: MathEquationSign }
+  | { kind: "blank" };
+
+/**
+ * The size of one copy for every number a game draws as pictures, as a share
+ * of the height it is drawn at: see `MATH_EQUATION_LAYOUT.pictureLarge`.
+ */
+export function mathEquationPictureCell(config: Pick<MathEquationConfig, "terms" | "cards">): number {
+  const counts = [...config.terms, ...config.cards].map((item) => (item.kind === "number" && item.image ? item.value : 0));
+  const { pictureLarge, pictureSmall, pictureLargeUpTo } = MATH_EQUATION_LAYOUT;
+  return Math.max(0, ...counts) <= pictureLargeUpTo ? pictureLarge : pictureSmall;
+}
+
+/** Rows of copies, top first: one row while they are big or few, else two with the fuller one below. */
+function mathPictureRows(count: number, cell: number): number[] {
+  if (cell >= MATH_EQUATION_LAYOUT.pictureLarge || count <= 2) {
+    return [Math.max(1, count)];
+  }
+  return [Math.floor(count / 2), Math.ceil(count / 2)];
+}
+
+/** How wide an item is drawn, as a share of its height; `pictureCell` from `mathEquationPictureCell`. */
+export function mathEquationItemUnits(
+  item: MathEquationItem,
+  pictureCell: number = MATH_EQUATION_LAYOUT.pictureLarge,
+): number {
+  if (item.kind === "sign" || item.kind === "blank") {
+    return MATH_EQUATION_LAYOUT.sign;
+  }
+
+  return item.image
+    ? Math.max(...mathPictureRows(item.value, pictureCell)) * pictureCell
+    : mathNumberGlyphs(item.value).length * MATH_EQUATION_LAYOUT.digit;
+}
+
+/** One picture of an item: a digit, a sign, the "?" or one copy of a picture. */
+export type MathEquationPiece = {
+  key: string;
+  /** The glyph to draw; null for a copy of `image`. */
+  glyph: MathEquationGlyph | null;
+  image: string | null;
+  /** In fractions of the box, which is `units` times as wide as it is high. Fit the picture inside. */
+  box: PictureCopyBox;
+};
+
+/**
+ * Where each picture of an item goes in a box `units` times as wide as it is
+ * high, centred. Fractions of the box, so the same pieces serve a card, a
+ * place in the example and a card flying between the two.
+ */
+export function mathEquationPieces(
+  item: MathEquationItem,
+  units: number,
+  pictureCell: number = MATH_EQUATION_LAYOUT.pictureLarge,
+): MathEquationPiece[] {
+  const width = Math.max(units, 1e-6);
+  const { digit, sign, signHeight, blankMark } = MATH_EQUATION_LAYOUT;
+  const centred = (glyph: MathEquationGlyph, w: number, h: number, key: string): MathEquationPiece => ({
+    key,
+    glyph,
+    image: null,
+    box: { left: (width - w) / 2 / width, top: (1 - h) / 2, width: w / width, height: h },
+  });
+
+  if (item.kind === "blank") {
+    return [centred("?", Math.min(sign, width), blankMark, "blank")];
+  }
+
+  if (item.kind === "sign") {
+    return [centred(item.value, Math.min(sign, width), signHeight, `sign-${item.value}`)];
+  }
+
+  if (item.image) {
+    const rows = mathPictureRows(item.value, pictureCell);
+    const inset = (pictureCell * PICTURE_COPIES_GAP) / 2;
+    const size = pictureCell - inset * 2;
+    const top = (1 - rows.length * pictureCell) / 2;
+    const image = item.image;
+    return rows.flatMap((inRow, row) => {
+      const start = (width - inRow * pictureCell) / 2;
+      return Array.from({ length: inRow }, (_, column): MathEquationPiece => ({
+        key: `copy-${row}-${column}`,
+        glyph: null,
+        image,
+        box: {
+          left: (start + column * pictureCell + inset) / width,
+          top: top + row * pictureCell + inset,
+          width: size / width,
+          height: size,
+        },
+      }));
+    });
+  }
+
+  const glyphs = mathNumberGlyphs(item.value);
+  const start = (width - glyphs.length * digit) / 2;
+  return glyphs.map((glyph, index) => ({
+    key: `digit-${index}`,
+    glyph,
+    image: null,
+    box: { left: (start + index * digit) / width, top: 0, width: digit / width, height: 1 },
+  }));
+}
+
+export type MathEquationLayout = {
+  /** The panel the example sits on, floating on the background. */
+  panel: BoardRect;
+  /** Height of the example's row, in px. */
+  row: number;
+  /** Each place of the example, in `terms` order; an empty place is the slot a card flies into. */
+  terms: Array<BoardRect & { id: string; units: number }>;
+  /** The panel behind the cards. */
+  tray: BoardRect;
+  /** In `cards` order: the card, its white tile, and where its number or sign is drawn (where a flying card starts). */
+  cards: BoardRect[];
+  tiles: BoardRect[];
+  contents: BoardRect[];
+  /** How wide every card's content box is, as a share of its height. */
+  contentUnits: number;
+  /** The copy size of every number drawn as pictures: pass it to `mathEquationPieces`. */
+  pictureCell: number;
+};
+
+/**
+ * Where everything of a math example goes on its stage. The background covers
+ * the whole stage; the example sits on a panel above, the cards in a tray
+ * below — two safe areas a gap apart, both inside the stage less `insets` and
+ * an edge margin. The example is sized first and the cards a little smaller,
+ * so it is what the child reads first. An empty place is as wide as the
+ * widest card of its kind, so its size gives nothing away.
+ */
+export function layoutMathEquation(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<MathEquationConfig, "terms" | "cards">,
+  insets: SceneInsets = {},
+): MathEquationLayout | null {
+  const L = MATH_EQUATION_LAYOUT;
+  const originX = insets.left ?? 0;
+  const originY = insets.top ?? 0;
+  const usableWidth = stageWidth - originX - (insets.right ?? 0);
+  const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+
+  if (usableWidth <= 0 || usableHeight <= 0 || config.terms.length === 0) {
+    return null;
+  }
+
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const gap = sceneGap(stageWidth, stageHeight);
+  const areaWidth = Math.max(usableWidth - edge * 2, 1);
+  const areaHeight = Math.max(usableHeight - edge * 2, 1);
+
+  const pictureCell = mathEquationPictureCell(config);
+  const cardUnits = config.cards.map((card) => mathEquationItemUnits(card, pictureCell));
+  const widestOf = (kind: MathEquationCard["kind"]) =>
+    Math.max(0, ...config.cards.map((card, index) => (card.kind === kind ? cardUnits[index] : 0)));
+  const numberSlot = Math.max(L.digit, widestOf("number"));
+  const termUnits = config.terms.map((term) =>
+    term.missing ? (term.kind === "number" ? numberSlot : L.sign) : mathEquationItemUnits(term, pictureCell),
+  );
+  const contentUnits = Math.max(L.sign, ...cardUnits);
+  const count = config.cards.length;
+
+  const rowUnits = termUnits.reduce((sum, units) => sum + units, 0) + L.gap * (termUnits.length - 1) + L.pad * 2;
+  const panelUnitsHigh = 1 + L.pad * 2;
+  const cardFrame = 2 * (L.cardPad + L.tilePad);
+  const trayFixedWidth = count > 0 ? 2 * L.trayPad + L.cardGap * (count - 1) + count * cardFrame : 0;
+  const trayFixedHeight = count > 0 ? 2 * L.trayPad + cardFrame : 0;
+
+  let row = Math.min(areaWidth / rowUnits, (areaHeight * L.maxPanelShare) / panelUnitsHigh, L.maxRow);
+  let content = count > 0
+    ? Math.min(
+        row * L.cardShare,
+        L.maxCard,
+        areaHeight * L.maxCardShare,
+        Math.max(areaWidth - trayFixedWidth, count) / (count * contentUnits),
+      )
+    : 0;
+
+  // Both have to fit one above the other with the gap between.
+  const spare = areaHeight - (count > 0 ? gap + trayFixedHeight : 0);
+  const needed = row * panelUnitsHigh + content;
+  if (needed > spare && needed > 0) {
+    const scale = Math.max(spare, 1) / needed;
+    row *= scale;
+    content *= scale;
+  }
+  row = Math.max(row, 1);
+
+  const panelWidth = row * rowUnits;
+  const panelHeight = row * panelUnitsHigh;
+  const cardWidth = content * contentUnits + cardFrame;
+  const cardHeight = content + cardFrame;
+  const trayWidth = count > 0 ? count * cardWidth + L.cardGap * (count - 1) + 2 * L.trayPad : 0;
+  const trayHeight = count > 0 ? cardHeight + 2 * L.trayPad : 0;
+  const free = Math.max(0, areaHeight - panelHeight - trayHeight - (count > 0 ? gap : 0));
+
+  const panel: BoardRect = {
+    left: originX + edge + (areaWidth - panelWidth) / 2,
+    top: originY + edge + free * 0.4,
+    width: panelWidth,
+    height: panelHeight,
+  };
+
+  let x = panel.left + L.pad * row;
+  const terms = config.terms.map((term, index) => {
+    const rect = { id: term.id, units: termUnits[index], left: x, top: panel.top + L.pad * row, width: termUnits[index] * row, height: row };
+    x += rect.width + L.gap * row;
+    return rect;
+  });
+
+  const tray: BoardRect = {
+    left: originX + edge + (areaWidth - trayWidth) / 2,
+    top: panel.top + panelHeight + (count > 0 ? gap : 0) + free * 0.3,
+    width: trayWidth,
+    height: trayHeight,
+  };
+
+  const cards: BoardRect[] = [];
+  const tiles: BoardRect[] = [];
+  const contents: BoardRect[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const card = { left: tray.left + L.trayPad + index * (cardWidth + L.cardGap), top: tray.top + L.trayPad, width: cardWidth, height: cardHeight };
+    const tile = { left: card.left + L.cardPad, top: card.top + L.cardPad, width: cardWidth - 2 * L.cardPad, height: cardHeight - 2 * L.cardPad };
+    cards.push(card);
+    tiles.push(tile);
+    contents.push({ left: tile.left + L.tilePad, top: tile.top + L.tilePad, width: tile.width - 2 * L.tilePad, height: tile.height - 2 * L.tilePad });
+  }
+
+  return { panel, row, terms, tray, cards, tiles, contents, contentUnits, pictureCell };
+}
+
 // --- Attempt metrics --------------------------------------------------------
 
 /**
@@ -3717,6 +4430,13 @@ export type ImageOrderMetrics = BaseGameMetrics & {
   filledSlots: number;
   totalItems: number;
   showExample: number;
+  livesRemaining: number;
+};
+
+export type MathEquationMetrics = BaseGameMetrics & {
+  /** Places the example left to fill, and how many were filled. */
+  blanks: number;
+  filled: number;
   livesRemaining: number;
 };
 
@@ -3782,6 +4502,7 @@ export const GAME_KIND_KEYS = {
   "drag-drop-match": "dragDropMatch",
   images_order: "imagesOrder",
   jigsaw: "jigsaw",
+  "math-equation": "mathEquation",
   "memory-cards": "memoryCards",
   "pattern-next": "patternNext",
   "select-option": "selectOption",
@@ -3804,6 +4525,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "drag-drop-match": GAME_TIMINGS.dragDropMatch,
   images_order: GAME_TIMINGS.imagesOrder,
   jigsaw: GAME_TIMINGS.jigsaw,
+  "math-equation": GAME_TIMINGS.mathEquation,
   "memory-cards": GAME_TIMINGS.memoryCards,
   "pattern-next": GAME_TIMINGS.patternNext,
   "select-option": GAME_TIMINGS.selectOption,
@@ -3822,6 +4544,7 @@ export type GameMetricsByKind = {
   "drag-drop-match": DragDropMatchMetrics;
   images_order: ImageOrderMetrics;
   jigsaw: JigsawMetrics;
+  "math-equation": MathEquationMetrics;
   "memory-cards": MemoryCardsMetrics;
   "pattern-next": PatternNextMetrics;
   "select-option": SelectOptionMetrics;
