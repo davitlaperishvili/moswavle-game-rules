@@ -206,14 +206,17 @@ section('counting comes before the digits');
     && rules.normalizeCountPickConfig({ image: 'x', count: 2, mode: 'tap_dots' }).mode === 'tap_dots');
 
   // One thing, one word: every thing to count is counted once, in any order.
-  const first = rules.resolveCountPickTap({ counted: true, alreadyCounted: false, countedSoFar: 0, total: 3 });
+  const first = rules.resolveCountPickTap({ counted: true, countedAs: 0, countedSoFar: 0, total: 3 });
   check('the first one tapped is "one"', first.kind === 'counted' && first.number === 1 && first.complete === false, JSON.stringify(first));
-  const last = rules.resolveCountPickTap({ counted: true, alreadyCounted: false, countedSoFar: 2, total: 3 });
+  const last = rules.resolveCountPickTap({ counted: true, countedAs: 0, countedSoFar: 2, total: 3 });
   check('the last one tapped completes the count', last.kind === 'counted' && last.number === 3 && last.complete === true, JSON.stringify(last));
-  check('one counted already is not counted twice, and costs nothing',
-    rules.resolveCountPickTap({ counted: true, alreadyCounted: true, countedSoFar: 2, total: 3 }).kind === 'repeat');
+  const again = rules.resolveCountPickTap({ counted: true, countedAs: 2, countedSoFar: 2, total: 3 });
+  check('one counted already is not counted twice: it says its own number again',
+    again.kind === 'repeat' && again.number === 2, JSON.stringify(again));
   check('a picture that is not to be counted is a mistake',
-    rules.resolveCountPickTap({ counted: false, alreadyCounted: false, countedSoFar: 0, total: 3 }).kind === 'decoy');
+    rules.resolveCountPickTap({ counted: false, countedAs: 0, countedSoFar: 0, total: 3 }).kind === 'decoy');
+  check('counted by tapping alone, the game has no lives; where a card is chosen it has',
+    rules.countPickUsesLives('tap') === false && rules.countPickUsesLives('tap_dots') === true && rules.countPickUsesLives('digits') === true);
 
   // The number words: one recording per number, as far as the game counts.
   const voiced = rules.normalizeCountPickConfig({ image: 'x', count: 3, count_voice: ['/c/1.mp3', null, '/c/3.mp3', '/c/4.mp3'] });

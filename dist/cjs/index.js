@@ -25,6 +25,7 @@ exports.normalizeImageOrderConfig = normalizeImageOrderConfig;
 exports.normalizeSizeOrderConfig = normalizeSizeOrderConfig;
 exports.normalizeCountPickConfig = normalizeCountPickConfig;
 exports.resolveCountPickTap = resolveCountPickTap;
+exports.countPickUsesLives = countPickUsesLives;
 exports.countPickDots = countPickDots;
 exports.fitSceneBoard = fitSceneBoard;
 exports.coverSceneBoard = coverSceneBoard;
@@ -1124,11 +1125,21 @@ function resolveCountPickTap(tap) {
     if (!tap.counted) {
         return { kind: "decoy" };
     }
-    if (tap.alreadyCounted) {
-        return { kind: "repeat" };
+    if (tap.countedAs > 0) {
+        return { kind: "repeat", number: tap.countedAs };
     }
     const number = tap.countedSoFar + 1;
     return { kind: "counted", number, complete: number >= tap.total };
+}
+/**
+ * Whether a counting game is played with lives. Counted by tapping alone
+ * (`tap`, the youngest) it is not: a picture that is not to be counted still
+ * gets the wrong sound and marks the mistake, but takes nothing and cannot end
+ * the game — so the players draw no lives either. Where a card is chosen
+ * (`tap_dots`, `digits`) a wrong one costs a life as in any game.
+ */
+function countPickUsesLives(mode) {
+    return mode !== "tap";
 }
 /**
  * Where the dots of a dot card stand, in fractions of the card (a square),

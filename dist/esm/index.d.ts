@@ -172,6 +172,8 @@ export type CountPickPlacement = {
  *
  * - `tap`       tap every one, and the game counts aloud. No digit to know:
  *                counting is one thing, one word. The last one counted wins.
+ *                Played without lives (`countPickUsesLives`): nothing a child
+ *                this young taps can lose the game.
  * - `tap_dots`  the same, then the card with as many dots — a quantity
  *                matched to a quantity, still without a digit.
  * - `digits`    count by eye and tap the digit.
@@ -532,9 +534,10 @@ export type CountPickTapOutcome =
     number: number;
     complete: boolean;
 }
-/** Counted already: nothing happens, and nothing is lost — a child checks its own count. */
+/** Counted already: its `number` is said again and nothing is lost — a child checks its own count. */
  | {
     kind: "repeat";
+    number: number;
 }
 /** Not one of the things to count: a mistake, like any wrong answer. */
  | {
@@ -547,12 +550,20 @@ export type CountPickTapOutcome =
 export declare function resolveCountPickTap(tap: {
     /** Whether the picture is one of the things to count. */
     counted: boolean;
-    /** Whether this very picture was counted before. */
-    alreadyCounted: boolean;
+    /** The number this very picture was counted as, 0 if it has not been. */
+    countedAs: number;
     /** How many were counted before this tap. */
     countedSoFar: number;
     total: number;
 }): CountPickTapOutcome;
+/**
+ * Whether a counting game is played with lives. Counted by tapping alone
+ * (`tap`, the youngest) it is not: a picture that is not to be counted still
+ * gets the wrong sound and marks the mistake, but takes nothing and cannot end
+ * the game — so the players draw no lives either. Where a card is chosen
+ * (`tap_dots`, `digits`) a wrong one costs a life as in any game.
+ */
+export declare function countPickUsesLives(mode: CountPickMode): boolean;
 /**
  * Where the dots of a dot card stand, in fractions of the card (a square),
  * with the dot radius. One to six are the faces of a die, which a child knows
