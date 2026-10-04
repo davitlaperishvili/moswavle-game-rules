@@ -201,15 +201,34 @@ export type CountPickPlacement = {
   y: number;
   width: number;
   height: number;
+  /** One of the things to count; the rest are there to be ignored. */
+  counted: boolean;
 };
+
+/**
+ * How the child answers, which follows what a child of that age can do:
+ *
+ * - `tap`       tap every one, and the game counts aloud. No digit to know:
+ *                counting is one thing, one word. The last one counted wins.
+ * - `tap_dots`  the same, then the card with as many dots — a quantity
+ *                matched to a quantity, still without a digit.
+ * - `digits`    count by eye and tap the digit.
+ */
+export type CountPickMode = "tap" | "tap_dots" | "digits";
 
 export type CountPickConfig = {
   /** The object to count. One picture, repeated. */
   image: string | null;
   /** How many copies to lay out — or, for a composed scene, how many placements are counted. */
   count: number;
-  /** The numbers offered, already shuffled. */
+  mode: CountPickMode;
+  /** The numbers offered, already shuffled. Dots in `tap_dots`, unused in `tap`. */
   choices: CountPickChoice[];
+  /**
+   * The recorded number words, "one" at index 0, as far as `count`. `null`
+   * where there is no recording: the players then fall back to a plain sound.
+   */
+  countVoice: Array<string | null>;
   bg_image: string | null;
   time_limit: number | null;
   lives: number;
@@ -223,6 +242,8 @@ export type CountPickConfig = {
   board: { width: number; height: number } | null;
   /** Everything the game draws, for the players to preload. */
   imageUris: string[];
+  /** The number words there are recordings of, for the players to preload. */
+  audioUris: string[];
 };
 
 export type PatternItem = {
@@ -1654,6 +1675,8 @@ export function normalizeCountPickConfig(
   config: Record<string, unknown>,
 ): CountPickConfig {
   const count = Math.max(1, Math.min(10, Math.floor(extractNumber(config.count) ?? 3)));
+  const image = extractMediaUrl(config.image) ?? extractMediaUrl(config.question_image) ?? null;
+  const mode: CountPickMode = config.mode === "tap" || config.mode === "tap_dots" ? config.mode : "digits";
 
   const authored = Array.isArray(config.choices)
     ? config.choices
@@ -1694,7 +1717,10 @@ export function normalizeCountPickConfig(
       const y = clampPercent(extractNumber(record.y));
       const width = Math.min(100 - x, clampPercent(extractNumber(record.width)));
       const height = Math.min(100 - y, clampPercent(extractNumber(record.height)));
-      return width > 0 && height > 0 ? { image: url, x, y, width, height } : null;
+      // A scene that does not say is the old kind: every copy of the counted
+      // picture counts.
+      const counted = "counted" in record ? Boolean(record.counted) : url === image;
+      return width > 0 && height > 0 ? { image: url, x, y, width, height, counted } : null;
     })
     .filter((placement): placement is CountPickPlacement => Boolean(placement));
 
@@ -1704,12 +1730,15 @@ export function normalizeCountPickConfig(
     placements.length > 0 && boardWidth && boardHeight && boardWidth > 0 && boardHeight > 0
       ? { width: boardWidth, height: boardHeight }
       : null;
-  const image = extractMediaUrl(config.image) ?? extractMediaUrl(config.question_image) ?? null;
+  const voices = Array.isArray(config.count_voice) ? config.count_voice : [];
+  const countVoice = Array.from({ length: count }, (_, index) => extractMediaUrl(voices[index]));
 
   return {
     image,
     count,
+    mode,
     choices,
+    countVoice,
     bg_image: extractMediaUrl(config.bg_image),
     time_limit: extractNumber(config.time_limit),
     lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
@@ -1722,7 +1751,80 @@ export function normalizeCountPickConfig(
         ),
       ),
     ],
+    audioUris: [...new Set(countVoice.filter((uri): uri is string => Boolean(uri)))],
   };
+}
+
+/** What a tap on a picture of a counting scene comes to. */
+export type CountPickTapOutcome =
+  /** One more counted: `number` is the word to say, `complete` once it was the last. */
+  | { kind: "counted"; number: number; complete: boolean }
+  /** Counted already: nothing happens, and nothing is lost — a child checks its own count. */
+  | { kind: "repeat" }
+  /** Not one of the things to count: a mistake, like any wrong answer. */
+  | { kind: "decoy" };
+
+/**
+ * The whole tap rule of the counting modes (`tap`, `tap_dots`): each thing to
+ * count is counted once, in whatever order the child points at them.
+ */
+export function resolveCountPickTap(tap: {
+  /** Whether the picture is one of the things to count. */
+  counted: boolean;
+  /** Whether this very picture was counted before. */
+  alreadyCounted: boolean;
+  /** How many were counted before this tap. */
+  countedSoFar: number;
+  total: number;
+}): CountPickTapOutcome {
+  if (!tap.counted) {
+    return { kind: "decoy" };
+  }
+  if (tap.alreadyCounted) {
+    return { kind: "repeat" };
+  }
+  const number = tap.countedSoFar + 1;
+  return { kind: "counted", number, complete: number >= tap.total };
+}
+
+/**
+ * Where the dots of a dot card stand, in fractions of the card (a square),
+ * with the dot radius. One to six are the faces of a die, which a child knows
+ * from board games; past six the dots stand in short rows, since a row longer
+ * than four is read as "many" rather than counted.
+ */
+export function countPickDots(value: number): { dots: Array<{ x: number; y: number }>; radius: number } {
+  const count = Math.max(1, Math.min(12, Math.floor(value)));
+  const dice: Record<number, Array<[number, number]>> = {
+    1: [[0.5, 0.5]],
+    2: [[0.3, 0.3], [0.7, 0.7]],
+    3: [[0.25, 0.25], [0.5, 0.5], [0.75, 0.75]],
+    4: [[0.3, 0.3], [0.7, 0.3], [0.3, 0.7], [0.7, 0.7]],
+    5: [[0.27, 0.27], [0.73, 0.27], [0.5, 0.5], [0.27, 0.73], [0.73, 0.73]],
+    6: [[0.3, 0.24], [0.7, 0.24], [0.3, 0.5], [0.7, 0.5], [0.3, 0.76], [0.7, 0.76]],
+  };
+
+  if (dice[count]) {
+    return { dots: dice[count].map(([x, y]) => ({ x, y })), radius: 0.1 };
+  }
+
+  const rows: Record<number, number[]> = {
+    7: [2, 3, 2],
+    8: [3, 2, 3],
+    9: [3, 3, 3],
+    10: [3, 4, 3],
+    11: [4, 3, 4],
+    12: [4, 4, 4],
+  };
+  const step = 0.21;
+  const dots = rows[count].flatMap((length, row) =>
+    Array.from({ length }, (_, column) => ({
+      x: 0.5 + (column - (length - 1) / 2) * step,
+      y: 0.5 + (row - 1) * 0.25,
+    })),
+  );
+
+  return { dots, radius: 0.08 };
 }
 
 /**
@@ -3538,7 +3640,12 @@ export const GAME_TIMINGS = {
    * the last pair gets `successSettleMs` to be seen before the win.
    */
   connectPairs: { matchFeedbackMs: 650, lineDrawMs: 350, wrongFeedbackMs: 600, successSettleMs: 700 },
-  countPick: { wrongFeedbackMs: 600 },
+  /**
+   * A counted picture pops for `countedPopMs`. In `tap` mode the last one
+   * counted is the win, held back `countedHoldMs` so the last number word is
+   * heard to its end and the number is seen.
+   */
+  countPick: { wrongFeedbackMs: 600, countedPopMs: 320, countedHoldMs: 1200 },
   dragDropMatch: { wrongFeedbackMs: 420, successSettleMs: 140 },
   imagesOrder: { wrongFillFeedbackMs: 900 },
   jigsaw: { wrongFlashMs: 500, successSettleMs: 400 },

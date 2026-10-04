@@ -196,6 +196,47 @@ check('the wrong answers are the neighbouring numbers', values.join() === '3,4,5
 const one = rules.normalizeCountPickConfig({ image: 'x', count: 1 });
 check('counting one never offers zero', one.choices.every((c) => c.value >= 1), JSON.stringify(one.choices.map((c) => c.value)));
 
+section('counting comes before the digits');
+
+{
+  // A game that says nothing is the one it always was: count by eye, tap the digit.
+  check('the digit is the answer unless the game says otherwise', count.mode === 'digits');
+  check('a mode the players do not know is the digit game too', rules.normalizeCountPickConfig({ image: 'x', count: 2, mode: 'auto' }).mode === 'digits');
+  check('tap and tap_dots are kept', rules.normalizeCountPickConfig({ image: 'x', count: 2, mode: 'tap' }).mode === 'tap'
+    && rules.normalizeCountPickConfig({ image: 'x', count: 2, mode: 'tap_dots' }).mode === 'tap_dots');
+
+  // One thing, one word: every thing to count is counted once, in any order.
+  const first = rules.resolveCountPickTap({ counted: true, alreadyCounted: false, countedSoFar: 0, total: 3 });
+  check('the first one tapped is "one"', first.kind === 'counted' && first.number === 1 && first.complete === false, JSON.stringify(first));
+  const last = rules.resolveCountPickTap({ counted: true, alreadyCounted: false, countedSoFar: 2, total: 3 });
+  check('the last one tapped completes the count', last.kind === 'counted' && last.number === 3 && last.complete === true, JSON.stringify(last));
+  check('one counted already is not counted twice, and costs nothing',
+    rules.resolveCountPickTap({ counted: true, alreadyCounted: true, countedSoFar: 2, total: 3 }).kind === 'repeat');
+  check('a picture that is not to be counted is a mistake',
+    rules.resolveCountPickTap({ counted: false, alreadyCounted: false, countedSoFar: 0, total: 3 }).kind === 'decoy');
+
+  // The number words: one recording per number, as far as the game counts.
+  const voiced = rules.normalizeCountPickConfig({ image: 'x', count: 3, count_voice: ['/c/1.mp3', null, '/c/3.mp3', '/c/4.mp3'] });
+  check('a number word per number, null where there is no recording',
+    JSON.stringify(voiced.countVoice) === JSON.stringify(['/c/1.mp3', null, '/c/3.mp3']), JSON.stringify(voiced.countVoice));
+  check('only the recordings there are get preloaded', JSON.stringify(voiced.audioUris) === JSON.stringify(['/c/1.mp3', '/c/3.mp3']));
+  check('no recordings is no voice, not a crash', count.countVoice.length === 4 && count.countVoice.every((uri) => uri === null) && count.audioUris.length === 0);
+
+  // Dot cards: as many dots as the number, all inside the card, none on another.
+  let dotsOk = true;
+  for (let value = 1; value <= 12; value += 1) {
+    const { dots, radius } = rules.countPickDots(value);
+    const inside = dots.every((dot) => dot.x - radius >= 0 && dot.x + radius <= 1 && dot.y - radius >= 0 && dot.y + radius <= 1);
+    const apart = dots.every((a, i) => dots.every((b, j) => i === j || Math.hypot(a.x - b.x, a.y - b.y) >= radius * 2));
+    if (dots.length !== value || !inside || !apart) {
+      dotsOk = false;
+      console.log(`    dots for ${value}: ${dots.length} dots, inside ${inside}, apart ${apart}`);
+    }
+  }
+  check('a dot card shows exactly its number, every dot whole and clear of the others', dotsOk);
+  check('five is the face of a die', JSON.stringify(rules.countPickDots(5).dots[2]) === JSON.stringify({ x: 0.5, y: 0.5 }));
+}
+
 section('a pattern is authored as its repeating unit');
 
 const pattern = rules.normalizePatternNextConfig({
@@ -389,6 +430,22 @@ section('count_pick: a scene composed by the author');
   });
 
   check('every valid placement is kept, counted and decoy', composed.placements.length === 3, JSON.stringify(composed.placements));
+  check('a scene that does not say counts every copy of the counted picture',
+    composed.placements.map((placement) => placement.counted).join() === 'true,true,false');
+
+  const ruled = rules.normalizeCountPickConfig({
+    image: url('duck'),
+    count: 2,
+    board_width: 1600,
+    board_height: 1200,
+    placements: [
+      { image: url('duck'), x: 10, y: 50, width: 20, height: 25, counted: true },
+      { image: url('fish'), x: 40, y: 55, width: 20, height: 25, counted: true },
+      { image: url('hen'), x: 70, y: 55, width: 20, height: 25, counted: false },
+    ],
+  });
+  check('a scene that says is believed: different pictures may count together',
+    ruled.placements.map((placement) => placement.counted).join() === 'true,true,false');
   check('a placement over the edge is clipped to the board', composed.placements[2].width === 10 && composed.placements[2].height === 10);
   check('the count is the authored one', composed.count === 2 && composed.choices.some((choice) => choice.isCorrect && choice.value === 2));
   check('the board is the background size', composed.board && composed.board.width === 1600 && composed.board.height === 1200);

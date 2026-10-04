@@ -164,14 +164,32 @@ export type CountPickPlacement = {
     y: number;
     width: number;
     height: number;
+    /** One of the things to count; the rest are there to be ignored. */
+    counted: boolean;
 };
+/**
+ * How the child answers, which follows what a child of that age can do:
+ *
+ * - `tap`       tap every one, and the game counts aloud. No digit to know:
+ *                counting is one thing, one word. The last one counted wins.
+ * - `tap_dots`  the same, then the card with as many dots — a quantity
+ *                matched to a quantity, still without a digit.
+ * - `digits`    count by eye and tap the digit.
+ */
+export type CountPickMode = "tap" | "tap_dots" | "digits";
 export type CountPickConfig = {
     /** The object to count. One picture, repeated. */
     image: string | null;
     /** How many copies to lay out — or, for a composed scene, how many placements are counted. */
     count: number;
-    /** The numbers offered, already shuffled. */
+    mode: CountPickMode;
+    /** The numbers offered, already shuffled. Dots in `tap_dots`, unused in `tap`. */
     choices: CountPickChoice[];
+    /**
+     * The recorded number words, "one" at index 0, as far as `count`. `null`
+     * where there is no recording: the players then fall back to a plain sound.
+     */
+    countVoice: Array<string | null>;
     bg_image: string | null;
     time_limit: number | null;
     lives: number;
@@ -188,6 +206,8 @@ export type CountPickConfig = {
     } | null;
     /** Everything the game draws, for the players to preload. */
     imageUris: string[];
+    /** The number words there are recordings of, for the players to preload. */
+    audioUris: string[];
 };
 export type PatternItem = {
     id: string;
@@ -498,6 +518,48 @@ export declare function normalizeSizeOrderConfig(config: Record<string, unknown>
  * right, a child who eyeballs "a few" does not.
  */
 export declare function normalizeCountPickConfig(config: Record<string, unknown>): CountPickConfig;
+/** What a tap on a picture of a counting scene comes to. */
+export type CountPickTapOutcome = 
+/** One more counted: `number` is the word to say, `complete` once it was the last. */
+{
+    kind: "counted";
+    number: number;
+    complete: boolean;
+}
+/** Counted already: nothing happens, and nothing is lost — a child checks its own count. */
+ | {
+    kind: "repeat";
+}
+/** Not one of the things to count: a mistake, like any wrong answer. */
+ | {
+    kind: "decoy";
+};
+/**
+ * The whole tap rule of the counting modes (`tap`, `tap_dots`): each thing to
+ * count is counted once, in whatever order the child points at them.
+ */
+export declare function resolveCountPickTap(tap: {
+    /** Whether the picture is one of the things to count. */
+    counted: boolean;
+    /** Whether this very picture was counted before. */
+    alreadyCounted: boolean;
+    /** How many were counted before this tap. */
+    countedSoFar: number;
+    total: number;
+}): CountPickTapOutcome;
+/**
+ * Where the dots of a dot card stand, in fractions of the card (a square),
+ * with the dot radius. One to six are the faces of a die, which a child knows
+ * from board games; past six the dots stand in short rows, since a row longer
+ * than four is read as "many" rather than counted.
+ */
+export declare function countPickDots(value: number): {
+    dots: Array<{
+        x: number;
+        y: number;
+    }>;
+    radius: number;
+};
 /**
  * The largest box of the board's aspect ratio that fits the space, for a scene
  * built in the Scene Composer: the whole background stays visible, so every
@@ -878,8 +940,15 @@ export declare const GAME_TIMINGS: {
         readonly wrongFeedbackMs: 600;
         readonly successSettleMs: 700;
     };
+    /**
+     * A counted picture pops for `countedPopMs`. In `tap` mode the last one
+     * counted is the win, held back `countedHoldMs` so the last number word is
+     * heard to its end and the number is seen.
+     */
     readonly countPick: {
         readonly wrongFeedbackMs: 600;
+        readonly countedPopMs: 320;
+        readonly countedHoldMs: 1200;
     };
     readonly dragDropMatch: {
         readonly wrongFeedbackMs: 420;
