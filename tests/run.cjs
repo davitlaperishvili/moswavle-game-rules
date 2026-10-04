@@ -215,6 +215,14 @@ section('counting comes before the digits');
     again.kind === 'repeat' && again.number === 2, JSON.stringify(again));
   check('a picture that is not to be counted is a mistake',
     rules.resolveCountPickTap({ counted: false, countedAs: 0, countedSoFar: 0, total: 3 }).kind === 'decoy');
+  // The hand that shows what to do points at one thing to count, never at one to ignore.
+  const scene = [{ id: 'frog', counted: false }, { id: 'duck-1', counted: true }, { id: 'duck-2', counted: true }];
+  check('the hint points at the first thing to count', rules.countPickHintTarget(scene, []) === 'duck-1');
+  check('then at the next one still to count', rules.countPickHintTarget(scene, ['duck-1']) === 'duck-2');
+  check('and at nothing once everything is counted', rules.countPickHintTarget(scene, ['duck-2', 'duck-1']) === null);
+  check('the hint waits a moment, and comes back when the child stalls',
+    rules.GAME_TIMINGS.countPick.hintDelayMs > 0 && rules.GAME_TIMINGS.countPick.hintIdleMs > rules.GAME_TIMINGS.countPick.hintDelayMs);
+
   check('counted by tapping alone, the game has no lives; where a card is chosen it has',
     rules.countPickUsesLives('tap') === false && rules.countPickUsesLives('tap_dots') === true && rules.countPickUsesLives('digits') === true);
 

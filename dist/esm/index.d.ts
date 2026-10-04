@@ -534,7 +534,11 @@ export type CountPickTapOutcome =
     number: number;
     complete: boolean;
 }
-/** Counted already: its `number` is said again and nothing is lost — a child checks its own count. */
+/**
+ * Counted already (as `number`): not to be tapped again. The players say so
+ * — the wrong sound, a shake, a red glow — which makes it a mistake for the
+ * result, but it takes no life in any mode.
+ */
  | {
     kind: "repeat";
     number: number;
@@ -564,6 +568,16 @@ export declare function resolveCountPickTap(tap: {
  * (`tap_dots`, `digits`) a wrong one costs a life as in any game.
  */
 export declare function countPickUsesLives(mode: CountPickMode): boolean;
+/**
+ * Which picture the hand points at, counted by tapping: the first thing to
+ * count that has not been counted — one picture, never one to ignore, so the
+ * hint shows what to do without giving the count away. `null` once there is
+ * nothing left to point at.
+ */
+export declare function countPickHintTarget<T extends {
+    id: string;
+    counted: boolean;
+}>(pictures: readonly T[], countedIds: readonly string[]): string | null;
 /**
  * Where the dots of a dot card stand, in fractions of the card (a square),
  * with the dot radius. One to six are the faces of a die, which a child knows
@@ -961,11 +975,19 @@ export declare const GAME_TIMINGS: {
      * A counted picture pops for `countedPopMs`. In `tap` mode the last one
      * counted is the win, held back `countedHoldMs` so the last number word is
      * heard to its end and the number is seen.
+     *
+     * Until the first tap a hand shows what to do: it appears `hintDelayMs`
+     * after the game starts, on one thing to count, and taps it once every
+     * `hintBeatMs`. Any tap sends it away; it comes back when nothing has been
+     * tapped for `hintIdleMs` and something is still to count.
      */
     readonly countPick: {
         readonly wrongFeedbackMs: 600;
         readonly countedPopMs: 320;
         readonly countedHoldMs: 1200;
+        readonly hintDelayMs: 1200;
+        readonly hintBeatMs: 1100;
+        readonly hintIdleMs: 6000;
     };
     readonly dragDropMatch: {
         readonly wrongFeedbackMs: 420;

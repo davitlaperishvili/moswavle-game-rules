@@ -1787,7 +1787,11 @@ const COUNT_PICK_DIGITS: readonly MathEquationGlyph[] = ["0", "1", "2", "3", "4"
 export type CountPickTapOutcome =
   /** One more counted: `number` is the word to say, `complete` once it was the last. */
   | { kind: "counted"; number: number; complete: boolean }
-  /** Counted already: its `number` is said again and nothing is lost — a child checks its own count. */
+  /**
+   * Counted already (as `number`): not to be tapped again. The players say so
+   * — the wrong sound, a shake, a red glow — which makes it a mistake for the
+   * result, but it takes no life in any mode.
+   */
   | { kind: "repeat"; number: number }
   /** Not one of the things to count: a mistake, like any wrong answer. */
   | { kind: "decoy" };
@@ -1824,6 +1828,19 @@ export function resolveCountPickTap(tap: {
  */
 export function countPickUsesLives(mode: CountPickMode): boolean {
   return mode !== "tap";
+}
+
+/**
+ * Which picture the hand points at, counted by tapping: the first thing to
+ * count that has not been counted — one picture, never one to ignore, so the
+ * hint shows what to do without giving the count away. `null` once there is
+ * nothing left to point at.
+ */
+export function countPickHintTarget<T extends { id: string; counted: boolean }>(
+  pictures: readonly T[],
+  countedIds: readonly string[],
+): string | null {
+  return pictures.find((picture) => picture.counted && !countedIds.includes(picture.id))?.id ?? null;
 }
 
 /**
@@ -3683,8 +3700,20 @@ export const GAME_TIMINGS = {
    * A counted picture pops for `countedPopMs`. In `tap` mode the last one
    * counted is the win, held back `countedHoldMs` so the last number word is
    * heard to its end and the number is seen.
+   *
+   * Until the first tap a hand shows what to do: it appears `hintDelayMs`
+   * after the game starts, on one thing to count, and taps it once every
+   * `hintBeatMs`. Any tap sends it away; it comes back when nothing has been
+   * tapped for `hintIdleMs` and something is still to count.
    */
-  countPick: { wrongFeedbackMs: 600, countedPopMs: 320, countedHoldMs: 1200 },
+  countPick: {
+    wrongFeedbackMs: 600,
+    countedPopMs: 320,
+    countedHoldMs: 1200,
+    hintDelayMs: 1200,
+    hintBeatMs: 1100,
+    hintIdleMs: 6000,
+  },
   dragDropMatch: { wrongFeedbackMs: 420, successSettleMs: 140 },
   imagesOrder: { wrongFillFeedbackMs: 900 },
   jigsaw: { wrongFlashMs: 500, successSettleMs: 400 },
