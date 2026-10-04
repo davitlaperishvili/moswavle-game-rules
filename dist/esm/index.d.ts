@@ -204,6 +204,12 @@ export type CountPickConfig = {
         width: number;
         height: number;
     } | null;
+    /**
+     * The library's digit pictures, by digit — the same ones a math example is
+     * written with. A digit without a picture is drawn by the players in the
+     * same style.
+     */
+    glyphs: Partial<Record<MathEquationGlyph, string>>;
     /** Everything the game draws, for the players to preload. */
     imageUris: string[];
     /** The number words there are recordings of, for the players to preload. */

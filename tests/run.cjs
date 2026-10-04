@@ -222,6 +222,18 @@ section('counting comes before the digits');
   check('only the recordings there are get preloaded', JSON.stringify(voiced.audioUris) === JSON.stringify(['/c/1.mp3', '/c/3.mp3']));
   check('no recordings is no voice, not a crash', count.countVoice.length === 4 && count.countVoice.every((uri) => uri === null) && count.audioUris.length === 0);
 
+  // The digits are the library's pictures, the ones a math example is written with.
+  const glyphs = { 2: '/g/2.webp', 3: '/g/3.webp', 4: '/g/4.webp', 1: '/g/1.webp', '+': '/g/plus.webp' };
+  const drawn = rules.normalizeCountPickConfig({ image: '/duck.webp', count: 3, glyphs });
+  check('a counting game keeps the digit pictures, and only the digits',
+    drawn.glyphs['3'] === '/g/3.webp' && drawn.glyphs['+'] === undefined, JSON.stringify(drawn.glyphs));
+  check('the digits it offers are preloaded with its pictures',
+    JSON.stringify(drawn.imageUris) === JSON.stringify(['/duck.webp', '/g/2.webp', '/g/3.webp', '/g/4.webp']), JSON.stringify(drawn.imageUris));
+  const tapped = rules.normalizeCountPickConfig({ image: '/duck.webp', count: 2, mode: 'tap', glyphs });
+  check('counted by tapping, the digits are the numbers the pictures get',
+    JSON.stringify(tapped.imageUris) === JSON.stringify(['/duck.webp', '/g/1.webp', '/g/2.webp']), JSON.stringify(tapped.imageUris));
+  check('no digit pictures is no glyphs, and nothing more to load', Object.keys(count.glyphs).length === 0 && count.imageUris.length === 1);
+
   // Dot cards: as many dots as the number, all inside the card, none on another.
   let dotsOk = true;
   for (let value = 1; value <= 12; value += 1) {

@@ -1079,6 +1079,19 @@ function normalizeCountPickConfig(config) {
         : null;
     const voices = Array.isArray(config.count_voice) ? config.count_voice : [];
     const countVoice = Array.from({ length: count }, (_, index) => extractMediaUrl(voices[index]));
+    const glyphSource = asRecord(config.glyphs) ?? {};
+    const glyphs = {};
+    COUNT_PICK_DIGITS.forEach((digit) => {
+        const url = extractMediaUrl(glyphSource[digit]);
+        if (url)
+            glyphs[digit] = url;
+    });
+    // Only the digits this game writes: the numbers offered, or — counted by
+    // tapping — the numbers the pictures get.
+    const written = mode === "digits"
+        ? choices.map((choice) => choice.value)
+        : Array.from({ length: count }, (_, index) => index + 1);
+    const digits = new Set(written.flatMap((value) => mathNumberGlyphs(value)));
     return {
         image,
         count,
@@ -1091,11 +1104,18 @@ function normalizeCountPickConfig(config) {
         placements,
         board,
         imageUris: [
-            ...new Set([extractMediaUrl(config.bg_image), image, ...placements.map((placement) => placement.image)].filter((uri) => Boolean(uri))),
+            ...new Set([
+                extractMediaUrl(config.bg_image),
+                image,
+                ...placements.map((placement) => placement.image),
+                ...COUNT_PICK_DIGITS.filter((digit) => digits.has(digit)).map((digit) => glyphs[digit] ?? null),
+            ].filter((uri) => Boolean(uri))),
         ],
+        glyphs,
         audioUris: [...new Set(countVoice.filter((uri) => Boolean(uri)))],
     };
 }
+const COUNT_PICK_DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 /**
  * The whole tap rule of the counting modes (`tap`, `tap_dots`): each thing to
  * count is counted once, in whatever order the child points at them.

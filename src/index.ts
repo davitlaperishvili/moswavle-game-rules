@@ -240,6 +240,12 @@ export type CountPickConfig = {
   placements: CountPickPlacement[];
   /** The composed scene's background size; its aspect ratio is the board's. */
   board: { width: number; height: number } | null;
+  /**
+   * The library's digit pictures, by digit — the same ones a math example is
+   * written with. A digit without a picture is drawn by the players in the
+   * same style.
+   */
+  glyphs: Partial<Record<MathEquationGlyph, string>>;
   /** Everything the game draws, for the players to preload. */
   imageUris: string[];
   /** The number words there are recordings of, for the players to preload. */
@@ -1733,6 +1739,20 @@ export function normalizeCountPickConfig(
   const voices = Array.isArray(config.count_voice) ? config.count_voice : [];
   const countVoice = Array.from({ length: count }, (_, index) => extractMediaUrl(voices[index]));
 
+  const glyphSource = asRecord(config.glyphs) ?? {};
+  const glyphs: Partial<Record<MathEquationGlyph, string>> = {};
+  COUNT_PICK_DIGITS.forEach((digit) => {
+    const url = extractMediaUrl(glyphSource[digit]);
+    if (url) glyphs[digit] = url;
+  });
+
+  // Only the digits this game writes: the numbers offered, or — counted by
+  // tapping — the numbers the pictures get.
+  const written = mode === "digits"
+    ? choices.map((choice) => choice.value)
+    : Array.from({ length: count }, (_, index) => index + 1);
+  const digits = new Set(written.flatMap((value) => mathNumberGlyphs(value)));
+
   return {
     image,
     count,
@@ -1746,14 +1766,20 @@ export function normalizeCountPickConfig(
     board,
     imageUris: [
       ...new Set(
-        [extractMediaUrl(config.bg_image), image, ...placements.map((placement) => placement.image)].filter(
-          (uri): uri is string => Boolean(uri),
-        ),
+        [
+          extractMediaUrl(config.bg_image),
+          image,
+          ...placements.map((placement) => placement.image),
+          ...COUNT_PICK_DIGITS.filter((digit) => digits.has(digit)).map((digit) => glyphs[digit] ?? null),
+        ].filter((uri): uri is string => Boolean(uri)),
       ),
     ],
+    glyphs,
     audioUris: [...new Set(countVoice.filter((uri): uri is string => Boolean(uri)))],
   };
 }
+
+const COUNT_PICK_DIGITS: readonly MathEquationGlyph[] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 /** What a tap on a picture of a counting scene comes to. */
 export type CountPickTapOutcome =
