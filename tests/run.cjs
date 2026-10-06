@@ -1062,5 +1062,57 @@ section('math_equation: an example with a place or two to fill');
     && rules.GAME_TIMINGS_BY_KIND['math-equation'] === t);
 }
 
+section('colour themes');
+
+{
+  const names = rules.THEME_NAMES;
+  const palettes = rules.THEME_PALETTES;
+  const keys = Object.keys(palettes.dark).sort().join(',');
+
+  check('three themes, dark first', names.join(',') === 'dark,light,contrast' && rules.DEFAULT_THEME === 'dark');
+  check('every theme names the same colours', names.every((name) => Object.keys(palettes[name]).sort().join(',') === keys));
+  check('every colour but the shadow and the overlay is #rrggbb', names.every((name) => Object.entries(palettes[name])
+    .every(([key, value]) => (key === 'shadow' || key === 'overlay' ? /^rgba\(/.test(value) : /^#[0-9a-f]{6}$/.test(value)))));
+
+  check('a retired name becomes one of the three', rules.normalizeThemeName('darkblue') === 'dark'
+    && rules.normalizeThemeName('violet') === 'dark' && rules.normalizeThemeName('accessibility') === 'contrast');
+  check('a kept name stays', names.every((name) => rules.normalizeThemeName(name) === name));
+  check('anything else is the default', rules.normalizeThemeName('sepia') === 'dark' && rules.normalizeThemeName(null) === 'dark'
+    && rules.normalizeThemeName('toString') === 'dark');
+
+  check('contrast is measured as WCAG does', Math.abs(rules.contrastRatio('#000000', '#ffffff') - 21) < 1e-9
+    && rules.contrastRatio('#777777', '#777777') === 1);
+
+  // What is read against what. Text needs 4.5 (WCAG AA); the high-contrast theme
+  // promises 7 (AAA). A placeholder is a hint, not content: 3 is enough for it.
+  const accents = ['primary', 'success', 'warning', 'danger', 'violet'];
+  const upper = (word) => word[0].toUpperCase() + word.slice(1);
+  const pairs = [
+    ['text', 'background'], ['text', 'surface'], ['text', 'surfaceSoft'],
+    ['textSecondary', 'background'], ['textSecondary', 'surface'], ['textSecondary', 'surfaceSoft'],
+    ['muted', 'background'], ['muted', 'surface'], ['muted', 'surfaceSoft'],
+    ...accents.flatMap((accent) => [
+      ['on' + upper(accent), accent],
+      [accent + 'Text', 'background'], [accent + 'Text', 'surface'], [accent + 'Text', accent + 'Soft'],
+      ['text', accent + 'Soft'],
+    ]),
+  ];
+  names.forEach((name) => {
+    const palette = palettes[name];
+    const floor = name === 'contrast' ? 7 : 4.5;
+    const weak = pairs
+      .map(([front, back]) => [front, back, rules.contrastRatio(palette[front], palette[back])])
+      .filter(([, , ratio]) => ratio < floor);
+    check(name + ': every text colour is readable on what it lies on', weak.length === 0,
+      weak.map(([front, back, ratio]) => front + ' on ' + back + ' ' + ratio.toFixed(2)).join(', '));
+    check(name + ': a placeholder can be made out', rules.contrastRatio(palette.placeholder, palette.surfaceSoft) >= 3
+      && rules.contrastRatio(palette.placeholder, palette.surface) >= 3);
+  });
+
+  check('dark is not black on white: no pure black, no pure white', !Object.values(palettes.dark).includes('#000000')
+    && !Object.values(palettes.dark).includes('#ffffff'));
+  check('in the dark and light themes a card differs from the page', ['dark', 'light'].every((name) => palettes[name].surface !== palettes[name].background));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

@@ -4738,3 +4738,6 @@ export type GameMetricsRegistryCheck = AssertMetricsComplete<GameMetricsByKind>;
 export type GameOutcome<K extends PlayableGameKind = PlayableGameKind> =
   | { status: "passed"; reason: "success"; metrics: GameMetricsByKind[K] }
   | { status: "failed"; reason: GameFailureReason; metrics: GameMetricsByKind[K] };
+
+// The colour themes of both clients (see theme.ts for why they are here).
+export * from "./theme.js";

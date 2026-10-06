@@ -48,6 +48,14 @@ a picture the crop cuts is shrunk until it is whole (`fitSceneRect`). A card tha
 picture several times — three apples on a memory card, two cats on an answer card, a pattern of counts — places the
 copies with `layoutPictureCopies`, so a count looks the same on every device.
 
+Also here, though it is not a game rule: the colour themes of both clients (`src/theme.ts` —
+`THEME_PALETTES`, `THEME_NAMES`, `DEFAULT_THEME`, `normalizeThemeName`). The site and the app must
+show the same colours, and this package is the one thing they both install, so a theme colour is
+written here and nowhere else: the site turns a palette into CSS variables, the app into style
+objects. There are three themes — dark (the default), light and high contrast — and the tests hold
+every text colour to WCAG AA against what it lies on (AAA in the high-contrast theme). The lesson
+player is outside of them: a game looks the same in every theme.
+
 No: anything that draws, animates, plays audio, or touches the DOM or React Native. Those differ
 per platform by design, and dragging them in here would force one platform's idea of rendering
 onto the other.

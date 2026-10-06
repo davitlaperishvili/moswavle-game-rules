@@ -1440,4 +1440,4 @@ export type GameOutcome<K extends PlayableGameKind = PlayableGameKind> = {
     reason: GameFailureReason;
     metrics: GameMetricsByKind[K];
 };
-export {};
+export * from "./theme.js";

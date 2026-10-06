@@ -3135,3 +3135,5 @@ export const GAME_TIMINGS_BY_KIND = {
     "sort-bins": GAME_TIMINGS.sortBins,
     "svg-assemble": GAME_TIMINGS.svgAssemble,
 };
+// The colour themes of both clients (see theme.ts for why they are here).
+export * from "./theme.js";
