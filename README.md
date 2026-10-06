@@ -52,7 +52,8 @@ Also here, though it is not a game rule: the colour themes of both clients (`src
 `THEME_PALETTES`, `THEME_NAMES`, `DEFAULT_THEME`, `normalizeThemeName`). The site and the app must
 show the same colours, and this package is the one thing they both install, so a theme colour is
 written here and nowhere else: the site turns a palette into CSS variables, the app into style
-objects. There are three themes — dark (the default), light and high contrast — and the tests hold
+objects. There are four themes — dark (the default), light, calm (muted, for a child whom bright colour
+tires) and high contrast — and the tests hold
 every text colour to WCAG AA against what it lies on (AAA in the high-contrast theme). The lesson
 player is outside of them: a game looks the same in every theme.
 

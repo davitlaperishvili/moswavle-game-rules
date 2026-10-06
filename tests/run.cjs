@@ -1069,12 +1069,12 @@ section('colour themes');
   const palettes = rules.THEME_PALETTES;
   const keys = Object.keys(palettes.dark).sort().join(',');
 
-  check('three themes, dark first', names.join(',') === 'dark,light,contrast' && rules.DEFAULT_THEME === 'dark');
+  check('four themes, dark first', names.join(',') === 'dark,light,calm,contrast' && rules.DEFAULT_THEME === 'dark');
   check('every theme names the same colours', names.every((name) => Object.keys(palettes[name]).sort().join(',') === keys));
   check('every colour but the shadow and the overlay is #rrggbb', names.every((name) => Object.entries(palettes[name])
     .every(([key, value]) => (key === 'shadow' || key === 'overlay' ? /^rgba\(/.test(value) : /^#[0-9a-f]{6}$/.test(value)))));
 
-  check('a retired name becomes one of the three', rules.normalizeThemeName('darkblue') === 'dark'
+  check('a retired name becomes one of the themes there are', rules.normalizeThemeName('darkblue') === 'dark'
     && rules.normalizeThemeName('violet') === 'dark' && rules.normalizeThemeName('accessibility') === 'contrast');
   check('a kept name stays', names.every((name) => rules.normalizeThemeName(name) === name));
   check('anything else is the default', rules.normalizeThemeName('sepia') === 'dark' && rules.normalizeThemeName(null) === 'dark'
@@ -1109,9 +1109,20 @@ section('colour themes');
       && rules.contrastRatio(palette.placeholder, palette.surface) >= 3);
   });
 
+  // Calm is calm by measure: nothing pure, and no accent as saturated as the light theme's.
+  const saturation = (hex) => {
+    const value = parseInt(hex.slice(1), 16);
+    const channels = [(value >> 16) & 255, (value >> 8) & 255, value & 255].map((channel) => channel / 255);
+    const max = Math.max(...channels);
+    const min = Math.min(...channels);
+    return max === min ? 0 : (max - min) / (1 - Math.abs(max + min - 1));
+  };
+  check('calm has no pure black and no pure white', !Object.values(palettes.calm).includes('#000000')
+    && !Object.values(palettes.calm).includes('#ffffff'));
+  check('every accent of calm is far less saturated than in the light theme', accents.every((accent) => saturation(palettes.calm[accent]) < saturation(palettes.light[accent]) - 0.2));
   check('dark is not black on white: no pure black, no pure white', !Object.values(palettes.dark).includes('#000000')
     && !Object.values(palettes.dark).includes('#ffffff'));
-  check('in the dark and light themes a card differs from the page', ['dark', 'light'].every((name) => palettes[name].surface !== palettes[name].background));
+  check('in every theme but high contrast a card differs from the page', ['dark', 'light', 'calm'].every((name) => palettes[name].surface !== palettes[name].background));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

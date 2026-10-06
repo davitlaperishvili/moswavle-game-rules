@@ -10,7 +10,7 @@
  * The lesson player is outside of this: a game is drawn on its own scene and
  * looks the same in every theme.
  */
-export type ThemeName = "dark" | "light" | "contrast";
+export type ThemeName = "dark" | "light" | "calm" | "contrast";
 /**
  * One theme. Every colour is a plain `#rrggbb` except `shadow` and `overlay`,
  * which carry their own transparency.

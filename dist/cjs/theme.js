@@ -125,11 +125,50 @@ const contrast = {
     shadow: "rgba(0, 0, 0, 0)",
     overlay: "rgba(0, 0, 0, 0.86)",
 };
-exports.THEME_PALETTES = { dark, light, contrast };
+/**
+ * Calm: for a child whom bright colour and sharp edges tire or upset. Warm
+ * sand instead of white, soft charcoal instead of black, and every accent
+ * dusty — no red, no loud yellow. It is the opposite of the high-contrast
+ * theme on purpose: text stays easy to read (WCAG AA), nothing else stands out.
+ */
+const calm = {
+    background: "#f1ede4",
+    surface: "#faf7f0",
+    surfaceSoft: "#e9e3d6",
+    border: "#d5cdbd",
+    text: "#37404a",
+    textSecondary: "#48525c",
+    muted: "#5a636c",
+    placeholder: "#7a8188",
+    primary: "#8fb3cf",
+    primaryDark: "#6f96b5",
+    onPrimary: "#1c2f3f",
+    primarySoft: "#dfe8ee",
+    primaryText: "#3b6283",
+    success: "#9cc0a5",
+    onSuccess: "#1d3626",
+    successSoft: "#dfe9dd",
+    successText: "#3a6647",
+    warning: "#dfc083",
+    onWarning: "#3d2e0e",
+    warningSoft: "#efe5cd",
+    warningText: "#73541a",
+    danger: "#d79c96",
+    onDanger: "#40201c",
+    dangerSoft: "#f0dfda",
+    dangerText: "#8a433d",
+    violet: "#b0a6d0",
+    onViolet: "#292343",
+    violetSoft: "#e4e0ec",
+    violetText: "#594c86",
+    shadow: "rgba(84, 72, 52, 0.1)",
+    overlay: "rgba(58, 54, 46, 0.45)",
+};
+exports.THEME_PALETTES = { dark, light, calm, contrast };
 /** The order the themes are offered in. */
-exports.THEME_NAMES = ["dark", "light", "contrast"];
+exports.THEME_NAMES = ["dark", "light", "calm", "contrast"];
 exports.DEFAULT_THEME = "dark";
-/** Names a device may still remember from before there were three themes. */
+/** Names a device may still remember from the themes there were before these. */
 const RETIRED_THEME_NAMES = {
     darkblue: "dark",
     violet: "dark",
