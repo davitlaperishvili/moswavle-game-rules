@@ -3424,6 +3424,179 @@ export function catchCorrectFallDurationMs(speed: number): number {
   );
 }
 
+// --- Memory Cards -----------------------------------------------------------
+
+export type MemoryCardsLayout = {
+  columns: number;
+  rows: number;
+  /** One card's box. */
+  cardWidth: number;
+  cardHeight: number;
+  /** Between two cards, both ways. */
+  gap: number;
+  /** The whole grid's box on the stage. A last row that is not full stands in its middle. */
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+/** No card is longer than this on a side: a big screen makes no giants. */
+export const MEMORY_CARD_MAX_SIDE = 230;
+/** A card fills its cell, but is never more than this much longer one way than the other. */
+const MEMORY_CARD_STRETCH = 1.3;
+
+/**
+ * Where the cards of a memory game go on a stage (`width` x `height`, the
+ * whole game window).
+ *
+ * The cards share the stage less `insets` (the chrome's band, the phone's
+ * edges) and stand in its middle. The grid is the one whose pictures come out
+ * biggest, and a card fills its cell — wider than tall on a phone on its side,
+ * where two rows leave room to spare beside them — instead of keeping one
+ * shape and leaving the stage empty around a small board.
+ *
+ * `controls` are what the player keeps in the bottom-left corner (the
+ * instruction voice's speaker). A board that fits beside or above it stays in
+ * the middle of the whole stage; only one that would lie under it moves, to
+ * whichever side of it leaves the cards bigger.
+ */
+export function layoutMemoryCards(
+  width: number,
+  height: number,
+  count: number,
+  insets: SceneInsets = {},
+  controls: ReadonlyArray<BoardRect> = [],
+): MemoryCardsLayout {
+  const total = Math.max(1, Math.floor(count));
+
+  if (width <= 0 || height <= 0) {
+    return { columns: total, rows: 1, cardWidth: 0, cardHeight: 0, gap: 0, left: 0, top: 0, width: 0, height: 0 };
+  }
+
+  const edge = clampNumber(Math.min(width, height) * 0.025, 6, 20);
+  const frame = {
+    left: (insets.left ?? 0) + edge,
+    top: (insets.top ?? 0) + edge,
+    right: width - (insets.right ?? 0) - edge,
+    bottom: height - (insets.bottom ?? 0) - edge,
+  };
+  const gap = Math.round(
+    clampNumber(Math.min(frame.right - frame.left, frame.bottom - frame.top) * 0.03, 6, 18),
+  );
+
+  type Area = { left: number; top: number; right: number; bottom: number };
+  type Fit = MemoryCardsLayout & { side: number };
+
+  const fit = (area: Area): Fit | null => {
+    const areaWidth = area.right - area.left;
+    const areaHeight = area.bottom - area.top;
+    let best: { columns: number; rows: number; w: number; h: number } | null = null;
+
+    for (let columns = 1; columns <= total; columns += 1) {
+      const rows = Math.ceil(total / columns);
+      const cellWidth = (areaWidth - gap * (columns - 1)) / columns;
+      const cellHeight = (areaHeight - gap * (rows - 1)) / rows;
+
+      if (cellWidth < 1 || cellHeight < 1) {
+        continue;
+      }
+
+      const w = Math.floor(Math.min(cellWidth, cellHeight * MEMORY_CARD_STRETCH, MEMORY_CARD_MAX_SIDE));
+      const h = Math.floor(Math.min(cellHeight, w * MEMORY_CARD_STRETCH, MEMORY_CARD_MAX_SIDE));
+      const side = Math.min(w, h);
+      const bestSide = best ? Math.min(best.w, best.h) : 0;
+
+      // The picture on a card is as big as the card's shorter side: that first,
+      // then the bigger card, then the fewer rows.
+      if (
+        !best ||
+        side > bestSide ||
+        (side === bestSide && w * h > best.w * best.h) ||
+        (side === bestSide && w * h === best.w * best.h && rows < best.rows)
+      ) {
+        best = { columns, rows, w, h };
+      }
+    }
+
+    if (!best) {
+      return null;
+    }
+
+    const gridWidth = best.columns * best.w + (best.columns - 1) * gap;
+    const gridHeight = best.rows * best.h + (best.rows - 1) * gap;
+
+    return {
+      columns: best.columns,
+      rows: best.rows,
+      cardWidth: best.w,
+      cardHeight: best.h,
+      gap,
+      left: Math.round(area.left + (areaWidth - gridWidth) / 2),
+      top: Math.round(area.top + (areaHeight - gridHeight) / 2),
+      width: gridWidth,
+      height: gridHeight,
+      side: Math.min(best.w, best.h),
+    };
+  };
+
+  const under = (grid: Fit) =>
+    controls.some(
+      (control) =>
+        grid.left < control.left + control.width + gap &&
+        grid.left + grid.width > control.left - gap &&
+        grid.top < control.top + control.height + gap &&
+        grid.top + grid.height > control.top - gap,
+    );
+  const strip = ({ side: _side, ...layout }: Fit): MemoryCardsLayout => layout;
+
+  const whole = fit(frame);
+
+  if (!whole) {
+    return { columns: total, rows: 1, cardWidth: 0, cardHeight: 0, gap, left: 0, top: 0, width: 0, height: 0 };
+  }
+
+  if (!under(whole)) {
+    return strip(whole);
+  }
+
+  // Beside the corner's controls, or above them.
+  const reachRight = Math.max(...controls.map((control) => control.left + control.width));
+  const reachTop = Math.min(...controls.map((control) => control.top));
+  const beside = fit({ ...frame, left: Math.max(frame.left, reachRight + gap) });
+  const above = fit({ ...frame, bottom: Math.min(frame.bottom, reachTop - gap) });
+  const moved = [beside, above]
+    .filter((candidate): candidate is Fit => candidate !== null)
+    .sort((a, b) => b.side - a.side || b.cardWidth * b.cardHeight - a.cardWidth * a.cardHeight)[0];
+
+  return strip(moved ?? whole);
+}
+
+/**
+ * The backs of the cards, toy colours a card has by where it lies — never by
+ * what it hides, so a back tells nothing. `from` and `to` are the back's
+ * gradient, `ink` the mark drawn on it, `soft` the rim of the card's face.
+ */
+export const MEMORY_CARD_COLORS = [
+  { from: "#5cc8ff", to: "#2f8fff", ink: "#1d6fe0", soft: "#cfe9ff" },
+  { from: "#ff9cba", to: "#f2548b", ink: "#d63a72", soft: "#ffdbe7" },
+  { from: "#ffd766", to: "#ff9f2e", ink: "#d97400", soft: "#ffeec2" },
+  { from: "#86e59a", to: "#2fbf71", ink: "#1f9d5a", soft: "#d3f5dc" },
+  { from: "#bca4ff", to: "#7c5cff", ink: "#6442e6", soft: "#e4dbff" },
+] as const;
+
+export type MemoryCardColor = (typeof MEMORY_CARD_COLORS)[number];
+
+/** The colour of the card at `index` of a grid of `columns`: no two neighbours alike. */
+export function memoryCardColor(index: number, columns: number): MemoryCardColor {
+  const perRow = Math.max(1, Math.floor(columns));
+  const position = Math.max(0, Math.floor(index));
+  const column = position % perRow;
+  const row = Math.floor(position / perRow);
+
+  return MEMORY_CARD_COLORS[(column + row * 2) % MEMORY_CARD_COLORS.length];
+}
+
 // --- Pattern Next -----------------------------------------------------------
 
 export type PatternNextLayout = {

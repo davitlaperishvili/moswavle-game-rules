@@ -867,6 +867,72 @@ export declare const DEFAULT_CATCH_CORRECT_ITEMS: ReadonlyArray<{
 }>;
 /** How long one item takes to cross the stage, from the authored `speed`. */
 export declare function catchCorrectFallDurationMs(speed: number): number;
+export type MemoryCardsLayout = {
+    columns: number;
+    rows: number;
+    /** One card's box. */
+    cardWidth: number;
+    cardHeight: number;
+    /** Between two cards, both ways. */
+    gap: number;
+    /** The whole grid's box on the stage. A last row that is not full stands in its middle. */
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+};
+/** No card is longer than this on a side: a big screen makes no giants. */
+export declare const MEMORY_CARD_MAX_SIDE = 230;
+/**
+ * Where the cards of a memory game go on a stage (`width` x `height`, the
+ * whole game window).
+ *
+ * The cards share the stage less `insets` (the chrome's band, the phone's
+ * edges) and stand in its middle. The grid is the one whose pictures come out
+ * biggest, and a card fills its cell — wider than tall on a phone on its side,
+ * where two rows leave room to spare beside them — instead of keeping one
+ * shape and leaving the stage empty around a small board.
+ *
+ * `controls` are what the player keeps in the bottom-left corner (the
+ * instruction voice's speaker). A board that fits beside or above it stays in
+ * the middle of the whole stage; only one that would lie under it moves, to
+ * whichever side of it leaves the cards bigger.
+ */
+export declare function layoutMemoryCards(width: number, height: number, count: number, insets?: SceneInsets, controls?: ReadonlyArray<BoardRect>): MemoryCardsLayout;
+/**
+ * The backs of the cards, toy colours a card has by where it lies — never by
+ * what it hides, so a back tells nothing. `from` and `to` are the back's
+ * gradient, `ink` the mark drawn on it, `soft` the rim of the card's face.
+ */
+export declare const MEMORY_CARD_COLORS: readonly [{
+    readonly from: "#5cc8ff";
+    readonly to: "#2f8fff";
+    readonly ink: "#1d6fe0";
+    readonly soft: "#cfe9ff";
+}, {
+    readonly from: "#ff9cba";
+    readonly to: "#f2548b";
+    readonly ink: "#d63a72";
+    readonly soft: "#ffdbe7";
+}, {
+    readonly from: "#ffd766";
+    readonly to: "#ff9f2e";
+    readonly ink: "#d97400";
+    readonly soft: "#ffeec2";
+}, {
+    readonly from: "#86e59a";
+    readonly to: "#2fbf71";
+    readonly ink: "#1f9d5a";
+    readonly soft: "#d3f5dc";
+}, {
+    readonly from: "#bca4ff";
+    readonly to: "#7c5cff";
+    readonly ink: "#6442e6";
+    readonly soft: "#e4dbff";
+}];
+export type MemoryCardColor = (typeof MEMORY_CARD_COLORS)[number];
+/** The colour of the card at `index` of a grid of `columns`: no two neighbours alike. */
+export declare function memoryCardColor(index: number, columns: number): MemoryCardColor;
 export type PatternNextLayout = {
     /** The side of one picture of the row, and of the box that waits for the answer. */
     item: number;

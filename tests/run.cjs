@@ -369,6 +369,38 @@ check('a picture on its own shadow is placed, whatever else is near', rules.judg
 check('a picture on another shadow is a mistake', rules.judgeShadowMatchDrop(false, true) === 'wrong');
 check('a picture let slip on the way is not a mistake', rules.judgeShadowMatchDrop(false, false) === 'stray');
 
+section('Memory Cards: the board fills the stage');
+{
+  // A phone on its side: the band on top, the camera's cut-out at both ends, the home bar below.
+  const insets = { top: 68, left: 59, right: 59, bottom: 21 };
+  const speaker = [{ left: 0, top: 393 - 100, width: 104, height: 100 }];
+  const inside = (l) => l.left >= insets.left && l.left + l.width <= 852 - insets.right && l.top >= insets.top && l.top + l.height <= 393 - insets.bottom;
+  const clearOf = (l) => !(l.left < 104 && l.top + l.height > 393 - 100);
+
+  const six = rules.layoutMemoryCards(852, 393, 6, insets, speaker);
+  check('six cards stand three by two', six.columns === 3 && six.rows === 2, JSON.stringify(six));
+  check('a card fills its cell: wider than tall on a phone on its side', six.cardWidth > six.cardHeight && six.cardWidth <= six.cardHeight * 1.3 + 1);
+  check('and is far bigger than the old 106 by 140', six.cardWidth >= 160 && six.cardHeight >= 130);
+  check('the board stays inside the edges', inside(six));
+  check('a board that fits beside the speaker stays in the middle of the stage', Math.abs(six.left + six.width / 2 - 852 / 2) <= 1);
+
+  const twelve = rules.layoutMemoryCards(852, 393, 12, insets, speaker);
+  check('twelve cards stand six by two', twelve.columns === 6 && twelve.rows === 2, JSON.stringify(twelve));
+  check('a board as wide as the stage keeps out of the speaker corner', clearOf(twelve) && inside(twelve));
+
+  const free = rules.layoutMemoryCards(852, 393, 12, insets);
+  check('without a speaker the same board takes the whole width', free.cardWidth >= twelve.cardWidth && Math.abs(free.left + free.width / 2 - 852 / 2) <= 1);
+
+  const desk = rules.layoutMemoryCards(1600, 900, 4);
+  check('a big screen makes no giants', desk.cardWidth <= rules.MEMORY_CARD_MAX_SIDE && desk.cardHeight <= rules.MEMORY_CARD_MAX_SIDE, JSON.stringify(desk));
+  check('no stage, no sizes', rules.layoutMemoryCards(0, 0, 6).cardWidth === 0);
+
+  const colours = Array.from({ length: 12 }, (_, i) => rules.memoryCardColor(i, 6));
+  const alike = colours.some((c, i) => (i % 6 > 0 && c === colours[i - 1]) || (i >= 6 && c === colours[i - 6]));
+  check('no two neighbouring cards have the same back', !alike);
+  check('a card has its colour by its place alone', rules.memoryCardColor(4, 6) === rules.memoryCardColor(4, 6));
+}
+
 section('Pattern Next: the row and the cards fill the room');
 {
   // A phone on its side, less the chrome, its edges and the speaker's strip.
