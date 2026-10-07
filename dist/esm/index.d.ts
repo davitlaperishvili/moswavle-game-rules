@@ -1424,7 +1424,7 @@ export declare const GAME_GESTURES: {
     readonly "connect-pairs": "tap";
     readonly "count-pick": "tap";
     readonly "drag-drop-match": "drag";
-    readonly images_order: "drag";
+    readonly images_order: "tap";
     readonly jigsaw: "drag";
     readonly "math-equation": "tap";
     readonly "memory-cards": "tap";

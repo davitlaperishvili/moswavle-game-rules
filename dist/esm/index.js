@@ -3147,7 +3147,8 @@ export const GAME_GESTURES = {
     "connect-pairs": "tap",
     "count-pick": "tap",
     "drag-drop-match": "drag",
-    images_order: "drag",
+    // Played by tapping alone: a picture tapped goes to the first free place.
+    images_order: "tap",
     jigsaw: "drag",
     "math-equation": "tap",
     "memory-cards": "tap",

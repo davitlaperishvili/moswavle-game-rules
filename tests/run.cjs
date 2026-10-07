@@ -1133,6 +1133,7 @@ section('the hint of how a game is played shows the gesture, never the answer');
   check('a game played only by carrying is shown carried', rules.GAME_GESTURES['shadow-match'] === 'drag');
   check('a game played either way is shown carried too', rules.GAME_GESTURES['drag-drop-match'] === 'drag' && rules.GAME_GESTURES['sort-bins'] === 'drag');
   check('a game of cards to tap is shown tapped', rules.GAME_GESTURES['answer-choice'] === 'tap' && rules.GAME_GESTURES['memory-cards'] === 'tap');
+  check('pictures put in order are tapped, not carried', rules.GAME_GESTURES.images_order === 'tap');
 
   check('a few things are all visited, in order', rules.gestureHintTapStops(3).join() === '0,1,2');
   check('nothing to tap, nothing to visit', rules.gestureHintTapStops(0).length === 0);
