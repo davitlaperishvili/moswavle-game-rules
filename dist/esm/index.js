@@ -2291,13 +2291,19 @@ export function catchCorrectFallDurationMs(speed) {
 // --- Shadow Match -----------------------------------------------------------
 /** A drop counts when its centre is within this fraction of the target's longer side. */
 export const SHADOW_MATCH_DROP_TOLERANCE = 0.42;
-/** A miss is blamed on the nearest other target within this fraction — feedback only. */
+/** A picture is on another one's shadow when its centre is within this fraction of that shadow. */
 export const SHADOW_MATCH_MISS_TOLERANCE = 0.5;
 export function isShadowMatchHit(distance, targetWidth, targetHeight) {
     return distance <= Math.max(targetWidth, targetHeight) * SHADOW_MATCH_DROP_TOLERANCE;
 }
 export function isShadowMatchNearMiss(distance, targetWidth, targetHeight) {
     return distance <= Math.max(targetWidth, targetHeight) * SHADOW_MATCH_MISS_TOLERANCE;
+}
+export function judgeShadowMatchDrop(onOwnShadow, onAnotherShadow) {
+    if (onOwnShadow) {
+        return "hit";
+    }
+    return onAnotherShadow ? "wrong" : "stray";
 }
 export function getDragDropMatchSceneMetrics(viewportWidth, viewportHeight, sourceWidth, sourceHeight) {
     if (viewportWidth <= 0 || viewportHeight <= 0 || sourceWidth <= 0 || sourceHeight <= 0) {

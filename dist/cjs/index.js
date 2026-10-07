@@ -67,6 +67,7 @@ exports.isImageReference = isImageReference;
 exports.catchCorrectFallDurationMs = catchCorrectFallDurationMs;
 exports.isShadowMatchHit = isShadowMatchHit;
 exports.isShadowMatchNearMiss = isShadowMatchNearMiss;
+exports.judgeShadowMatchDrop = judgeShadowMatchDrop;
 exports.getDragDropMatchSceneMetrics = getDragDropMatchSceneMetrics;
 exports.getDragDropMatchZoneRect = getDragDropMatchZoneRect;
 exports.layoutDragDropMatchZones = layoutDragDropMatchZones;
@@ -2370,13 +2371,19 @@ function catchCorrectFallDurationMs(speed) {
 // --- Shadow Match -----------------------------------------------------------
 /** A drop counts when its centre is within this fraction of the target's longer side. */
 exports.SHADOW_MATCH_DROP_TOLERANCE = 0.42;
-/** A miss is blamed on the nearest other target within this fraction — feedback only. */
+/** A picture is on another one's shadow when its centre is within this fraction of that shadow. */
 exports.SHADOW_MATCH_MISS_TOLERANCE = 0.5;
 function isShadowMatchHit(distance, targetWidth, targetHeight) {
     return distance <= Math.max(targetWidth, targetHeight) * exports.SHADOW_MATCH_DROP_TOLERANCE;
 }
 function isShadowMatchNearMiss(distance, targetWidth, targetHeight) {
     return distance <= Math.max(targetWidth, targetHeight) * exports.SHADOW_MATCH_MISS_TOLERANCE;
+}
+function judgeShadowMatchDrop(onOwnShadow, onAnotherShadow) {
+    if (onOwnShadow) {
+        return "hit";
+    }
+    return onAnotherShadow ? "wrong" : "stray";
 }
 function getDragDropMatchSceneMetrics(viewportWidth, viewportHeight, sourceWidth, sourceHeight) {
     if (viewportWidth <= 0 || viewportHeight <= 0 || sourceWidth <= 0 || sourceHeight <= 0) {

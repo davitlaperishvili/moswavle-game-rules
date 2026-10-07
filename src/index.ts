@@ -3428,7 +3428,7 @@ export function catchCorrectFallDurationMs(speed: number): number {
 
 /** A drop counts when its centre is within this fraction of the target's longer side. */
 export const SHADOW_MATCH_DROP_TOLERANCE = 0.42;
-/** A miss is blamed on the nearest other target within this fraction — feedback only. */
+/** A picture is on another one's shadow when its centre is within this fraction of that shadow. */
 export const SHADOW_MATCH_MISS_TOLERANCE = 0.5;
 
 export function isShadowMatchHit(distance: number, targetWidth: number, targetHeight: number): boolean {
@@ -3441,6 +3441,22 @@ export function isShadowMatchNearMiss(
   targetHeight: number,
 ): boolean {
   return distance <= Math.max(targetWidth, targetHeight) * SHADOW_MATCH_MISS_TOLERANCE;
+}
+
+/**
+ * What letting go of a picture was. On its own shadow it is placed. On another
+ * picture's shadow it is a mistake: a life, and `hadMistake`. Anywhere else it
+ * was let slip on the way — a small hand does that — so it goes back to where
+ * it waited and nothing is counted, no life and no sound.
+ */
+export type ShadowMatchDrop = "hit" | "wrong" | "stray";
+
+export function judgeShadowMatchDrop(onOwnShadow: boolean, onAnotherShadow: boolean): ShadowMatchDrop {
+  if (onOwnShadow) {
+    return "hit";
+  }
+
+  return onAnotherShadow ? "wrong" : "stray";
 }
 
 // --- Board geometry ---------------------------------------------------------

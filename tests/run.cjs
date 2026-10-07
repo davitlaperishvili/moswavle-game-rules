@@ -365,6 +365,9 @@ check('authored items are kept as they are', rules.normalizeCatchCorrectConfig({
 
 check('a drop inside the tolerance is a hit', rules.isShadowMatchHit(40, 100, 80) && !rules.isShadowMatchHit(43, 100, 80));
 check('a near miss is wider than a hit', rules.isShadowMatchNearMiss(48, 100, 80) && !rules.isShadowMatchNearMiss(51, 100, 80));
+check('a picture on its own shadow is placed, whatever else is near', rules.judgeShadowMatchDrop(true, false) === 'hit' && rules.judgeShadowMatchDrop(true, true) === 'hit');
+check('a picture on another shadow is a mistake', rules.judgeShadowMatchDrop(false, true) === 'wrong');
+check('a picture let slip on the way is not a mistake', rules.judgeShadowMatchDrop(false, false) === 'stray');
 
 const ddmSource = {
   zones: Array.from({ length: 8 }, (_, i) => ({ match_key: 'k' + i, x: 10, y: 10, width: 10, height: 10 })),
