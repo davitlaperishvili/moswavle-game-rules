@@ -25,7 +25,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -86,6 +86,8 @@ exports.mathEquationPictureCell = mathEquationPictureCell;
 exports.mathEquationItemUnits = mathEquationItemUnits;
 exports.mathEquationPieces = mathEquationPieces;
 exports.layoutMathEquation = layoutMathEquation;
+exports.gestureHintTapStops = gestureHintTapStops;
+exports.gestureHintDragEnd = gestureHintDragEnd;
 const DEFAULT_ANSWER_CHOICE_TIME_LIMIT = 60;
 const DEFAULT_SELECT_OPTION_WIDTH = 16;
 const DEFAULT_SELECT_OPTION_HEIGHT = 24;
@@ -3212,5 +3214,71 @@ exports.GAME_TIMINGS_BY_KIND = {
     "sort-bins": exports.GAME_TIMINGS.sortBins,
     "svg-assemble": exports.GAME_TIMINGS.svgAssemble,
 };
+/**
+ * What the hand of the hint shows in each game. A game that can be played both
+ * ways (carry a card to its place, or tap the card and then the place) is
+ * shown carried: a tap on the card alone looks as if nothing happened.
+ * Exhaustive by construction, like the timings.
+ */
+exports.GAME_GESTURES = {
+    "answer-choice": "tap",
+    "catch-correct": "tap",
+    "connect-pairs": "tap",
+    "count-pick": "tap",
+    "drag-drop-match": "drag",
+    images_order: "drag",
+    jigsaw: "drag",
+    "math-equation": "tap",
+    "memory-cards": "tap",
+    "pattern-next": "tap",
+    "select-option": "tap",
+    "shadow-match": "drag",
+    "size-order": "drag",
+    "sort-bins": "drag",
+    "svg-assemble": "tap",
+};
+/**
+ * The hint itself: a hand that shows the gesture and never the answer. It
+ * waits `delayMs` after the game is ready — a child who is already playing
+ * never sees it — leaves at the first touch, and comes back when the child
+ * has done nothing for `idleMs`. Tapping, it visits the things that can be
+ * tapped in turn, a beat on each, with no favourite among them. Carrying, it
+ * lifts one thing and takes it only `dragReach` of the way towards the
+ * middle of where things go, so it never arrives at a place.
+ */
+exports.GESTURE_HINT = {
+    delayMs: 2500,
+    idleMs: 8000,
+    tapBeatMs: 1100,
+    dragBeatMs: 2200,
+    dragReach: 0.55,
+    tapStops: 4,
+};
+/**
+ * Which of `count` things the tapping hand visits on its `round`-th time
+ * round. All of them where they are few; where they are many, `tapStops` of
+ * them spread from the first to the last, a different set each round — so in
+ * the end every one is visited and none is ever left out for good.
+ */
+function gestureHintTapStops(count, round = 0) {
+    if (count <= 0) {
+        return [];
+    }
+    if (count <= exports.GESTURE_HINT.tapStops) {
+        return Array.from({ length: count }, (_unused, index) => index);
+    }
+    const shift = ((round % count) + count) % count;
+    return Array.from({ length: exports.GESTURE_HINT.tapStops }, (_unused, index) => (Math.floor((index * count) / exports.GESTURE_HINT.tapStops) + shift) % count);
+}
+/**
+ * Where the carrying hand lets go: `dragReach` of the way from the thing it
+ * lifted towards the middle of where things go.
+ */
+function gestureHintDragEnd(from, towards) {
+    return {
+        x: from.x + (towards.x - from.x) * exports.GESTURE_HINT.dragReach,
+        y: from.y + (towards.y - from.y) * exports.GESTURE_HINT.dragReach,
+    };
+}
 // The colour themes of both clients (see theme.ts for why they are here).
 __exportStar(require("./theme.js"), exports);

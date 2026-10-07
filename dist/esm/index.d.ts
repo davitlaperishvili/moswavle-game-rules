@@ -1410,6 +1410,69 @@ export type GameTimingKey = (typeof GAME_KIND_KEYS)[PlayableGameKind];
 export declare const GAME_TIMINGS_BY_KIND: {
     [K in PlayableGameKind]: (typeof GAME_TIMINGS)[(typeof GAME_KIND_KEYS)[K]];
 };
+/** How a child answers in a game: by tapping a thing, or by carrying it somewhere. */
+export type GameGesture = "tap" | "drag";
+/**
+ * What the hand of the hint shows in each game. A game that can be played both
+ * ways (carry a card to its place, or tap the card and then the place) is
+ * shown carried: a tap on the card alone looks as if nothing happened.
+ * Exhaustive by construction, like the timings.
+ */
+export declare const GAME_GESTURES: {
+    readonly "answer-choice": "tap";
+    readonly "catch-correct": "tap";
+    readonly "connect-pairs": "tap";
+    readonly "count-pick": "tap";
+    readonly "drag-drop-match": "drag";
+    readonly images_order: "drag";
+    readonly jigsaw: "drag";
+    readonly "math-equation": "tap";
+    readonly "memory-cards": "tap";
+    readonly "pattern-next": "tap";
+    readonly "select-option": "tap";
+    readonly "shadow-match": "drag";
+    readonly "size-order": "drag";
+    readonly "sort-bins": "drag";
+    readonly "svg-assemble": "tap";
+};
+/**
+ * The hint itself: a hand that shows the gesture and never the answer. It
+ * waits `delayMs` after the game is ready — a child who is already playing
+ * never sees it — leaves at the first touch, and comes back when the child
+ * has done nothing for `idleMs`. Tapping, it visits the things that can be
+ * tapped in turn, a beat on each, with no favourite among them. Carrying, it
+ * lifts one thing and takes it only `dragReach` of the way towards the
+ * middle of where things go, so it never arrives at a place.
+ */
+export declare const GESTURE_HINT: {
+    readonly delayMs: 2500;
+    readonly idleMs: 8000;
+    readonly tapBeatMs: 1100;
+    readonly dragBeatMs: 2200;
+    readonly dragReach: 0.55;
+    readonly tapStops: 4;
+};
+/**
+ * Which of `count` things the tapping hand visits on its `round`-th time
+ * round. All of them where they are few; where they are many, `tapStops` of
+ * them spread from the first to the last, a different set each round — so in
+ * the end every one is visited and none is ever left out for good.
+ */
+export declare function gestureHintTapStops(count: number, round?: number): number[];
+/**
+ * Where the carrying hand lets go: `dragReach` of the way from the thing it
+ * lifted towards the middle of where things go.
+ */
+export declare function gestureHintDragEnd(from: {
+    x: number;
+    y: number;
+}, towards: {
+    x: number;
+    y: number;
+}): {
+    x: number;
+    y: number;
+};
 /** Kind → what its result carries. Every entry extends `BaseGameMetrics`. */
 export type GameMetricsByKind = {
     "answer-choice": AnswerChoiceMetrics;

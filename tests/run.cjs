@@ -1125,5 +1125,29 @@ section('colour themes');
   check('in every theme but high contrast a card differs from the page', ['dark', 'light', 'calm'].every((name) => palettes[name].surface !== palettes[name].background));
 }
 
+section('the hint of how a game is played shows the gesture, never the answer');
+
+{
+  const kindsWithGesture = Object.keys(rules.GAME_GESTURES).sort().join();
+  check('every playable kind has its gesture', kindsWithGesture === Object.keys(rules.GAME_TIMINGS_BY_KIND).sort().join());
+  check('a game played only by carrying is shown carried', rules.GAME_GESTURES['shadow-match'] === 'drag');
+  check('a game played either way is shown carried too', rules.GAME_GESTURES['drag-drop-match'] === 'drag' && rules.GAME_GESTURES['sort-bins'] === 'drag');
+  check('a game of cards to tap is shown tapped', rules.GAME_GESTURES['answer-choice'] === 'tap' && rules.GAME_GESTURES['memory-cards'] === 'tap');
+
+  check('a few things are all visited, in order', rules.gestureHintTapStops(3).join() === '0,1,2');
+  check('nothing to tap, nothing to visit', rules.gestureHintTapStops(0).length === 0);
+  const many = 12;
+  const first = rules.gestureHintTapStops(many, 0);
+  check('of many things only some are visited at a time', first.length === rules.GESTURE_HINT.tapStops && new Set(first).size === first.length);
+  const seen = new Set();
+  for (let round = 0; round < many; round += 1) rules.gestureHintTapStops(many, round).forEach((index) => seen.add(index));
+  check('but every one of them in the end', seen.size === many);
+  check('and none outside the list', [...seen].every((index) => index >= 0 && index < many));
+
+  const end = rules.gestureHintDragEnd({ x: 0, y: 100 }, { x: 200, y: 0 });
+  check('the carrying hand stops short of where things go', end.x > 0 && end.x < 200 && end.y < 100 && end.y > 0);
+  check('by the same share both ways', Math.abs(end.x / 200 - rules.GESTURE_HINT.dragReach) < 1e-9 && Math.abs((100 - end.y) / 100 - rules.GESTURE_HINT.dragReach) < 1e-9);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

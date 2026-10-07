@@ -4710,6 +4710,90 @@ export const GAME_TIMINGS_BY_KIND: {
   "svg-assemble": GAME_TIMINGS.svgAssemble,
 };
 
+// --- The hint of how a game is played ---------------------------------------
+
+/** How a child answers in a game: by tapping a thing, or by carrying it somewhere. */
+export type GameGesture = "tap" | "drag";
+
+/**
+ * What the hand of the hint shows in each game. A game that can be played both
+ * ways (carry a card to its place, or tap the card and then the place) is
+ * shown carried: a tap on the card alone looks as if nothing happened.
+ * Exhaustive by construction, like the timings.
+ */
+export const GAME_GESTURES = {
+  "answer-choice": "tap",
+  "catch-correct": "tap",
+  "connect-pairs": "tap",
+  "count-pick": "tap",
+  "drag-drop-match": "drag",
+  images_order: "drag",
+  jigsaw: "drag",
+  "math-equation": "tap",
+  "memory-cards": "tap",
+  "pattern-next": "tap",
+  "select-option": "tap",
+  "shadow-match": "drag",
+  "size-order": "drag",
+  "sort-bins": "drag",
+  "svg-assemble": "tap",
+} as const satisfies Record<PlayableGameKind, GameGesture>;
+
+/**
+ * The hint itself: a hand that shows the gesture and never the answer. It
+ * waits `delayMs` after the game is ready — a child who is already playing
+ * never sees it — leaves at the first touch, and comes back when the child
+ * has done nothing for `idleMs`. Tapping, it visits the things that can be
+ * tapped in turn, a beat on each, with no favourite among them. Carrying, it
+ * lifts one thing and takes it only `dragReach` of the way towards the
+ * middle of where things go, so it never arrives at a place.
+ */
+export const GESTURE_HINT = {
+  delayMs: 2500,
+  idleMs: 8000,
+  tapBeatMs: 1100,
+  dragBeatMs: 2200,
+  dragReach: 0.55,
+  tapStops: 4,
+} as const;
+
+/**
+ * Which of `count` things the tapping hand visits on its `round`-th time
+ * round. All of them where they are few; where they are many, `tapStops` of
+ * them spread from the first to the last, a different set each round — so in
+ * the end every one is visited and none is ever left out for good.
+ */
+export function gestureHintTapStops(count: number, round = 0): number[] {
+  if (count <= 0) {
+    return [];
+  }
+
+  if (count <= GESTURE_HINT.tapStops) {
+    return Array.from({ length: count }, (_unused, index) => index);
+  }
+
+  const shift = ((round % count) + count) % count;
+
+  return Array.from(
+    { length: GESTURE_HINT.tapStops },
+    (_unused, index) => (Math.floor((index * count) / GESTURE_HINT.tapStops) + shift) % count,
+  );
+}
+
+/**
+ * Where the carrying hand lets go: `dragReach` of the way from the thing it
+ * lifted towards the middle of where things go.
+ */
+export function gestureHintDragEnd(
+  from: { x: number; y: number },
+  towards: { x: number; y: number },
+): { x: number; y: number } {
+  return {
+    x: from.x + (towards.x - from.x) * GESTURE_HINT.dragReach,
+    y: from.y + (towards.y - from.y) * GESTURE_HINT.dragReach,
+  };
+}
+
 /** Kind → what its result carries. Every entry extends `BaseGameMetrics`. */
 export type GameMetricsByKind = {
   "answer-choice": AnswerChoiceMetrics;
