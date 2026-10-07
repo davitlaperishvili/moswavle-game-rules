@@ -369,6 +369,32 @@ check('a picture on its own shadow is placed, whatever else is near', rules.judg
 check('a picture on another shadow is a mistake', rules.judgeShadowMatchDrop(false, true) === 'wrong');
 check('a picture let slip on the way is not a mistake', rules.judgeShadowMatchDrop(false, false) === 'stray');
 
+section('Pattern Next: the row and the cards fill the room');
+{
+  // A phone on its side, less the chrome, its edges and the speaker's strip.
+  const phone = rules.layoutPatternNext(614, 292, 5, 2);
+  const tall = (l, lines) => lines * l.item + (lines - 1) * l.itemGap + l.rowGap + l.choice;
+  check('on a phone the row is far bigger than the old fixed 76', phone.item >= 100, JSON.stringify(phone));
+  check('and its cards bigger than the old fixed 96', phone.choice >= 110 && phone.choice >= phone.item);
+  check('a short row stands in one line', phone.perLine === 5);
+  check('the group fits the height', tall(phone, 1) <= 292);
+  check('the row fits the width', 5 * phone.item + 4 * phone.itemGap <= 614);
+  check('the group takes most of the height, not a strip of it', tall(phone, 1) >= 292 * 0.8);
+
+  const long = rules.layoutPatternNext(614, 292, 13, 3);
+  check('a long row is broken in two lines', long.perLine === 7, JSON.stringify(long));
+  check('and still fits', tall(long, 2) <= 292 && 7 * long.item + 6 * long.itemGap <= 614);
+  check('its cards stay in scale with it', long.choice <= long.item * 1.35 + 1);
+
+  const counts = rules.layoutPatternNext(614, 292, 5, 2, true);
+  check('a pattern of counts is drawn bigger', counts.item > phone.item && counts.choice > phone.choice, JSON.stringify(counts));
+  check('and fits too', tall(counts, 1) <= 292);
+
+  const desk = rules.layoutPatternNext(1500, 900, 5, 2);
+  check('a big screen does not make giants', desk.item <= 190 && desk.choice <= 220, JSON.stringify(desk));
+  check('no room, no sizes', rules.layoutPatternNext(0, 0, 5, 2).item === 0);
+}
+
 const ddmSource = {
   zones: Array.from({ length: 8 }, (_, i) => ({ match_key: 'k' + i, x: 10, y: 10, width: 10, height: 10 })),
   items: Array.from({ length: 8 }, (_, i) => ({ image: 'https://x/' + i + '.png', match_key: 'k' + i })),

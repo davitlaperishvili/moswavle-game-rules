@@ -867,6 +867,32 @@ export declare const DEFAULT_CATCH_CORRECT_ITEMS: ReadonlyArray<{
 }>;
 /** How long one item takes to cross the stage, from the authored `speed`. */
 export declare function catchCorrectFallDurationMs(speed: number): number;
+export type PatternNextLayout = {
+    /** The side of one picture of the row, and of the box that waits for the answer. */
+    item: number;
+    /** How many of them stand in one line: a long row is broken in two. */
+    perLine: number;
+    /** The gap between two of them, and between the two lines. */
+    itemGap: number;
+    /** The side of one answer card. */
+    choice: number;
+    /** The gap between two answer cards. */
+    choiceGap: number;
+    /** The gap between the row and the answer cards. */
+    rowGap: number;
+};
+/**
+ * How big the row and the answer cards of a "what comes next" game are in the
+ * room the game has (`width` x `height`, the stage less its edges).
+ *
+ * The two are one group, to be centred in that room: the row, a small gap, the
+ * cards. They grow with the room instead of keeping a fixed size, so a phone
+ * on its side is filled rather than left with a row under the chrome, cards at
+ * the bottom and sand between them. `rowCount` is the row's pictures and the
+ * box that waits for the answer. A pattern of counts (`counting`) is drawn
+ * bigger: several copies share one picture's box.
+ */
+export declare function layoutPatternNext(width: number, height: number, rowCount: number, choiceCount: number, counting?: boolean): PatternNextLayout;
 /** A drop counts when its centre is within this fraction of the target's longer side. */
 export declare const SHADOW_MATCH_DROP_TOLERANCE = 0.42;
 /** A picture is on another one's shadow when its centre is within this fraction of that shadow. */

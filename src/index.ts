@@ -3424,6 +3424,86 @@ export function catchCorrectFallDurationMs(speed: number): number {
   );
 }
 
+// --- Pattern Next -----------------------------------------------------------
+
+export type PatternNextLayout = {
+  /** The side of one picture of the row, and of the box that waits for the answer. */
+  item: number;
+  /** How many of them stand in one line: a long row is broken in two. */
+  perLine: number;
+  /** The gap between two of them, and between the two lines. */
+  itemGap: number;
+  /** The side of one answer card. */
+  choice: number;
+  /** The gap between two answer cards. */
+  choiceGap: number;
+  /** The gap between the row and the answer cards. */
+  rowGap: number;
+};
+
+/** A row keeps to one line unless two lines make its pictures this much bigger. */
+const PATTERN_NEXT_ONE_LINE_SHARE = 0.8;
+
+/**
+ * How big the row and the answer cards of a "what comes next" game are in the
+ * room the game has (`width` x `height`, the stage less its edges).
+ *
+ * The two are one group, to be centred in that room: the row, a small gap, the
+ * cards. They grow with the room instead of keeping a fixed size, so a phone
+ * on its side is filled rather than left with a row under the chrome, cards at
+ * the bottom and sand between them. `rowCount` is the row's pictures and the
+ * box that waits for the answer. A pattern of counts (`counting`) is drawn
+ * bigger: several copies share one picture's box.
+ */
+export function layoutPatternNext(
+  width: number,
+  height: number,
+  rowCount: number,
+  choiceCount: number,
+  counting = false,
+): PatternNextLayout {
+  const count = Math.max(1, Math.floor(rowCount));
+  const cards = Math.max(1, Math.floor(choiceCount));
+
+  if (width <= 0 || height <= 0) {
+    return { item: 0, perLine: count, itemGap: 0, choice: 0, choiceGap: 0, rowGap: 0 };
+  }
+
+  const rowGap = clampNumber(height * 0.09, 10, 44);
+  const itemGap = clampNumber(width * 0.014, 6, 18);
+  const choiceGap = clampNumber(width * 0.022, 10, 28);
+  const widestChoice = Math.max(0, (width - (cards - 1) * choiceGap) / cards);
+  const tallestChoice = Math.min(height * (counting ? 0.46 : 0.42), counting ? 260 : 220, widestChoice);
+  const room = height - rowGap - tallestChoice;
+  const tallestItem = Math.min(height * (counting ? 0.44 : 0.38), counting ? 230 : 190);
+
+  const fit = (lines: number) => {
+    const perLine = Math.ceil(count / lines);
+
+    return {
+      perLine,
+      item: Math.max(
+        0,
+        Math.min(tallestItem, (width - (perLine - 1) * itemGap) / perLine, (room - (lines - 1) * itemGap) / lines),
+      ),
+    };
+  };
+
+  const oneLine = fit(1);
+  const twoLines = count > 3 ? fit(2) : oneLine;
+  const row = oneLine.item >= twoLines.item * PATTERN_NEXT_ONE_LINE_SHARE ? oneLine : twoLines;
+
+  return {
+    item: Math.floor(row.item),
+    perLine: row.perLine,
+    itemGap: Math.round(itemGap),
+    // A card is the bigger of the two, but not out of scale with the row.
+    choice: Math.floor(Math.min(tallestChoice, row.item * 1.35)),
+    choiceGap: Math.round(choiceGap),
+    rowGap: Math.round(rowGap),
+  };
+}
+
 // --- Shadow Match -----------------------------------------------------------
 
 /** A drop counts when its centre is within this fraction of the target's longer side. */
