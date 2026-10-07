@@ -25,7 +25,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.SORT_BINS_SORTED_SHARE = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -65,6 +65,9 @@ exports.shuffle = shuffle;
 exports.shouldPlayHalfway = shouldPlayHalfway;
 exports.isImageReference = isImageReference;
 exports.catchCorrectFallDurationMs = catchCorrectFallDurationMs;
+exports.fitSquares = fitSquares;
+exports.layoutSortBinsTray = layoutSortBinsTray;
+exports.sortBinsSortedSide = sortBinsSortedSide;
 exports.layoutMemoryCards = layoutMemoryCards;
 exports.memoryCardColor = memoryCardColor;
 exports.layoutPatternNext = layoutPatternNext;
@@ -2371,6 +2374,68 @@ function catchCorrectFallDurationMs(speed) {
     const safeSpeed = Number.isFinite(speed) && speed > 0 ? speed : 120;
     return Math.round(clampNumber((100000 / safeSpeed) * 5, exports.CATCH_CORRECT_MIN_FALL_MS, exports.CATCH_CORRECT_MAX_FALL_MS));
 }
+/**
+ * The biggest squares `count` things can be in a box, `gap` apart: the grid
+ * is chosen for them, the fewer rows when two grids give the same.
+ */
+function fitSquares(width, height, count, gap = 0) {
+    const total = Math.max(1, Math.floor(count));
+    let best = { side: 0, columns: total, rows: 1 };
+    if (width <= 0 || height <= 0) {
+        return best;
+    }
+    for (let columns = 1; columns <= total; columns += 1) {
+        const rows = Math.ceil(total / columns);
+        const side = Math.floor(Math.min((width - gap * (columns - 1)) / columns, (height - gap * (rows - 1)) / rows));
+        if (side > best.side || (side === best.side && side > 0 && rows < best.rows)) {
+            best = { side: Math.max(0, side), columns, rows };
+        }
+    }
+    return best;
+}
+/** No tile of the tray is longer than this on a side: a big screen makes no giants. */
+exports.SORT_BINS_TILE_MAX = 190;
+/** A thing already sorted is drawn this much of a tray tile, when its group has the room. */
+exports.SORT_BINS_SORTED_SHARE = 0.86;
+/**
+ * The things still to sort, in their tray (`width` x `height`, the room
+ * inside its padding).
+ *
+ * The tiles are as big as the tray lets `count` of them be — the count the
+ * game starts with, so a tile keeps its size as the tray empties — instead of
+ * one small size on every screen. `reserveLeft` is the strip at the tray's
+ * left that the speaker's corner takes: the tiles stand in the middle of the
+ * whole tray, and move right only as far as that strip makes them.
+ */
+function layoutSortBinsTray(width, height, count, reserveLeft = 0) {
+    if (width <= 0 || height <= 0) {
+        return { tile: 0, columns: Math.max(1, Math.floor(count)), gap: 0, left: 0, width: 0 };
+    }
+    const reserve = clampNumber(reserveLeft, 0, width);
+    const gap = Math.round(clampNumber(Math.min(width, height) * 0.07, 6, 14));
+    const fit = fitSquares(width - reserve, height, count, gap);
+    const tile = Math.min(fit.side, exports.SORT_BINS_TILE_MAX);
+    const block = fit.columns * tile + (fit.columns - 1) * gap;
+    return {
+        tile,
+        columns: fit.columns,
+        gap,
+        left: Math.round(Math.max(reserve, (width - block) / 2)),
+        width: block,
+    };
+}
+/**
+ * The side of a thing lying in its group (`width` x `height`, the room for
+ * the group's things). It stays close to a tray tile — shrinking it made the
+ * finished half of the game look like a discard pile — but `most`, the most
+ * things one group ends with, must all fit.
+ */
+function sortBinsSortedSide(width, height, most, tile, gap = 4) {
+    if (width <= 0 || height <= 0) {
+        return Math.floor(tile * exports.SORT_BINS_SORTED_SHARE);
+    }
+    return Math.max(0, Math.min(Math.floor(tile * exports.SORT_BINS_SORTED_SHARE), fitSquares(width, height, most, gap).side));
+}
 /** No card is longer than this on a side: a big screen makes no giants. */
 exports.MEMORY_CARD_MAX_SIDE = 230;
 /** A card fills its cell, but is never more than this much longer one way than the other. */
@@ -2760,11 +2825,15 @@ exports.CONNECT_PAIRS_LAYOUT = {
     /** Space between neighbouring cards of a group, as a share of a card: at least, at most. */
     minGap: 0.14,
     maxGap: 0.5,
-    /** The lane between the two groups, where the lines run, as a share of a card: at least, at most. */
-    minLane: 0.9,
+    /**
+     * The lane between the two groups, where the lines run, as a share of a card: at least, at most.
+     * On a phone on its side the lane is what the cards' size is paid from: at 0.9 of a card
+     * three pairs stood small with room to spare, at 0.6 a line is still plain to see.
+     */
+    minLane: 0.6,
     maxLane: 3,
     /** Kept clear along the stage's edges, as a share of its shorter side. */
-    margin: 0.04,
+    margin: 0.03,
 };
 /**
  * Where the cards of `count` pairs go on a stage. The two groups are either

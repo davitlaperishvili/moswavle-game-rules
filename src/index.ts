@@ -3424,6 +3424,102 @@ export function catchCorrectFallDurationMs(speed: number): number {
   );
 }
 
+// --- Sort Bins --------------------------------------------------------------
+
+export type SquaresFit = { side: number; columns: number; rows: number };
+
+/**
+ * The biggest squares `count` things can be in a box, `gap` apart: the grid
+ * is chosen for them, the fewer rows when two grids give the same.
+ */
+export function fitSquares(width: number, height: number, count: number, gap = 0): SquaresFit {
+  const total = Math.max(1, Math.floor(count));
+  let best: SquaresFit = { side: 0, columns: total, rows: 1 };
+
+  if (width <= 0 || height <= 0) {
+    return best;
+  }
+
+  for (let columns = 1; columns <= total; columns += 1) {
+    const rows = Math.ceil(total / columns);
+    const side = Math.floor(
+      Math.min((width - gap * (columns - 1)) / columns, (height - gap * (rows - 1)) / rows),
+    );
+
+    if (side > best.side || (side === best.side && side > 0 && rows < best.rows)) {
+      best = { side: Math.max(0, side), columns, rows };
+    }
+  }
+
+  return best;
+}
+
+/** No tile of the tray is longer than this on a side: a big screen makes no giants. */
+export const SORT_BINS_TILE_MAX = 190;
+/** A thing already sorted is drawn this much of a tray tile, when its group has the room. */
+export const SORT_BINS_SORTED_SHARE = 0.86;
+
+export type SortBinsTrayLayout = {
+  /** The side of one tile. */
+  tile: number;
+  /** How many stand in a line. */
+  columns: number;
+  /** Between two tiles, both ways. */
+  gap: number;
+  /** Where the tiles' block begins from the tray's left, and how wide it is. */
+  left: number;
+  width: number;
+};
+
+/**
+ * The things still to sort, in their tray (`width` x `height`, the room
+ * inside its padding).
+ *
+ * The tiles are as big as the tray lets `count` of them be — the count the
+ * game starts with, so a tile keeps its size as the tray empties — instead of
+ * one small size on every screen. `reserveLeft` is the strip at the tray's
+ * left that the speaker's corner takes: the tiles stand in the middle of the
+ * whole tray, and move right only as far as that strip makes them.
+ */
+export function layoutSortBinsTray(
+  width: number,
+  height: number,
+  count: number,
+  reserveLeft = 0,
+): SortBinsTrayLayout {
+  if (width <= 0 || height <= 0) {
+    return { tile: 0, columns: Math.max(1, Math.floor(count)), gap: 0, left: 0, width: 0 };
+  }
+
+  const reserve = clampNumber(reserveLeft, 0, width);
+  const gap = Math.round(clampNumber(Math.min(width, height) * 0.07, 6, 14));
+  const fit = fitSquares(width - reserve, height, count, gap);
+  const tile = Math.min(fit.side, SORT_BINS_TILE_MAX);
+  const block = fit.columns * tile + (fit.columns - 1) * gap;
+
+  return {
+    tile,
+    columns: fit.columns,
+    gap,
+    left: Math.round(Math.max(reserve, (width - block) / 2)),
+    width: block,
+  };
+}
+
+/**
+ * The side of a thing lying in its group (`width` x `height`, the room for
+ * the group's things). It stays close to a tray tile — shrinking it made the
+ * finished half of the game look like a discard pile — but `most`, the most
+ * things one group ends with, must all fit.
+ */
+export function sortBinsSortedSide(width: number, height: number, most: number, tile: number, gap = 4): number {
+  if (width <= 0 || height <= 0) {
+    return Math.floor(tile * SORT_BINS_SORTED_SHARE);
+  }
+
+  return Math.max(0, Math.min(Math.floor(tile * SORT_BINS_SORTED_SHARE), fitSquares(width, height, most, gap).side));
+}
+
 // --- Memory Cards -----------------------------------------------------------
 
 export type MemoryCardsLayout = {
@@ -4078,11 +4174,15 @@ export const CONNECT_PAIRS_LAYOUT = {
   /** Space between neighbouring cards of a group, as a share of a card: at least, at most. */
   minGap: 0.14,
   maxGap: 0.5,
-  /** The lane between the two groups, where the lines run, as a share of a card: at least, at most. */
-  minLane: 0.9,
+  /**
+   * The lane between the two groups, where the lines run, as a share of a card: at least, at most.
+   * On a phone on its side the lane is what the cards' size is paid from: at 0.9 of a card
+   * three pairs stood small with room to spare, at 0.6 a line is still plain to see.
+   */
+  minLane: 0.6,
   maxLane: 3,
   /** Kept clear along the stage's edges, as a share of its shorter side. */
-  margin: 0.04,
+  margin: 0.03,
 } as const;
 
 export type ConnectPairsOrientation = "columns" | "rows";

@@ -867,6 +867,49 @@ export declare const DEFAULT_CATCH_CORRECT_ITEMS: ReadonlyArray<{
 }>;
 /** How long one item takes to cross the stage, from the authored `speed`. */
 export declare function catchCorrectFallDurationMs(speed: number): number;
+export type SquaresFit = {
+    side: number;
+    columns: number;
+    rows: number;
+};
+/**
+ * The biggest squares `count` things can be in a box, `gap` apart: the grid
+ * is chosen for them, the fewer rows when two grids give the same.
+ */
+export declare function fitSquares(width: number, height: number, count: number, gap?: number): SquaresFit;
+/** No tile of the tray is longer than this on a side: a big screen makes no giants. */
+export declare const SORT_BINS_TILE_MAX = 190;
+/** A thing already sorted is drawn this much of a tray tile, when its group has the room. */
+export declare const SORT_BINS_SORTED_SHARE = 0.86;
+export type SortBinsTrayLayout = {
+    /** The side of one tile. */
+    tile: number;
+    /** How many stand in a line. */
+    columns: number;
+    /** Between two tiles, both ways. */
+    gap: number;
+    /** Where the tiles' block begins from the tray's left, and how wide it is. */
+    left: number;
+    width: number;
+};
+/**
+ * The things still to sort, in their tray (`width` x `height`, the room
+ * inside its padding).
+ *
+ * The tiles are as big as the tray lets `count` of them be — the count the
+ * game starts with, so a tile keeps its size as the tray empties — instead of
+ * one small size on every screen. `reserveLeft` is the strip at the tray's
+ * left that the speaker's corner takes: the tiles stand in the middle of the
+ * whole tray, and move right only as far as that strip makes them.
+ */
+export declare function layoutSortBinsTray(width: number, height: number, count: number, reserveLeft?: number): SortBinsTrayLayout;
+/**
+ * The side of a thing lying in its group (`width` x `height`, the room for
+ * the group's things). It stays close to a tray tile — shrinking it made the
+ * finished half of the game look like a discard pile — but `most`, the most
+ * things one group ends with, must all fit.
+ */
+export declare function sortBinsSortedSide(width: number, height: number, most: number, tile: number, gap?: number): number;
 export type MemoryCardsLayout = {
     columns: number;
     rows: number;
@@ -1193,11 +1236,15 @@ export declare const CONNECT_PAIRS_LAYOUT: {
     /** Space between neighbouring cards of a group, as a share of a card: at least, at most. */
     readonly minGap: 0.14;
     readonly maxGap: 0.5;
-    /** The lane between the two groups, where the lines run, as a share of a card: at least, at most. */
-    readonly minLane: 0.9;
+    /**
+     * The lane between the two groups, where the lines run, as a share of a card: at least, at most.
+     * On a phone on its side the lane is what the cards' size is paid from: at 0.9 of a card
+     * three pairs stood small with room to spare, at 0.6 a line is still plain to see.
+     */
+    readonly minLane: 0.6;
     readonly maxLane: 3;
     /** Kept clear along the stage's edges, as a share of its shorter side. */
-    readonly margin: 0.04;
+    readonly margin: 0.03;
 };
 export type ConnectPairsOrientation = "columns" | "rows";
 export type ConnectPairsLayout = {

@@ -369,6 +369,30 @@ check('a picture on its own shadow is placed, whatever else is near', rules.judg
 check('a picture on another shadow is a mistake', rules.judgeShadowMatchDrop(false, true) === 'wrong');
 check('a picture let slip on the way is not a mistake', rules.judgeShadowMatchDrop(false, false) === 'stray');
 
+section('Sort Bins: the tray is filled, and its tiles stand in the middle');
+{
+  // A phone on its side: the tray under the two groups.
+  const tray = rules.layoutSortBinsTray(694, 113, 6);
+  check('six tiles are far bigger than the old fixed 82', tray.tile >= 98, JSON.stringify(tray));
+  check('they stand in one line and fit', tray.columns === 6 && tray.width <= 694 && tray.tile <= 113);
+  check('in the middle of the tray', Math.abs(tray.left + tray.width / 2 - 694 / 2) <= 1);
+
+  const beside = rules.layoutSortBinsTray(694, 113, 6, 40);
+  check('a speaker in the corner moves them no further than it must', beside.left === 40 && beside.left + beside.width <= 694, JSON.stringify(beside));
+  const few = rules.layoutSortBinsTray(694, 113, 3, 40);
+  check('a few tiles stay in the middle whatever the corner holds', Math.abs(few.left + few.width / 2 - 694 / 2) <= 1 && few.tile <= 113);
+
+  const many = rules.layoutSortBinsTray(500, 150, 12);
+  check('a full tray breaks into lines', many.columns < 12 && many.tile > 0 && many.width <= 500, JSON.stringify(many));
+  check('a big screen makes no giants', rules.layoutSortBinsTray(1600, 400, 4).tile === rules.SORT_BINS_TILE_MAX);
+  check('no tray, no sizes', rules.layoutSortBinsTray(0, 0, 6).tile === 0);
+
+  check('a sorted thing stays close to a tile', rules.sortBinsSortedSide(340, 140, 3, 100) === 86);
+  check('but all of a group must fit', rules.sortBinsSortedSide(340, 140, 6, 100) < 86 && rules.sortBinsSortedSide(340, 140, 6, 100) > 0);
+  const squares = rules.fitSquares(300, 100, 6, 10);
+  check('squares take the grid that makes them biggest', squares.columns === 3 && squares.rows === 2 && squares.side === 45, JSON.stringify(squares));
+}
+
 section('Memory Cards: the board fills the stage');
 {
   // A phone on its side: the band on top, the camera's cut-out at both ends, the home bar below.
