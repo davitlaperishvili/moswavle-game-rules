@@ -1288,7 +1288,14 @@ section('written words: every letter has its colour');
   check('a line\'s box holds its letters and the outline', Math.abs(rules.textLineUnits('ა') * rules.TEXT_ART.lineHeight - (rules.textLineAdvance('ა') + 2 * rules.TEXT_ART.pad)) < 1e-9);
 
   const lines = rules.breakTextLines;
-  check('a text is broken at its spaces, as evenly as it goes', lines('რომელი ცხოველი იძინებს მთელი ზამთარი?', 2).join('|') === 'რომელი ცხოველი იძინებს|მთელი ზამთარი?', lines('რომელი ცხოველი იძინებს მთელი ზამთარი?', 2).join('|'));
+  {
+    // Of every way to break it in two, the one whose longer line is shortest.
+    const words = 'რომელი ცხოველი იძინებს მთელი ზამთარი?'.split(' ');
+    const longest = (parts) => Math.max(...parts.map((part) => rules.textLineAdvance(part)));
+    const ways = words.slice(1).map((_, at) => [words.slice(0, at + 1).join(' '), words.slice(at + 1).join(' ')]);
+    const broken = lines(words.join(' '), 2);
+    check('a text is broken at its spaces, as evenly as it goes', broken.length === 2 && ways.every((way) => longest(broken) <= longest(way) + 1e-9), broken.join('|'));
+  }
   check('never into more lines than it has words', lines('დათვი', 3).join('|') === 'დათვი' && lines('Кто спит', 3).length === 2);
   check('and no word is lost or split', lines('one two three four five six seven', 3).join(' ') === 'one two three four five six seven' && lines('  two   spaces ', 1).join('|') === 'two spaces');
   check('nothing to write is no line', lines('   ', 2).length === 0);
@@ -1382,6 +1389,51 @@ section('text_choice: a question to read and answers in words');
   check('a line is drawn in a box as wide as its letters ask', phone.cards.every((card) => card.lines.every((line) => line.width <= rules.textLineUnits(line.text) * line.height + 1e-6)));
   check('no answers, no game', rules.layoutTextChoice(852, 393, make({ answers: [] }), {}) === null);
   check('the timings and the gesture are there', rules.GAME_TIMINGS.textChoice.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['text-choice'] === rules.GAME_TIMINGS.textChoice && rules.GAME_GESTURES['text-choice'] === 'tap');
+}
+
+section('letters drawn in code: outlines, not pictures');
+
+{
+  const sets = rules.LETTER_SETS;
+  const letters = [...Object.values(sets).join('')];
+  const tone = { light: '#ffa3a3', deep: '#f43f5e', outline: '#8f1239' };
+
+  check('the alphabets drawn are the ones written with: the same letters in the same order', sets.ka === rules.LETTER_ALPHABETS.ka && sets.ruLower === rules.LETTER_ALPHABETS.ru && sets.enLower === rules.LETTER_ALPHABETS.en);
+  check('Russian and English have their capitals, letter for letter', sets.ru.toLowerCase() === sets.ruLower && sets.en.toLowerCase() === sets.enLower);
+  check('every letter has an outline with ink in it', letters.every((char) => { const shape = rules.glyphShape(char); return shape && shape.path.length > 20 && shape.box.width > 0 && shape.box.height > 0 && shape.advance > 0; }));
+  check('and so has every digit and the marks of a sentence', [...'0123456789.,!?:;-–«»()+−×÷=<>'].every((char) => rules.glyphShape(char) !== null));
+  check('a character we have no outline of says so, as does a name of Object', rules.glyphShape('字') === null && rules.glyphShape('constructor') === null && rules.glyphShape('') === null);
+
+  const arts = letters.map((char) => rules.letterArt(char));
+  check('every letter can be drawn on a card', arts.every(Boolean));
+  check('what is drawn is a square, as a picture of the library is', arts.every((art) => Math.abs(art.view.width - art.view.height) < 1e-6 && Math.abs(art.box.width - art.box.height) < 1e-6));
+  check('the ink, its outline and its thickness are inside it', arts.every((art) => {
+    const ring = art.outline / 2;
+    return art.ink.x - ring >= art.view.x - 1e-6 && art.ink.y - ring >= art.view.y - 1e-6
+      && art.ink.x + art.ink.width + ring <= art.view.x + art.view.width + 1e-6
+      && art.ink.y + art.ink.height + ring + art.depth <= art.view.y + art.view.height + 1e-6;
+  }));
+  check('the letters of one alphabet are drawn at one scale: "ა" stays smaller than "ქ"', Object.keys(sets).every((name) => new Set([...sets[name]].map((char) => Math.round(rules.letterArt(char).view.width))).size === 1)
+    && rules.letterArt('ა').ink.height < rules.letterArt('ქ').ink.height * 0.75);
+  check('and on one line: a letter with a tail hangs under it', rules.letterArt('ა').box.y === rules.letterArt('ქ').box.y && rules.letterArt('р').box.y === rules.letterArt('а').box.y);
+  check('each stands in the middle of its square from left to right', arts.every((art) => Math.abs((art.ink.x + art.ink.width / 2) - (art.box.x + art.box.width / 2)) < 1e-6));
+  check('a digit, a sign and a letter of another alphabet are not letters to draw', rules.letterArt('3') === null && rules.letterArt('?') === null && rules.letterArt('ß') === null && rules.letterArt('') === null);
+  check('a capital and its small letter are two drawings', rules.letterArt('Б').path !== rules.letterArt('б').path && rules.letterSetOf('Б') === 'ru' && rules.letterSetOf('б') === 'ruLower' && rules.letterSetOf('ბ') === 'ka');
+
+  const svg = rules.letterSvg('ჭ', tone);
+  check('a letter is an SVG document in its colours', svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"') && svg.endsWith('</svg>') && svg.includes(tone.light) && svg.includes(tone.deep) && svg.includes(tone.outline) && svg.includes(rules.letterArt('ჭ').path));
+  const uri = rules.letterPictureUri('ჭ', tone);
+  check('and the address of a picture that is fetched from nowhere', uri.startsWith(rules.LETTER_PICTURE_PREFIX) && decodeURIComponent(uri.slice(rules.LETTER_PICTURE_PREFIX.length)) === svg);
+  check('safe inside a quoted attribute, a CSS url() and another SVG', letters.every((char) => !/["'()<>\s&]/.test(rules.letterPictureUri(char, tone))));
+  check('the players take it for a picture, not for a word', rules.isImageReference(uri) && !rules.isImageReference('ჭ'));
+  check('what is not a letter has no address', rules.letterPictureUri('7', tone) === null && rules.letterSvg(' ', tone) === null);
+  check('a letter weighs little as an address', letters.every((char) => rules.letterPictureUri(char, tone).length < 3200), String(Math.max(...letters.map((char) => rules.letterPictureUri(char, tone).length))));
+
+  const line = rules.layoutTextLine('და 5 კატა?');
+  check('a line of writing is laid out a character at a time, left to right', line.glyphs.length === 10 && line.glyphs.every((glyph, index) => index === 0 || Math.abs(glyph.x - (line.glyphs[index - 1].x + line.glyphs[index - 1].advance)) < 1e-9));
+  check('as wide as the players are told it is', Math.abs(line.width - rules.textLineAdvance('და 5 კატა?')) < 1e-9);
+  check('a space has room and no ink; a letter, a digit and a mark have both', line.glyphs[2].path === null && line.glyphs[2].advance > 0.1 && Boolean(line.glyphs[0].path && line.glyphs[3].path && line.glyphs[9].path));
+  check('a character we cannot draw still takes its room', rules.layoutTextLine('字').glyphs[0].path === null && rules.layoutTextLine('字').width > 0.5);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

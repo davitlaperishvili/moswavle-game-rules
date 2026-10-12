@@ -1483,7 +1483,10 @@ export declare const TEXT_ART: {
     readonly baseline: 1.02;
     readonly pad: 0.1;
 };
-/** How wide a line of writing is expected to be, in ems. The players measure the real one and fit it. */
+/**
+ * How wide a line of writing is, in ems: the letters are our own outlines
+ * (letters.ts), so this is what the players draw and not an estimate.
+ */
 export declare function textLineAdvance(text: string): number;
 /** How wide the box of a line is for its height: see `TEXT_ART`. */
 export declare function textLineUnits(text: string): number;
@@ -1815,3 +1818,4 @@ export type GameOutcome<K extends PlayableGameKind = PlayableGameKind> = {
     metrics: GameMetricsByKind[K];
 };
 export * from "./theme.js";
+export * from "./letters.js";

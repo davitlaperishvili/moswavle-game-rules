@@ -57,6 +57,16 @@ tires) and high contrast — and the tests hold
 every text colour to WCAG AA against what it lies on (AAA in the high-contrast theme). The lesson
 player is outside of them: a game looks the same in every theme.
 
+And the letters (`src/letters.ts`, `src/letterOutlines.ts`). A letter is not a picture to fetch
+and not the device's own type: its outline is here — the three alphabets with the capitals and small
+letters of Russian and English, the digits and the marks of a sentence, taken once from FiraGO
+ExtraBold (SIL Open Font License, `licenses/FiraGO-OFL.txt`) by `scripts/build-letters.cjs` — and
+both players paint it the same way. `letterArt` is a letter on a card, at its true size on its
+alphabet's line; `letterPictureUri` the same letter as the address of a picture, for wherever a
+picture is drawn by its address; `layoutTextLine` a line of writing, a character at a time, which
+makes `textLineAdvance` exact. To change the face or add a character, run the script again with
+the font file and commit what it writes.
+
 No: anything that draws, animates, plays audio, or touches the DOM or React Native. Those differ
 per platform by design, and dragging them in here would force one platform's idea of rendering
 onto the other.

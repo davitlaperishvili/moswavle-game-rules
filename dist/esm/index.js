@@ -9,6 +9,7 @@
  * other — but both must interpret an authored game identically, or the same
  * game scores differently depending on the device it is played on.
  */
+import { textCharAdvance } from "./letters.js";
 const DEFAULT_ANSWER_CHOICE_TIME_LIMIT = 60;
 const DEFAULT_SELECT_OPTION_WIDTH = 16;
 const DEFAULT_SELECT_OPTION_HEIGHT = 24;
@@ -2277,6 +2278,8 @@ export function isImageReference(value) {
         return false;
     }
     return (/^https?:\/\//i.test(trimmed) ||
+        // A letter drawn in code comes as the picture itself (letterPictureUri).
+        /^data:image\//i.test(trimmed) ||
         trimmed.startsWith("/") ||
         /\.(jpe?g|gif|png|svg|webp)(\?.*)?$/i.test(trimmed));
 }
@@ -3461,38 +3464,10 @@ export function letterToneIndex(char) {
  * `pad` is the room for the outline at each end.
  */
 export const TEXT_ART = { lineHeight: 1.42, baseline: 1.02, pad: 0.1 };
-/** How wide letters are for their size in a heavy face: the widest of the faces measured, so a line is never underestimated by much. */
-const TEXT_ADVANCE_GROUPS = [
-    ["დთლფ", 0.96],
-    ["ზორტუღჯ", 0.8],
-    ["жшщюыфм", 0.96],
-    ["гт", 0.52],
-    ["ЖШЩЫЮ", 1.14],
-    ["МФЦД", 0.98],
-    ["mw", 1.0],
-    ["ijl", 0.36],
-    ["frt", 0.46],
-    ["MW", 1.06],
-    ["I", 0.4],
-    [" ", 0.33],
-    [".,!:;'’-–", 0.4],
-    ["?", 0.62],
-    ["+−×÷=<>", 0.74],
-    ["0123456789", 0.68],
-];
-function textCharAdvance(char) {
-    for (const [chars, advance] of TEXT_ADVANCE_GROUPS) {
-        if (chars.includes(char))
-            return advance;
-    }
-    if (LETTER_ALPHABETS.ka.includes(char))
-        return 0.63;
-    if (LETTER_ALPHABETS.ru.includes(char) || LETTER_ALPHABETS.en.includes(char))
-        return 0.68;
-    // A capital, or a letter of another alphabet.
-    return 0.82;
-}
-/** How wide a line of writing is expected to be, in ems. The players measure the real one and fit it. */
+/**
+ * How wide a line of writing is, in ems: the letters are our own outlines
+ * (letters.ts), so this is what the players draw and not an estimate.
+ */
 export function textLineAdvance(text) {
     return [...text].reduce((sum, char) => sum + textCharAdvance(char), 0);
 }
@@ -3872,3 +3847,5 @@ export function gestureHintDragEnd(from, towards) {
 }
 // The colour themes of both clients (see theme.ts for why they are here).
 export * from "./theme.js";
+// The letters drawn in code: their outlines and how a letter and a line are laid out.
+export * from "./letters.js";
