@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1217,6 +1217,15 @@ export declare const GAME_TIMINGS: {
         readonly successSettleMs: 900;
         readonly livesOutDelayMs: 320;
     };
+    /**
+     * A wrong card shakes for `wrongFeedbackMs`. Once every part is named the
+     * scene stays `successSettleMs`, so the child sees it whole with its legend.
+     */
+    readonly labelDiagram: {
+        readonly wrongFeedbackMs: 520;
+        readonly successSettleMs: 1000;
+        readonly livesOutDelayMs: 320;
+    };
     readonly mathEquation: {
         readonly wrongFeedbackMs: 560;
         readonly flyMs: 620;
@@ -1801,6 +1810,136 @@ export type WordBuildLayout = {
  * stage less `insets` and an edge margin.
  */
 export declare function layoutWordBuild(stageWidth: number, stageHeight: number, config: Pick<WordBuildConfig, "letters" | "tiles" | "questionImage">, insets?: SceneInsets): WordBuildLayout | null;
+export declare const LABEL_DIAGRAM_PARTS_MIN = 2;
+/** More pins than this and their names do not fit a phone at a size a child reads. */
+export declare const LABEL_DIAGRAM_PARTS_MAX = 6;
+/** The most cards: the names of the parts and the ones that name nothing on the picture. */
+export declare const LABEL_DIAGRAM_LABELS_MAX = 6;
+/** One thing placed by the author, in percent of the picture. */
+export type LabelDiagramPart = {
+    id: string;
+    /** A picture standing on the sheet; null for a point of the sheet's own picture. */
+    image: string | null;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    /** The word that names it, in the game's language; null for a picture that is only there. */
+    label: string | null;
+    /** The number on its pin, 1 up in the order the parts are asked; 0 for a picture with no name. */
+    number: number;
+};
+export type LabelDiagramLabel = {
+    id: string;
+    text: string;
+};
+export type LabelDiagramConfig = {
+    /** Everything on the sheet, in the order it is drawn. */
+    parts: LabelDiagramPart[];
+    /** The named parts' ids in the order they are asked: across the picture or down it, whichever way it runs. */
+    order: string[];
+    /** The cards: a name for every part asked and the names that belong to nothing, mixed once here. */
+    labels: LabelDiagramLabel[];
+    /** The picture's size; its aspect ratio is the sheet's. Null when there is no picture to draw. */
+    board: {
+        width: number;
+        height: number;
+    } | null;
+    /** The picture itself: the map, the diagram, the scene. */
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The picture and everything standing on it: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `placements` are what stands on the
+ * picture, in percent of it, each with the `label` that names it — already in
+ * the language of the game — or none; one without an `image` is a point of
+ * the picture itself and is kept only for its name. `extra_labels` are names
+ * of nothing on the picture. A name is asked for at most
+ * `LABEL_DIAGRAM_PARTS_MAX` parts: the leftmost ones, the rest left unnamed.
+ */
+export declare function normalizeLabelDiagramConfig(config: Record<string, unknown>): LabelDiagramConfig;
+export type LabelDiagramTapResult = 
+/** Every part is named already, the card is used, or the game does not have it. */
+{
+    type: "ignored";
+}
+/** The name of the part asked: the card is its; `complete` when that was the last part. */
+ | {
+    type: "right";
+    partId: string;
+    complete: boolean;
+}
+/** Not its name: a mistake. */
+ | {
+    type: "wrong";
+    partId: string;
+};
+/**
+ * What a tap on a card does: the whole play rule, so both players follow it
+ * tap for tap. `used` are the cards given to parts so far, in the order the
+ * parts are asked — so the part asked now is `order[used.length]`. Any card of
+ * the right word is right: a picture with two cows has two cards "cow", and
+ * either names either.
+ */
+export declare function resolveLabelDiagramTap(config: Pick<LabelDiagramConfig, "parts" | "order" | "labels">, used: readonly string[], labelId: string): LabelDiagramTapResult;
+/** Proportions of the cards and the pins. Shares are of the height of a line of a card's writing. */
+export declare const LABEL_DIAGRAM_LAYOUT: {
+    /** A line of a name never grows past this, in px; under `minLine` a child no longer reads it. */
+    readonly maxLine: 40;
+    readonly minLine: 16;
+    /** A name is broken into at most this many lines. */
+    readonly lines: 2;
+    /** Around a card's writing. */
+    readonly cardPadX: 0.4;
+    readonly cardPadY: 0.24;
+    /** The round place for the pin's number at the left of a card, and the room after it. */
+    readonly badge: 1.1;
+    readonly badgeGap: 0.3;
+    /** In px: between cards. */
+    readonly cardGap: 8;
+    /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+    readonly sheetRim: 6;
+    /** The most of the free width a column of cards takes, and of the free height a row of them. */
+    readonly columnShare: 0.4;
+    readonly rowShare: 0.36;
+    /** A pin on a picture: this share of its shorter side across. On a point: as big as the point. Both between these sizes in px. */
+    readonly pinShare: 0.34;
+    readonly minPin: 28;
+    readonly maxPin: 46;
+};
+export type LabelDiagramLayout = {
+    /** The picture, whole and never cropped: the players draw it with a rim of `sheetRim` round it. */
+    sheet: BoardRect;
+    /** Everything on the sheet in stage pixels, in `parts` order, exactly where the author put it. */
+    parts: BoardRect[];
+    /** A pin on the middle of every named part, in the order the parts are asked. */
+    pins: Array<BoardRect & {
+        partId: string;
+        number: number;
+    }>;
+    /** The cards stand in a column at the right of the sheet or in a row under it. */
+    arrangement: "row" | "column";
+    /** Around the cards. */
+    tray: BoardRect;
+    /** A card for every name, in `labels` order: its box, the place of its number and its writing line by line. */
+    cards: Array<BoardRect & {
+        id: string;
+        badge: BoardRect;
+        lines: TextLineBox[];
+    }>;
+};
+/**
+ * Where everything of a picture to name goes on its stage: the sheet and the
+ * cards, two areas a gap apart, both inside the stage less `insets` and an
+ * edge margin. The cards are tried four ways — a column at the right of the
+ * sheet or a row under it, their names on one line or broken in two — each as
+ * big as it goes, and the way is taken that leaves the sheet biggest for
+ * writing a child still reads. Nothing on the sheet is ever moved.
+ */
+export declare function layoutLabelDiagram(stageWidth: number, stageHeight: number, config: Pick<LabelDiagramConfig, "parts" | "order" | "labels" | "board">, insets?: SceneInsets): LabelDiagramLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -1858,6 +1997,12 @@ export type WordBuildMetrics = BaseGameMetrics & {
     /** Letters the word has, and how many of them stand in it. */
     letters: number;
     placed: number;
+    livesRemaining: number;
+};
+export type LabelDiagramMetrics = BaseGameMetrics & {
+    /** Parts the scene asks to name, and how many of them have their name. */
+    parts: number;
+    named: number;
     livesRemaining: number;
 };
 export type MathInputMetrics = BaseGameMetrics & {
@@ -1927,6 +2072,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "text-choice": "textChoice";
     readonly "math-input": "mathInput";
     readonly "word-build": "wordBuild";
+    readonly "label-diagram": "labelDiagram";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -1960,6 +2106,7 @@ export declare const GAME_GESTURES: {
     readonly "text-choice": "tap";
     readonly "math-input": "tap";
     readonly "word-build": "tap";
+    readonly "label-diagram": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -2019,6 +2166,7 @@ export type GameMetricsByKind = {
     "text-choice": TextChoiceMetrics;
     "math-input": MathInputMetrics;
     "word-build": WordBuildMetrics;
+    "label-diagram": LabelDiagramMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

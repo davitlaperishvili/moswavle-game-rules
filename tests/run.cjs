@@ -480,14 +480,14 @@ const tinyHotspot = rules.layoutSelectOptionItems({ width: 1600, height: 900 }, 
 check('a tiny hotspot is grown to a tappable size', tinyHotspot.width >= 900 * 0.08 - 0.001);
 check('no hotspots before the stage is measured', rules.layoutSelectOptionItems({ width: 0, height: 0 }, { items: [{ id: 'a', x: 1, y: 1, width: 1, height: 1 }], board_width: 1, board_height: 1 }).length === 0);
 
-check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 18);
+check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 19);
 check('failure reasons are named', rules.FAILURE_REASON.wrongCatch === 'wrong_catch' && rules.FAILURE_REASON.livesOut === 'lives_out');
 
 
 section('every playable kind is registered');
 
 const playableKinds = Object.keys(rules.GAME_KIND_KEYS);
-check('eighteen kinds, generic excluded', playableKinds.length === 18 && !playableKinds.includes('generic'));
+check('nineteen kinds, generic excluded', playableKinds.length === 19 && !playableKinds.includes('generic'));
 check('each kind resolves to itself', playableKinds.every((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) === kind), playableKinds.filter((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) !== kind).join());
 check('each kind has timings', playableKinds.every((kind) => rules.GAME_TIMINGS_BY_KIND[kind] === rules.GAME_TIMINGS[rules.GAME_KIND_KEYS[kind]]));
 check('no timing key is orphaned', Object.keys(rules.GAME_TIMINGS).every((key) => Object.values(rules.GAME_KIND_KEYS).includes(key)));
@@ -1616,6 +1616,134 @@ section('word_build: a word put together from its letters');
   check('a face with no room draws nothing', rules.wordBuildLetterBox(0, 50).height === 0);
   check('no word, no game', rules.layoutWordBuild(852, 393, make(''), {}) === null);
   check('the timings and the gesture are there', rules.GAME_TIMINGS.wordBuild.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-build'] === rules.GAME_TIMINGS.wordBuild && rules.GAME_GESTURES['word-build'] === 'tap');
+}
+
+section('label_diagram: a picture whose parts are named');
+
+{
+  ['label_diagram', 'label_map', 'name_parts', 'Label Diagram'].forEach((type) => {
+    check(`${type} resolves to label-diagram`, rules.resolveGameKind(type, {}) === 'label-diagram');
+  });
+  check('a word to build is still its own game', rules.resolveGameKind('word_build', {}) === 'word-build');
+
+  const make = (data) => rules.normalizeLabelDiagramConfig(data);
+  const pic = (name) => `https://x/${name}.webp`;
+
+  // A farm: four animals with names, a tree that is only there, and a name of nothing on it.
+  const farm = make({
+    board_width: 2048, board_height: 1152, bg_image: pic('bg-farm'), lives: 2,
+    placements: [
+      { image: pic('goat'), x: 62, y: 52, width: 14, height: 28, label: 'თხა' },
+      { image: pic('cow'), x: 8, y: 48, width: 20, height: 34, label: '  ძროხა ' },
+      { image: pic('tree'), x: 44, y: 8, width: 14, height: 28 },
+      { image: pic('hen'), x: 82, y: 62, width: 9, height: 18, label: 'ქათამი' },
+      { image: pic('horse'), x: 36, y: 40, width: 20, height: 40, label: 'ცხენი' },
+    ],
+    extra_labels: ['ღორი', 'თხა', '', 'ღორი'],
+  });
+  check('every picture stands on the sheet, in the order it was placed', farm.parts.map((part) => part.image).join() === ['goat', 'cow', 'tree', 'hen', 'horse'].map(pic).join());
+  check('the named ones are asked left to right, and numbered so', farm.order.join() === 'part_2,part_5,part_1,part_4'
+    && farm.parts.map((part) => part.number).join('') === '31042');
+  check('a name is tidied; a picture with none is only there', farm.parts[1].label === 'ძროხა' && farm.parts[2].label === null);
+  check('a card for every name, and one for a name of nothing — said once, and never a part\'s own', farm.labels.length === 5
+    && [...farm.labels.map((label) => label.text)].sort().join() === ['თხა', 'ძროხა', 'ქათამი', 'ცხენი', 'ღორი'].sort().join()
+    && new Set(farm.labels.map((label) => label.id)).size === 5);
+  check('defaults and what to preload: the picture and everything on it', farm.lives === 2 && farm.time_limit === null
+    && farm.board.width === 2048 && farm.imageUris.length === 6 && farm.imageUris[0] === pic('bg-farm'));
+
+  // A plant runs down the page: asked top to bottom.
+  const plant = make({
+    board_width: 900, board_height: 1200, bg_image: pic('plant'),
+    placements: [
+      { x: 40, y: 86, width: 8, height: 6, label: 'root' },
+      { x: 60, y: 35, width: 8, height: 6, label: 'leaf' },
+      { x: 45, y: 8, width: 8, height: 6, label: 'flower' },
+      { x: 44, y: 55, width: 8, height: 6, label: 'stem' },
+      { x: 10, y: 10, width: 8, height: 6 },
+    ],
+  });
+  check('a picture that runs down is asked top to bottom', plant.order.map((id) => plant.parts.find((part) => part.id === id).label).join() === 'flower,leaf,stem,root');
+  check('a point is a part with no picture of its own; one with no name is nothing', plant.parts.length === 4 && plant.parts.every((part) => part.image === null)
+    && plant.imageUris.join() === pic('plant'));
+
+  const many = make({
+    board_width: 1000, board_height: 500, bg_image: pic('map'),
+    placements: Array.from({ length: 8 }, (_, index) => ({ x: 5 + index * 11, y: 40, width: 6, height: 10, label: `town ${index + 1}` })),
+    extra_labels: ['nowhere'],
+  });
+  check('no more than six parts are asked: the leftmost, and the points past them are gone', many.order.length === rules.LABEL_DIAGRAM_PARTS_MAX
+    && many.parts.length === 6 && many.labels.length === rules.LABEL_DIAGRAM_LABELS_MAX && !many.labels.some((label) => label.text === 'nowhere'));
+  check('no picture size, or nothing on the picture, is no game', make({ bg_image: pic('map'), placements: [{ x: 1, y: 1, width: 5, height: 5, label: 'a' }] }).board === null
+    && make({ board_width: 10, board_height: 10, placements: [] }).board === null);
+
+  const tap = rules.resolveLabelDiagramTap;
+  const cardOf = (config, text, used = []) => config.labels.find((label) => label.text === text && !used.includes(label.id)).id;
+  check('the name of the part asked is right', JSON.stringify(tap(farm, [], cardOf(farm, 'ძროხა'))) === '{"type":"right","partId":"part_2","complete":false}');
+  check('the name of another part is a mistake, and says which part was asked', JSON.stringify(tap(farm, [], cardOf(farm, 'თხა'))) === '{"type":"wrong","partId":"part_2"}');
+  check('so is a name of nothing on the picture', tap(farm, [], cardOf(farm, 'ღორი')).type === 'wrong');
+  const afterCow = [cardOf(farm, 'ძროხა')];
+  check('a card given to its part is not taken again', tap(farm, afterCow, afterCow[0]).type === 'ignored');
+  check('then the next part is asked', JSON.stringify(tap(farm, afterCow, cardOf(farm, 'ცხენი'))) === '{"type":"right","partId":"part_5","complete":false}');
+  const three = [...afterCow, cardOf(farm, 'ცხენი'), cardOf(farm, 'თხა')];
+  check('the last name completes the picture', JSON.stringify(tap(farm, three, cardOf(farm, 'ქათამი'))) === '{"type":"right","partId":"part_4","complete":true}');
+  check('a picture all named takes no more', tap(farm, [...three, cardOf(farm, 'ქათამი')], cardOf(farm, 'ღორი')).type === 'ignored');
+  check('a card the game does not have is ignored', tap(farm, [], 'zzz').type === 'ignored');
+
+  // Two cows: two cards "cow", and either names either.
+  const twins = make({ board_width: 100, board_height: 50, bg_image: pic('bg'), placements: [
+    { image: pic('cow'), x: 10, y: 10, width: 20, height: 30, label: 'cow' },
+    { image: pic('cow'), x: 60, y: 10, width: 20, height: 30, label: 'cow' },
+  ] });
+  check('two parts of one name have a card each, and either card is right for either', twins.labels.length === 2
+    && tap(twins, [], twins.labels[1].id).type === 'right' && tap(twins, [twins.labels[1].id], twins.labels[0].id).complete === true);
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const world = make({ board_width: 2048, board_height: 1152, bg_image: pic('world'), placements: [
+    { x: 18, y: 30, width: 4, height: 7, label: 'North America' }, { x: 28, y: 62, width: 4, height: 7, label: 'South America' },
+    { x: 50, y: 28, width: 4, height: 7, label: 'Europe' }, { x: 53, y: 52, width: 4, height: 7, label: 'Africa' },
+    { x: 70, y: 32, width: 4, height: 7, label: 'Asia' }, { x: 84, y: 68, width: 4, height: 7, label: 'Australia' },
+  ] });
+  const stages = [[852, 393, { top: 56, left: 115, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  const configs = [farm, plant, world, twins, many];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => configs.forEach((config, index) => {
+    const layout = rules.layoutLabelDiagram(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const rim = rules.LABEL_DIAGRAM_LAYOUT.sheetRim;
+    const framed = layout && { left: layout.sheet.left - rim, top: layout.sheet.top - rim, width: layout.sheet.width + rim * 2, height: layout.sheet.height + rim * 2 };
+    const ok = layout
+      && inside(framed, stage) && inside(layout.tray, stage) && !overlap(framed, layout.tray)
+      && Math.abs(layout.sheet.width / layout.sheet.height - config.board.width / config.board.height) < 1e-6
+      && layout.parts.length === config.parts.length
+      && layout.parts.every((rect, i) => Math.abs(rect.left - (layout.sheet.left + config.parts[i].x / 100 * layout.sheet.width)) < 1e-6
+        && Math.abs(rect.top - (layout.sheet.top + config.parts[i].y / 100 * layout.sheet.height)) < 1e-6)
+      && layout.pins.length === config.order.length && layout.pins.every((pin, i) => pin.partId === config.order[i] && pin.number === i + 1)
+      && layout.cards.length === config.labels.length && layout.cards.every((card, i) => card.id === config.labels[i].id && inside(card, layout.tray)
+        && inside(card.badge, card) && card.lines.length >= 1 && card.lines.every((line) => inside(line, card) && line.left >= card.badge.left + card.badge.width))
+      && layout.cards.every((card, i) => layout.cards.every((other, j) => i === j || !overlap(card, other)));
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the sheet is whole and uncropped, its parts where the author put them, the cards apart from it and inside the safe area', whole, detail);
+
+  const phone = rules.layoutLabelDiagram(852, 393, farm, { top: 56, left: 115, right: 59, bottom: 21 });
+  check('a phone on its side has the cards in a column at the right of the sheet, big enough to read', phone.arrangement === 'column'
+    && phone.tray.left > phone.sheet.left + phone.sheet.width && phone.cards[0].lines[0].height >= rules.LABEL_DIAGRAM_LAYOUT.minLine
+    && phone.cards.every((card) => Math.abs(card.width - phone.cards[0].width) < 1e-6));
+  const tablet = rules.layoutLabelDiagram(1024, 768, farm, { top: 68 });
+  check('where the stage is tall the cards stand in a row under the sheet', tablet.arrangement === 'row' && tablet.tray.top > tablet.sheet.top + tablet.sheet.height);
+  const pinOf = (layout, config, partId) => ({ pin: layout.pins.find((pin) => pin.partId === partId), rect: layout.parts[config.parts.findIndex((part) => part.id === partId)] });
+  const cowPin = pinOf(phone, farm, 'part_2');
+  check('a pin stands on the middle of its part', Math.abs(cowPin.pin.left + cowPin.pin.width / 2 - (cowPin.rect.left + cowPin.rect.width / 2)) < 1e-6
+    && Math.abs(cowPin.pin.top + cowPin.pin.height / 2 - (cowPin.rect.top + cowPin.rect.height / 2)) < 1e-6);
+  check('a pin is big enough to see and never a blot', phone.pins.every((pin) => pin.width >= rules.LABEL_DIAGRAM_LAYOUT.minPin && pin.width <= rules.LABEL_DIAGRAM_LAYOUT.maxPin));
+  const wide = rules.layoutLabelDiagram(1250, 750, world, {});
+  check('a name of two words may be broken in two lines, never cut', wide.cards.every((card) => card.lines.map((line) => line.text).join(' ') === world.labels.find((label) => label.id === card.id).text));
+  check('no picture, no game', rules.layoutLabelDiagram(852, 393, make({ placements: [] }), {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.labelDiagram.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['label-diagram'] === rules.GAME_TIMINGS.labelDiagram && rules.GAME_GESTURES['label-diagram'] === 'tap');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

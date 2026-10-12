@@ -716,6 +716,16 @@ export function resolveGameKind(type, config) {
         return "word-build";
     }
     if ([
+        "label_diagram",
+        "labeldiagram",
+        "diagram_labels",
+        "label_picture",
+        "label_map",
+        "name_parts",
+    ].includes(normalizedType)) {
+        return "label-diagram";
+    }
+    if ([
         "memory_cards",
         "memory",
         "memorycards",
@@ -2753,6 +2763,11 @@ export const GAME_TIMINGS = {
      * child reads it whole before the win.
      */
     wordBuild: { wrongFeedbackMs: 520, flyMs: 420, successSettleMs: 900, livesOutDelayMs: 320 },
+    /**
+     * A wrong card shakes for `wrongFeedbackMs`. Once every part is named the
+     * scene stays `successSettleMs`, so the child sees it whole with its legend.
+     */
+    labelDiagram: { wrongFeedbackMs: 520, successSettleMs: 1000, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -4145,6 +4160,279 @@ export function layoutWordBuild(stageWidth, stageHeight, config, insets = {}) {
         tiles,
     };
 }
+// --- Label diagram ----------------------------------------------------------
+//
+// A picture whose parts are named: a map, the parts of a plant, the animals
+// of a farm. It lies whole on the stage like a sheet on a desk, with numbered
+// pins on what is to be named — a point of the picture itself, or a picture
+// the author stood on it — and the words that name them wait on cards beside
+// it. The parts are asked one after another, left to right: the pin of the
+// one asked pulses, and the child taps its name. A right card takes the pin's
+// number and stays, so a legend grows as the game goes; a wrong one costs a
+// life. It is the game of a child who reads, and its words arrive in the
+// language it is played in.
+//
+// Unlike every scene game the picture is never cropped and nothing on it is
+// moved: a pin on a map stands on its town or it stands for nothing.
+export const LABEL_DIAGRAM_PARTS_MIN = 2;
+/** More pins than this and their names do not fit a phone at a size a child reads. */
+export const LABEL_DIAGRAM_PARTS_MAX = 6;
+/** The most cards: the names of the parts and the ones that name nothing on the picture. */
+export const LABEL_DIAGRAM_LABELS_MAX = 6;
+/**
+ * The game as the players draw it. `placements` are what stands on the
+ * picture, in percent of it, each with the `label` that names it — already in
+ * the language of the game — or none; one without an `image` is a point of
+ * the picture itself and is kept only for its name. `extra_labels` are names
+ * of nothing on the picture. A name is asked for at most
+ * `LABEL_DIAGRAM_PARTS_MAX` parts: the leftmost ones, the rest left unnamed.
+ */
+export function normalizeLabelDiagramConfig(config) {
+    const clampPercent = (value) => Math.max(0, Math.min(100, value ?? 0));
+    const tidy = (value) => (extractText(value) ?? "").trim().replace(/\s+/g, " ");
+    const placed = (Array.isArray(config.placements) ? config.placements : [])
+        .map((raw) => {
+        const record = asRecord(raw);
+        if (!record) {
+            return null;
+        }
+        const image = extractMediaUrl(record.image);
+        const label = tidy(record.label) || null;
+        const x = clampPercent(extractNumber(record.x));
+        const y = clampPercent(extractNumber(record.y));
+        const width = Math.min(100 - x, clampPercent(extractNumber(record.width)));
+        const height = Math.min(100 - y, clampPercent(extractNumber(record.height)));
+        // A point with no name is nothing at all: there is no picture to show for it.
+        return width > 0 && height > 0 && (image || label) ? { image, x, y, width, height, label } : null;
+    })
+        .filter((part) => Boolean(part));
+    const boardWidth = extractNumber(config.board_width);
+    const boardHeight = extractNumber(config.board_height);
+    // Asked the way the picture runs: left to right across a map, top to bottom
+    // down a plant — along whichever way the named parts are spread further.
+    const middles = placed.map((part) => ({
+        x: ((part.x + part.width / 2) / 100) * (boardWidth && boardWidth > 0 ? boardWidth : 100),
+        y: ((part.y + part.height / 2) / 100) * (boardHeight && boardHeight > 0 ? boardHeight : 100),
+    }));
+    const namedIndexes = placed.map((part, index) => index).filter((index) => placed[index].label !== null);
+    const spread = (axis) => namedIndexes.length > 0
+        ? Math.max(...namedIndexes.map((index) => middles[index][axis])) - Math.min(...namedIndexes.map((index) => middles[index][axis]))
+        : 0;
+    const [first, second] = spread("y") > spread("x") ? ["y", "x"] : ["x", "y"];
+    const named = namedIndexes
+        .map((index) => ({ part: placed[index], index }))
+        .sort((a, b) => middles[a.index][first] - middles[b.index][first] ||
+        middles[a.index][second] - middles[b.index][second] ||
+        a.index - b.index)
+        .slice(0, LABEL_DIAGRAM_PARTS_MAX);
+    const numberOf = new Map(named.map(({ index }, turn) => [index, turn + 1]));
+    const parts = placed
+        .map((part, index) => ({
+        id: `part_${index + 1}`,
+        ...part,
+        label: numberOf.has(index) ? part.label : null,
+        number: numberOf.get(index) ?? 0,
+    }))
+        // A point past the last one asked has neither a name nor a picture left.
+        .filter((part) => part.image !== null || part.label !== null);
+    const own = named.map(({ part }) => part.label);
+    const extra = (Array.isArray(config.extra_labels) ? config.extra_labels : [])
+        .map(tidy)
+        .filter((text, index, all) => text !== "" && !own.includes(text) && all.indexOf(text) === index)
+        .slice(0, Math.max(0, LABEL_DIAGRAM_LABELS_MAX - own.length));
+    const bg = extractMediaUrl(config.bg_image);
+    return {
+        parts,
+        order: named.map(({ index }) => `part_${index + 1}`),
+        labels: shuffle([...own, ...extra].map((text, index) => ({ id: `label_${index + 1}`, text }))),
+        board: parts.length > 0 && boardWidth && boardHeight && boardWidth > 0 && boardHeight > 0
+            ? { width: boardWidth, height: boardHeight }
+            : null,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [...new Set([bg, ...parts.map((part) => part.image)].filter((uri) => Boolean(uri)))],
+    };
+}
+/**
+ * What a tap on a card does: the whole play rule, so both players follow it
+ * tap for tap. `used` are the cards given to parts so far, in the order the
+ * parts are asked — so the part asked now is `order[used.length]`. Any card of
+ * the right word is right: a picture with two cows has two cards "cow", and
+ * either names either.
+ */
+export function resolveLabelDiagramTap(config, used, labelId) {
+    const partId = config.order[used.length];
+    const part = config.parts.find((item) => item.id === partId);
+    const label = config.labels.find((item) => item.id === labelId);
+    if (!part || !label || used.includes(labelId)) {
+        return { type: "ignored" };
+    }
+    if (label.text !== part.label) {
+        return { type: "wrong", partId: part.id };
+    }
+    return { type: "right", partId: part.id, complete: used.length + 1 === config.order.length };
+}
+/** Proportions of the cards and the pins. Shares are of the height of a line of a card's writing. */
+export const LABEL_DIAGRAM_LAYOUT = {
+    /** A line of a name never grows past this, in px; under `minLine` a child no longer reads it. */
+    maxLine: 40,
+    minLine: 16,
+    /** A name is broken into at most this many lines. */
+    lines: 2,
+    /** Around a card's writing. */
+    cardPadX: 0.4,
+    cardPadY: 0.24,
+    /** The round place for the pin's number at the left of a card, and the room after it. */
+    badge: 1.1,
+    badgeGap: 0.3,
+    /** In px: between cards. */
+    cardGap: 8,
+    /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+    sheetRim: 6,
+    /** The most of the free width a column of cards takes, and of the free height a row of them. */
+    columnShare: 0.4,
+    rowShare: 0.36,
+    /** A pin on a picture: this share of its shorter side across. On a point: as big as the point. Both between these sizes in px. */
+    pinShare: 0.34,
+    minPin: 28,
+    maxPin: 46,
+};
+/**
+ * Where everything of a picture to name goes on its stage: the sheet and the
+ * cards, two areas a gap apart, both inside the stage less `insets` and an
+ * edge margin. The cards are tried four ways — a column at the right of the
+ * sheet or a row under it, their names on one line or broken in two — each as
+ * big as it goes, and the way is taken that leaves the sheet biggest for
+ * writing a child still reads. Nothing on the sheet is ever moved.
+ */
+export function layoutLabelDiagram(stageWidth, stageHeight, config, insets = {}) {
+    const L = LABEL_DIAGRAM_LAYOUT;
+    const board = config.board;
+    const count = config.labels.length;
+    if (!board || count === 0 || config.parts.length === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const areaLeft = (insets.left ?? 0) + edge;
+    const areaTop = (insets.top ?? 0) + edge;
+    const areaWidth = stageWidth - (insets.left ?? 0) - (insets.right ?? 0) - edge * 2;
+    const areaHeight = stageHeight - (insets.top ?? 0) - (insets.bottom ?? 0) - edge * 2;
+    if (areaWidth <= 0 || areaHeight <= 0) {
+        return null;
+    }
+    const chrome = L.cardPadX * 2 + L.badge + L.badgeGap;
+    const breaks = config.labels.some((label) => label.text.includes(" ")) ? [1, L.lines] : [1];
+    const gaps = L.cardGap * (count - 1);
+    let best = null;
+    for (const arrangement of ["column", "row"]) {
+        for (const maxLines of breaks) {
+            const texts = config.labels.map((label) => breakTextLines(label.text, maxLines));
+            const rows = Math.max(...texts.map((lines) => lines.length), 1);
+            // A card's width and height, in lines' heights.
+            const unitsWide = texts.map((lines) => chrome + Math.max(...lines.map((text) => textLineUnits(text)), 0));
+            const unitsHigh = rows + L.cardPadY * 2;
+            const widest = Math.max(...unitsWide);
+            const line = Math.min(L.maxLine, arrangement === "column"
+                ? Math.min((areaWidth * L.columnShare) / widest, (areaHeight - gaps) / (count * unitsHigh))
+                : Math.min((areaWidth - gaps) / unitsWide.reduce((sum, units) => sum + units, 0), (areaHeight * L.rowShare) / unitsHigh));
+            if (!(line > 1)) {
+                continue;
+            }
+            const cardHeight = unitsHigh * line;
+            // In a column every card is as wide as the widest, like the lines of a legend.
+            const widths = unitsWide.map((units) => (arrangement === "column" ? widest : units) * line);
+            const tray = arrangement === "column"
+                ? { width: widths[0], height: count * cardHeight + gaps }
+                : { width: widths.reduce((sum, width) => sum + width, 0) + gaps, height: cardHeight };
+            const roomWidth = areaWidth - L.sheetRim * 2 - (arrangement === "column" ? tray.width + gap : 0);
+            const roomHeight = areaHeight - L.sheetRim * 2 - (arrangement === "row" ? tray.height + gap : 0);
+            if (roomWidth <= 0 || roomHeight <= 0) {
+                continue;
+            }
+            const scale = Math.min(roomWidth / board.width, roomHeight / board.height);
+            const sheet = { width: board.width * scale, height: board.height * scale };
+            // The biggest sheet wins, as long as its names can be read: writing under `minLine` is the last choice.
+            const score = sheet.width * sheet.height * (line / L.maxLine) * (line < L.minLine ? 0.25 : 1);
+            if (!best || score > best.score * (1 + 1e-9)) {
+                best = { score, arrangement, line, texts, widths, cardHeight, tray, sheet };
+            }
+        }
+    }
+    if (!best) {
+        return null;
+    }
+    const { arrangement, line, texts, widths, cardHeight } = best;
+    const framed = { width: best.sheet.width + L.sheetRim * 2, height: best.sheet.height + L.sheetRim * 2 };
+    // The sheet and the cards, centred together in what the stage leaves free.
+    const groupWidth = arrangement === "column" ? framed.width + gap + best.tray.width : Math.max(framed.width, best.tray.width);
+    const groupHeight = arrangement === "row" ? framed.height + gap + best.tray.height : Math.max(framed.height, best.tray.height);
+    const groupLeft = areaLeft + (areaWidth - groupWidth) / 2;
+    const groupTop = areaTop + (areaHeight - groupHeight) / 2;
+    const sheet = {
+        left: (arrangement === "column" ? groupLeft : groupLeft + (groupWidth - framed.width) / 2) + L.sheetRim,
+        top: (arrangement === "row" ? groupTop : groupTop + (groupHeight - framed.height) / 2) + L.sheetRim,
+        width: best.sheet.width,
+        height: best.sheet.height,
+    };
+    const tray = {
+        left: arrangement === "column" ? groupLeft + framed.width + gap : groupLeft + (groupWidth - best.tray.width) / 2,
+        top: arrangement === "row" ? groupTop + framed.height + gap : groupTop + (groupHeight - best.tray.height) / 2,
+        width: best.tray.width,
+        height: best.tray.height,
+    };
+    const badge = L.badge * line;
+    let cursor = 0;
+    const cards = config.labels.map((label, index) => {
+        const left = tray.left + (arrangement === "column" ? 0 : cursor);
+        const top = tray.top + (arrangement === "column" ? cursor : 0);
+        cursor += (arrangement === "column" ? cardHeight : widths[index]) + L.cardGap;
+        const textLeft = left + (L.cardPadX + L.badge + L.badgeGap) * line;
+        const textTop = top + (cardHeight - texts[index].length * line) / 2;
+        return {
+            id: label.id,
+            left,
+            top,
+            width: widths[index],
+            height: cardHeight,
+            badge: { left: left + L.cardPadX * line, top: top + (cardHeight - badge) / 2, width: badge, height: badge },
+            lines: texts[index].map((text, row) => ({
+                text,
+                left: textLeft,
+                top: textTop + row * line,
+                width: textLineUnits(text) * line,
+                height: line,
+            })),
+        };
+    });
+    const parts = config.parts.map((part) => ({
+        left: sheet.left + (part.x / 100) * sheet.width,
+        top: sheet.top + (part.y / 100) * sheet.height,
+        width: (part.width / 100) * sheet.width,
+        height: (part.height / 100) * sheet.height,
+    }));
+    const pins = config.order
+        .map((partId) => {
+        const index = config.parts.findIndex((part) => part.id === partId);
+        const rect = parts[index];
+        if (!rect) {
+            return null;
+        }
+        const across = Math.min(rect.width, rect.height) * (config.parts[index].image === null ? 1 : L.pinShare);
+        const size = Math.max(L.minPin, Math.min(L.maxPin, across));
+        return {
+            partId,
+            number: config.parts[index].number,
+            left: rect.left + rect.width / 2 - size / 2,
+            top: rect.top + rect.height / 2 - size / 2,
+            width: size,
+            height: size,
+        };
+    })
+        .filter((pin) => Boolean(pin));
+    return { sheet, parts, pins, arrangement, tray, cards };
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -4163,6 +4451,7 @@ export const GAME_KIND_KEYS = {
     "text-choice": "textChoice",
     "math-input": "mathInput",
     "word-build": "wordBuild",
+    "label-diagram": "labelDiagram",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -4184,6 +4473,7 @@ export const GAME_TIMINGS_BY_KIND = {
     "text-choice": GAME_TIMINGS.textChoice,
     "math-input": GAME_TIMINGS.mathInput,
     "word-build": GAME_TIMINGS.wordBuild,
+    "label-diagram": GAME_TIMINGS.labelDiagram,
     "memory-cards": GAME_TIMINGS.memoryCards,
     "pattern-next": GAME_TIMINGS.patternNext,
     "select-option": GAME_TIMINGS.selectOption,
@@ -4211,6 +4501,7 @@ export const GAME_GESTURES = {
     "text-choice": "tap",
     "math-input": "tap",
     "word-build": "tap",
+    "label-diagram": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",
