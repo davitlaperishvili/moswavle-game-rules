@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1187,6 +1187,15 @@ export declare const GAME_TIMINGS: {
      * `wrongFeedbackMs`. The finished example stays `successSettleMs` so the
      * child sees it whole before the win.
      */
+    /**
+     * A wrong answer shakes for `wrongFeedbackMs` and stays crossed out. The
+     * right one stays lit `successSettleMs` before the win.
+     */
+    readonly textChoice: {
+        readonly wrongFeedbackMs: 560;
+        readonly successSettleMs: 600;
+        readonly livesOutDelayMs: 320;
+    };
     readonly mathEquation: {
         readonly wrongFeedbackMs: 560;
         readonly flyMs: 620;
@@ -1447,6 +1456,143 @@ export type MathEquationLayout = {
  * widest card of its kind, so its size gives nothing away.
  */
 export declare function layoutMathEquation(stageWidth: number, stageHeight: number, config: Pick<MathEquationConfig, "terms" | "cards">, insets?: SceneInsets): MathEquationLayout | null;
+/** How many tones the players' palette of letters has. */
+export declare const LETTER_TONE_COUNT = 10;
+/** The alphabets of the three languages, in their own order. */
+export declare const LETTER_ALPHABETS: {
+    readonly ka: "აბგდევზთიკლმნოპჟრსტუფქღყშჩცძწჭხჯჰ";
+    readonly ru: "абвгдеёжзийклмнопрстуфхцчшщъыьэюя";
+    readonly en: "abcdefghijklmnopqrstuvwxyz";
+};
+/**
+ * The tone of a character, 0 to `LETTER_TONE_COUNT - 1`: a letter by its place in its
+ * alphabet, stepped so that neighbours in the alphabet are far apart in the
+ * palette; a digit its own number, as in a math example. Null for anything
+ * else — a space, a comma, a sign — which the players draw in the signs' grey.
+ * A capital has its small letter's tone.
+ */
+export declare function letterToneIndex(char: string): number | null;
+/**
+ * How a line of writing is drawn, in shares of its letters' size (the em):
+ * the box it is drawn in is `lineHeight` high with the baseline `baseline`
+ * from its top, which leaves room for a tall letter, a tail and the outline;
+ * `pad` is the room for the outline at each end.
+ */
+export declare const TEXT_ART: {
+    readonly lineHeight: 1.42;
+    readonly baseline: 1.02;
+    readonly pad: 0.1;
+};
+/** How wide a line of writing is expected to be, in ems. The players measure the real one and fit it. */
+export declare function textLineAdvance(text: string): number;
+/** How wide the box of a line is for its height: see `TEXT_ART`. */
+export declare function textLineUnits(text: string): number;
+/**
+ * A text broken into at most `maxLines` lines at its spaces, as evenly as
+ * it goes: of every way to break it the one whose longest line is shortest.
+ * A text of fewer words has fewer lines; a word is never split.
+ */
+export declare function breakTextLines(text: string, maxLines: number): string[];
+export declare const TEXT_CHOICE_ANSWERS_MIN = 2;
+/** More than four answers in words do not fit a phone at a size a child reads. */
+export declare const TEXT_CHOICE_ANSWERS_MAX = 4;
+export type TextChoiceOption = {
+    id: string;
+    /** In the language the game is played in: the server has chosen it. */
+    text: string;
+    isCorrect: boolean;
+};
+export type TextChoiceConfig = {
+    /** The question as the child reads it, in the game's language. Empty when it is only said. */
+    question: string;
+    /** A picture the question is about; null for a question of words alone. */
+    questionImage: string | null;
+    bg_image: string | null;
+    /** Shuffled once here: the right answer is not always the first card. */
+    answers: TextChoiceOption[];
+    correctOptionIds: string[];
+    time_limit: number | null;
+    lives: number;
+    /** The background and the question's picture: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `question` and each answer's `text` arrive
+ * already in the language of the game. An answer with no text is dropped, and
+ * no more than `TEXT_CHOICE_ANSWERS_MAX` are kept — the right ones first, so a
+ * game never loses its answer to the limit.
+ */
+export declare function normalizeTextChoiceConfig(game: AuthoredGame, config: Record<string, unknown>): TextChoiceConfig;
+export type TextChoiceTapResult = 
+/** An answer already found or already crossed out, or one the game does not have. */
+{
+    type: "ignored";
+}
+/** A right answer; `complete` when it was the last one to find. */
+ | {
+    type: "right";
+    complete: boolean;
+}
+/** A wrong answer: it is crossed out, and a life is lost. */
+ | {
+    type: "wrong";
+};
+/**
+ * What a tap on an answer does: the whole play rule, so both players follow
+ * it tap for tap. `found` are the right answers tapped so far, `crossed` the
+ * wrong ones.
+ */
+export declare function resolveTextChoiceTap(config: Pick<TextChoiceConfig, "answers" | "correctOptionIds">, found: readonly string[], crossed: readonly string[], optionId: string): TextChoiceTapResult;
+/** Proportions of the question and its answers. Paddings are shares of the line they surround. */
+export declare const TEXT_CHOICE_LAYOUT: {
+    /** The most of the free height the question may take… */
+    readonly questionShare: 0.4;
+    /** …and the most lines it is broken into. */
+    readonly questionLines: 3;
+    /** A line of the question never grows past this, in px. */
+    readonly maxQuestionLine: 76;
+    /** The question's picture: a square of this share of the free height, at most this share of the width. */
+    readonly pictureShare: 0.34;
+    readonly pictureWidthShare: 0.24;
+    /** An answer is broken into at most this many lines. */
+    readonly answerLines: 3;
+    /** A line of an answer never grows past this, in px. */
+    readonly maxAnswerLine: 88;
+    /** Around the question, and around an answer on its card. */
+    readonly panelPadX: 0.36;
+    readonly panelPadY: 0.2;
+    readonly cardPadX: 0.42;
+    readonly cardPadY: 0.26;
+    /** In px: between cards. */
+    readonly cardGap: 12;
+};
+/** A line of writing where it is drawn: a box `textLineUnits` wide for its height. */
+export type TextLineBox = BoardRect & {
+    text: string;
+};
+export type TextChoiceLayout = {
+    /** The panel the question sits on; null when the game has neither a written question nor a picture. */
+    panel: BoardRect | null;
+    picture: BoardRect | null;
+    question: TextLineBox[];
+    /** In `answers` order: the card and the lines of its answer. Every answer is written at one size. */
+    cards: Array<BoardRect & {
+        id: string;
+        lines: TextLineBox[];
+    }>;
+};
+/**
+ * Where everything of a text question goes on its stage. The background
+ * covers the whole stage; the question sits on a panel above — its picture at
+ * its left when it has one — and the answers on cards below: two safe areas a
+ * gap apart, both inside the stage less `insets` and an edge margin.
+ *
+ * The answers are set in whichever of one row, two columns or one column, and
+ * in however many lines each, writes them biggest; all of them at one size,
+ * so the right one is not the one that looks different. A long question is
+ * broken into lines the same way.
+ */
+export declare function layoutTextChoice(stageWidth: number, stageHeight: number, config: Pick<TextChoiceConfig, "question" | "questionImage" | "answers">, insets?: SceneInsets): TextChoiceLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -1498,6 +1644,13 @@ export type MathEquationMetrics = BaseGameMetrics & {
     /** Places the example left to fill, and how many were filled. */
     blanks: number;
     filled: number;
+    livesRemaining: number;
+};
+export type TextChoiceMetrics = BaseGameMetrics & {
+    /** Right answers the game has, and how many of them were found. */
+    correct: number;
+    found: number;
+    totalOptions: number;
     livesRemaining: number;
 };
 export type JigsawMetrics = BaseGameMetrics & {
@@ -1552,6 +1705,7 @@ export declare const GAME_KIND_KEYS: {
     readonly images_order: "imagesOrder";
     readonly jigsaw: "jigsaw";
     readonly "math-equation": "mathEquation";
+    readonly "text-choice": "textChoice";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -1582,6 +1736,7 @@ export declare const GAME_GESTURES: {
     readonly images_order: "tap";
     readonly jigsaw: "drag";
     readonly "math-equation": "tap";
+    readonly "text-choice": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -1638,6 +1793,7 @@ export type GameMetricsByKind = {
     images_order: ImageOrderMetrics;
     jigsaw: JigsawMetrics;
     "math-equation": MathEquationMetrics;
+    "text-choice": TextChoiceMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

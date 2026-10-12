@@ -480,14 +480,14 @@ const tinyHotspot = rules.layoutSelectOptionItems({ width: 1600, height: 900 }, 
 check('a tiny hotspot is grown to a tappable size', tinyHotspot.width >= 900 * 0.08 - 0.001);
 check('no hotspots before the stage is measured', rules.layoutSelectOptionItems({ width: 0, height: 0 }, { items: [{ id: 'a', x: 1, y: 1, width: 1, height: 1 }], board_width: 1, board_height: 1 }).length === 0);
 
-check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 15);
+check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 16);
 check('failure reasons are named', rules.FAILURE_REASON.wrongCatch === 'wrong_catch' && rules.FAILURE_REASON.livesOut === 'lives_out');
 
 
 section('every playable kind is registered');
 
 const playableKinds = Object.keys(rules.GAME_KIND_KEYS);
-check('fifteen kinds, generic excluded', playableKinds.length === 15 && !playableKinds.includes('generic'));
+check('sixteen kinds, generic excluded', playableKinds.length === 16 && !playableKinds.includes('generic'));
 check('each kind resolves to itself', playableKinds.every((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) === kind), playableKinds.filter((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) !== kind).join());
 check('each kind has timings', playableKinds.every((kind) => rules.GAME_TIMINGS_BY_KIND[kind] === rules.GAME_TIMINGS[rules.GAME_KIND_KEYS[kind]]));
 check('no timing key is orphaned', Object.keys(rules.GAME_TIMINGS).every((key) => Object.values(rules.GAME_KIND_KEYS).includes(key)));
@@ -1268,6 +1268,120 @@ section('the hint of how a game is played shows the gesture, never the answer');
   const end = rules.gestureHintDragEnd({ x: 0, y: 100 }, { x: 200, y: 0 });
   check('the carrying hand stops short of where things go', end.x > 0 && end.x < 200 && end.y < 100 && end.y > 0);
   check('by the same share both ways', Math.abs(end.x / 200 - rules.GESTURE_HINT.dragReach) < 1e-9 && Math.abs((100 - end.y) / 100 - rules.GESTURE_HINT.dragReach) < 1e-9);
+}
+
+section('written words: every letter has its colour');
+
+{
+  const tone = rules.letterToneIndex;
+  const all = Object.values(rules.LETTER_ALPHABETS).join('');
+  check('three alphabets: 33 Georgian letters, 33 Russian, 26 English', rules.LETTER_ALPHABETS.ka.length === 33 && rules.LETTER_ALPHABETS.ru.length === 33 && rules.LETTER_ALPHABETS.en.length === 26);
+  check('every letter of every alphabet has a tone', [...all].every((char) => Number.isInteger(tone(char)) && tone(char) >= 0 && tone(char) < rules.LETTER_TONE_COUNT));
+  check('neighbours in an alphabet never share one', Object.values(rules.LETTER_ALPHABETS).every((alphabet) => [...alphabet].every((char, index) => index === 0 || tone(char) !== tone(alphabet[index - 1]))));
+  check('and every tone of the palette is used by each alphabet', Object.values(rules.LETTER_ALPHABETS).every((alphabet) => new Set([...alphabet].map(tone)).size === rules.LETTER_TONE_COUNT));
+  check('a capital has its small letter\'s tone', tone('Ж') === tone('ж') && tone('Q') === tone('q'));
+  check('a digit keeps its own, as in a math example', tone('3') === 3 && tone('0') === 0);
+  check('a space, a comma and a sign have none', tone(' ') === null && tone(',') === null && tone('?') === null && tone('') === null);
+
+  check('a wide letter takes more room than a narrow one', rules.textLineAdvance('ლ') > rules.textLineAdvance('ი') && rules.textLineAdvance('m') > rules.textLineAdvance('i'));
+  check('a longer line is wider', rules.textLineUnits('დათვი და მგელი') > rules.textLineUnits('დათვი'));
+  check('a line\'s box holds its letters and the outline', Math.abs(rules.textLineUnits('ა') * rules.TEXT_ART.lineHeight - (rules.textLineAdvance('ა') + 2 * rules.TEXT_ART.pad)) < 1e-9);
+
+  const lines = rules.breakTextLines;
+  check('a text is broken at its spaces, as evenly as it goes', lines('რომელი ცხოველი იძინებს მთელი ზამთარი?', 2).join('|') === 'რომელი ცხოველი იძინებს|მთელი ზამთარი?', lines('რომელი ცხოველი იძინებს მთელი ზამთარი?', 2).join('|'));
+  check('never into more lines than it has words', lines('დათვი', 3).join('|') === 'დათვი' && lines('Кто спит', 3).length === 2);
+  check('and no word is lost or split', lines('one two three four five six seven', 3).join(' ') === 'one two three four five six seven' && lines('  two   spaces ', 1).join('|') === 'two spaces');
+  check('nothing to write is no line', lines('   ', 2).length === 0);
+}
+
+section('text_choice: a question to read and answers in words');
+
+{
+  ['text_choice', 'text_question', 'quiz', 'Text Choice'].forEach((type) => {
+    check(`${type} resolves to text-choice`, rules.resolveGameKind(type, {}) === 'text-choice');
+  });
+
+  const game = { id: 'g7' };
+  const make = (extra = {}) => rules.normalizeTextChoiceConfig(game, {
+    question: ' რომელი ცხოველი იძინებს მთელი ზამთარი? ',
+    bg_image: 'https://x/bg-forest.webp',
+    answers: [
+      { id: 'bear', text: 'დათვი', is_correct: true },
+      { id: 'wolf', text: 'მგელი', is_correct: false },
+      { id: 'fox', text: 'მელა', is_correct: false },
+    ],
+    ...extra,
+  });
+
+  const quiz = make();
+  check('the question is kept as written, trimmed', quiz.question === 'რომელი ცხოველი იძინებს მთელი ზამთარი?');
+  check('the answers are all there, shuffled or not', quiz.answers.map((a) => a.id).sort().join() === 'bear,fox,wolf');
+  check('the right one is known', quiz.correctOptionIds.join() === 'bear');
+  check('defaults: lives 3, no timer, the background to preload', quiz.lives === 3 && quiz.time_limit === null && quiz.imageUris.join() === 'https://x/bg-forest.webp');
+  check('a picture the question is about is preloaded too', make({ question_image: 'https://x/bear.webp' }).imageUris.includes('https://x/bear.webp'));
+
+  const crowded = make({ answers: [
+    { text: 'ერთი' }, { text: 'ორი' }, { text: '' }, { text: 'სამი' }, { text: 'ოთხი' }, { id: 'right', text: 'ხუთი', is_correct: true }, { text: 'ექვსი' },
+  ] });
+  check('an answer with no text is dropped, and four at most are kept', crowded.answers.length === rules.TEXT_CHOICE_ANSWERS_MAX && crowded.answers.every((a) => a.text !== ''));
+  check('the right answer is never the one left out', crowded.correctOptionIds.join() === 'right');
+
+  const tap = rules.resolveTextChoiceTap;
+  check('the right answer ends the game', JSON.stringify(tap(quiz, [], [], 'bear')) === '{"type":"right","complete":true}');
+  check('a wrong one is wrong', tap(quiz, [], [], 'wolf').type === 'wrong');
+  check('once crossed out it takes no more taps', tap(quiz, [], ['wolf'], 'wolf').type === 'ignored');
+  check('nor does an answer the game does not have', tap(quiz, [], [], 'nobody').type === 'ignored');
+
+  const several = make({ answers: [
+    { id: 'sparrow', text: 'ბეღურა', is_correct: true },
+    { id: 'eagle', text: 'არწივი', is_correct: true },
+    { id: 'bat', text: 'ღამურა', is_correct: false },
+    { id: 'bee', text: 'ფუტკარი', is_correct: false },
+  ] });
+  check('several right answers: the first leaves the game open', JSON.stringify(tap(several, [], [], 'eagle')) === '{"type":"right","complete":false}');
+  check('the last one found ends it', JSON.stringify(tap(several, ['eagle'], ['bat'], 'sparrow')) === '{"type":"right","complete":true}');
+  check('one already found takes no more taps', tap(several, ['eagle'], [], 'eagle').type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  const configs = [
+    quiz,
+    several,
+    make({ question_image: 'https://x/bear.webp' }),
+    make({ question: '', question_image: 'https://x/bear.webp' }),
+    make({ question: '' }),
+    make({ question: 'The whale is a fish.', answers: [{ text: 'True' }, { text: 'False', is_correct: true }] }),
+    make({ question: 'Какое животное кормит своих детёнышей молоком и живёт в море?', answers: [{ text: 'синий кит', is_correct: true }, { text: 'белая акула' }, { text: 'морской конёк' }, { text: 'осьминог' }] }),
+    make({ question: 'Что нужно растению, чтобы расти?', answers: [{ text: 'вода, свет и тепло', is_correct: true }, { text: 'только вода' }, { text: 'только темнота' }] }),
+  ];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => configs.forEach((config, index) => {
+    const layout = rules.layoutTextChoice(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const sizes = layout ? layout.cards.flatMap((card) => card.lines.map((line) => line.height)) : [];
+    const ok = layout
+      && layout.cards.length === config.answers.length
+      && layout.cards.every((card) => inside(card, stage) && card.lines.length > 0 && card.lines.every((line) => inside(line, card)))
+      && layout.cards.every((card, i) => layout.cards.every((other, j) => i === j || !overlap(card, other)))
+      && sizes.every((size) => Math.abs(size - sizes[0]) < 1e-6)
+      && (!layout.panel || (inside(layout.panel, stage) && layout.cards.every((card) => !overlap(card, layout.panel))))
+      && layout.question.every((line) => inside(line, layout.panel))
+      && (!layout.picture || (inside(layout.picture, layout.panel) && layout.question.every((line) => !overlap(line, layout.picture))))
+      && Boolean(layout.panel) === (config.question !== '' || Boolean(config.questionImage))
+      && layout.question.map((line) => line.text).join(' ') === config.question
+      && layout.cards.every((card, i) => card.id === config.answers[i].id && card.lines.map((line) => line.text).join(' ') === config.answers[i].text);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the question and the answers are whole, apart, inside the safe area, the answers at one size', whole, detail);
+
+  const phone = rules.layoutTextChoice(852, 393, quiz, { top: 56 });
+  check('a line is drawn in a box as wide as its letters ask', phone.cards.every((card) => card.lines.every((line) => line.width <= rules.textLineUnits(line.text) * line.height + 1e-6)));
+  check('no answers, no game', rules.layoutTextChoice(852, 393, make({ answers: [] }), {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.textChoice.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['text-choice'] === rules.GAME_TIMINGS.textChoice && rules.GAME_GESTURES['text-choice'] === 'tap');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

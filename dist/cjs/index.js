@@ -25,7 +25,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.SORT_BINS_SORTED_SHARE = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.SORT_BINS_SORTED_SHARE = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -94,6 +94,13 @@ exports.mathEquationPictureCell = mathEquationPictureCell;
 exports.mathEquationItemUnits = mathEquationItemUnits;
 exports.mathEquationPieces = mathEquationPieces;
 exports.layoutMathEquation = layoutMathEquation;
+exports.letterToneIndex = letterToneIndex;
+exports.textLineAdvance = textLineAdvance;
+exports.textLineUnits = textLineUnits;
+exports.breakTextLines = breakTextLines;
+exports.normalizeTextChoiceConfig = normalizeTextChoiceConfig;
+exports.resolveTextChoiceTap = resolveTextChoiceTap;
+exports.layoutTextChoice = layoutTextChoice;
 exports.gestureHintTapStops = gestureHintTapStops;
 exports.gestureHintDragEnd = gestureHintDragEnd;
 const DEFAULT_ANSWER_CHOICE_TIME_LIMIT = 60;
@@ -768,6 +775,16 @@ function resolveGameKind(type, config) {
         "compare_numbers",
     ].includes(normalizedType)) {
         return "math-equation";
+    }
+    if ([
+        "text_choice",
+        "textchoice",
+        "text_question",
+        "text_quiz",
+        "quiz",
+        "read_and_choose",
+    ].includes(normalizedType)) {
+        return "text-choice";
     }
     if ([
         "memory_cards",
@@ -2788,6 +2805,11 @@ exports.GAME_TIMINGS = {
      * `wrongFeedbackMs`. The finished example stays `successSettleMs` so the
      * child sees it whole before the win.
      */
+    /**
+     * A wrong answer shakes for `wrongFeedbackMs` and stays crossed out. The
+     * right one stays lit `successSettleMs` before the win.
+     */
+    textChoice: { wrongFeedbackMs: 560, successSettleMs: 600, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -3495,6 +3517,342 @@ function layoutMathEquation(stageWidth, stageHeight, config, insets = {}) {
     }
     return { panel, row, terms, tray, cards, tiles, contents, contentUnits, pictureCell };
 }
+// --- Written words ----------------------------------------------------------
+//
+// Words a child reads are not set in plain type: every letter has a colour of
+// its own, as every digit has, so "ა" is the same "ა" wherever it is written.
+// The colours are the players' (ten tones, the digits' own); which letter gets
+// which is decided here, so a word looks the same on the site and in the app.
+/** How many tones the players' palette of letters has. */
+exports.LETTER_TONE_COUNT = 10;
+/** The alphabets of the three languages, in their own order. */
+exports.LETTER_ALPHABETS = {
+    ka: "აბგდევზთიკლმნოპჟრსტუფქღყშჩცძწჭხჯჰ",
+    ru: "абвгдеёжзийклмнопрстуфхцчшщъыьэюя",
+    en: "abcdefghijklmnopqrstuvwxyz",
+};
+/**
+ * The tone of a character, 0 to `LETTER_TONE_COUNT - 1`: a letter by its place in its
+ * alphabet, stepped so that neighbours in the alphabet are far apart in the
+ * palette; a digit its own number, as in a math example. Null for anything
+ * else — a space, a comma, a sign — which the players draw in the signs' grey.
+ * A capital has its small letter's tone.
+ */
+function letterToneIndex(char) {
+    const letter = char.toLowerCase();
+    for (const alphabet of Object.values(exports.LETTER_ALPHABETS)) {
+        const index = alphabet.indexOf(letter);
+        if (letter !== "" && index >= 0) {
+            return (index * 7) % exports.LETTER_TONE_COUNT;
+        }
+    }
+    return /^[0-9]$/.test(letter) ? Number(letter) : null;
+}
+/**
+ * How a line of writing is drawn, in shares of its letters' size (the em):
+ * the box it is drawn in is `lineHeight` high with the baseline `baseline`
+ * from its top, which leaves room for a tall letter, a tail and the outline;
+ * `pad` is the room for the outline at each end.
+ */
+exports.TEXT_ART = { lineHeight: 1.42, baseline: 1.02, pad: 0.1 };
+/** How wide letters are for their size in a heavy face: the widest of the faces measured, so a line is never underestimated by much. */
+const TEXT_ADVANCE_GROUPS = [
+    ["დთლფ", 0.96],
+    ["ზორტუღჯ", 0.8],
+    ["жшщюыфм", 0.96],
+    ["гт", 0.52],
+    ["ЖШЩЫЮ", 1.14],
+    ["МФЦД", 0.98],
+    ["mw", 1.0],
+    ["ijl", 0.36],
+    ["frt", 0.46],
+    ["MW", 1.06],
+    ["I", 0.4],
+    [" ", 0.33],
+    [".,!:;'’-–", 0.4],
+    ["?", 0.62],
+    ["+−×÷=<>", 0.74],
+    ["0123456789", 0.68],
+];
+function textCharAdvance(char) {
+    for (const [chars, advance] of TEXT_ADVANCE_GROUPS) {
+        if (chars.includes(char))
+            return advance;
+    }
+    if (exports.LETTER_ALPHABETS.ka.includes(char))
+        return 0.63;
+    if (exports.LETTER_ALPHABETS.ru.includes(char) || exports.LETTER_ALPHABETS.en.includes(char))
+        return 0.68;
+    // A capital, or a letter of another alphabet.
+    return 0.82;
+}
+/** How wide a line of writing is expected to be, in ems. The players measure the real one and fit it. */
+function textLineAdvance(text) {
+    return [...text].reduce((sum, char) => sum + textCharAdvance(char), 0);
+}
+/** How wide the box of a line is for its height: see `TEXT_ART`. */
+function textLineUnits(text) {
+    return (textLineAdvance(text) + exports.TEXT_ART.pad * 2) / exports.TEXT_ART.lineHeight;
+}
+/**
+ * A text broken into at most `maxLines` lines at its spaces, as evenly as
+ * it goes: of every way to break it the one whose longest line is shortest.
+ * A text of fewer words has fewer lines; a word is never split.
+ */
+function breakTextLines(text, maxLines) {
+    const words = text.trim().split(/\s+/).filter(Boolean);
+    const lines = Math.max(1, Math.min(Math.floor(maxLines), words.length));
+    if (words.length === 0) {
+        return [];
+    }
+    const widths = words.map((word) => textLineAdvance(word));
+    const space = textLineAdvance(" ");
+    // The width of words[from..to) set as one line.
+    const span = (from, to) => widths.slice(from, to).reduce((sum, width) => sum + width, 0) + space * (to - from - 1);
+    // best[k][i]: the longest line when words[i..] are set in k lines, and where the first of them ends.
+    const best = [];
+    for (let k = 1; k <= lines; k += 1) {
+        best[k] = [];
+        for (let i = words.length - k; i >= 0; i -= 1) {
+            if (k === 1) {
+                best[k][i] = { longest: span(i, words.length), end: words.length };
+                continue;
+            }
+            let choice = { longest: Number.POSITIVE_INFINITY, end: i + 1 };
+            for (let end = i + 1; end <= words.length - (k - 1); end += 1) {
+                const longest = Math.max(span(i, end), best[k - 1][end].longest);
+                if (longest < choice.longest - 1e-9)
+                    choice = { longest, end };
+            }
+            best[k][i] = choice;
+        }
+    }
+    const result = [];
+    let start = 0;
+    for (let k = lines; k >= 1; k -= 1) {
+        const { end } = best[k][start];
+        result.push(words.slice(start, end).join(" "));
+        start = end;
+    }
+    return result;
+}
+// --- Text choice ------------------------------------------------------------
+//
+// A question the child reads — the voice says the same — and two to four
+// answers in words. It is the game of a child who reads: what is asked is
+// what the child knows, and nothing on the screen gives it away. One answer
+// is right, or several ("tap every bird"): the game is passed once every
+// right one is found. A wrong one is crossed out and costs a life.
+exports.TEXT_CHOICE_ANSWERS_MIN = 2;
+/** More than four answers in words do not fit a phone at a size a child reads. */
+exports.TEXT_CHOICE_ANSWERS_MAX = 4;
+/**
+ * The game as the players draw it. `question` and each answer's `text` arrive
+ * already in the language of the game. An answer with no text is dropped, and
+ * no more than `TEXT_CHOICE_ANSWERS_MAX` are kept — the right ones first, so a
+ * game never loses its answer to the limit.
+ */
+function normalizeTextChoiceConfig(game, config) {
+    const rawAnswers = Array.isArray(config.answers) ? config.answers : [];
+    const all = rawAnswers
+        .map((answer, index) => {
+        const record = asRecord(answer);
+        const text = (record ? extractText(record.text) ?? extractText(record.label) : extractText(answer))?.trim();
+        if (!text) {
+            return null;
+        }
+        return {
+            id: record ? extractText(record.id) ?? `${game.id}-answer-${index}` : `${game.id}-answer-${index}`,
+            text,
+            isCorrect: record ? extractBoolean(record.is_correct) ?? extractBoolean(record.correct) ?? false : false,
+        };
+    })
+        .filter((answer) => Boolean(answer));
+    const kept = [...all.filter((answer) => answer.isCorrect), ...all.filter((answer) => !answer.isCorrect)]
+        .slice(0, exports.TEXT_CHOICE_ANSWERS_MAX);
+    const answers = shuffle(kept);
+    const questionImage = extractMediaUrl(config.question_image);
+    const bg = normalizeBackground(config);
+    return {
+        question: extractText(config.question)?.trim() ?? "",
+        questionImage,
+        bg_image: bg,
+        answers,
+        correctOptionIds: answers.filter((answer) => answer.isCorrect).map((answer) => answer.id),
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [bg, questionImage].filter((uri) => Boolean(uri)),
+    };
+}
+/**
+ * What a tap on an answer does: the whole play rule, so both players follow
+ * it tap for tap. `found` are the right answers tapped so far, `crossed` the
+ * wrong ones.
+ */
+function resolveTextChoiceTap(config, found, crossed, optionId) {
+    const option = config.answers.find((answer) => answer.id === optionId);
+    if (!option || found.includes(optionId) || crossed.includes(optionId)) {
+        return { type: "ignored" };
+    }
+    if (!option.isCorrect) {
+        return { type: "wrong" };
+    }
+    const left = config.correctOptionIds.filter((id) => id !== optionId && !found.includes(id));
+    return { type: "right", complete: left.length === 0 };
+}
+/** Proportions of the question and its answers. Paddings are shares of the line they surround. */
+exports.TEXT_CHOICE_LAYOUT = {
+    /** The most of the free height the question may take… */
+    questionShare: 0.4,
+    /** …and the most lines it is broken into. */
+    questionLines: 3,
+    /** A line of the question never grows past this, in px. */
+    maxQuestionLine: 76,
+    /** The question's picture: a square of this share of the free height, at most this share of the width. */
+    pictureShare: 0.34,
+    pictureWidthShare: 0.24,
+    /** An answer is broken into at most this many lines. */
+    answerLines: 3,
+    /** A line of an answer never grows past this, in px. */
+    maxAnswerLine: 88,
+    /** Around the question, and around an answer on its card. */
+    panelPadX: 0.36,
+    panelPadY: 0.2,
+    cardPadX: 0.42,
+    cardPadY: 0.26,
+    /** In px: between cards. */
+    cardGap: 12,
+};
+/** The lines of a text set at `size` px a line, centred in `area` one under the other. */
+function placeTextLines(lines, size, area) {
+    const top = area.top + (area.height - lines.length * size) / 2;
+    return lines.map((text, index) => {
+        const width = Math.min(textLineUnits(text) * size, area.width);
+        return { text, left: area.left + (area.width - width) / 2, top: top + index * size, width, height: size };
+    });
+}
+/**
+ * Where everything of a text question goes on its stage. The background
+ * covers the whole stage; the question sits on a panel above — its picture at
+ * its left when it has one — and the answers on cards below: two safe areas a
+ * gap apart, both inside the stage less `insets` and an edge margin.
+ *
+ * The answers are set in whichever of one row, two columns or one column, and
+ * in however many lines each, writes them biggest; all of them at one size,
+ * so the right one is not the one that looks different. A long question is
+ * broken into lines the same way.
+ */
+function layoutTextChoice(stageWidth, stageHeight, config, insets = {}) {
+    const L = exports.TEXT_CHOICE_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    if (usableWidth <= 0 || usableHeight <= 0 || config.answers.length === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const areaWidth = Math.max(usableWidth - edge * 2, 1);
+    const areaHeight = Math.max(usableHeight - edge * 2, 1);
+    const hasQuestion = config.question !== "";
+    const hasPicture = Boolean(config.questionImage);
+    const hasPanel = hasQuestion || hasPicture;
+    // The question: its picture is a square, the text beside it as big as its lines allow.
+    const pictureSide = hasPicture ? Math.min(areaHeight * L.pictureShare, areaWidth * L.pictureWidthShare) : 0;
+    const questionBudget = areaHeight * L.questionShare;
+    let questionLines = [];
+    let questionSize = 0;
+    let panelWidth = 0;
+    let panelHeight = 0;
+    if (hasPanel) {
+        const pictureRoom = hasPicture ? pictureSide + gap * 0.5 : 0;
+        if (hasQuestion) {
+            for (let count = 1; count <= L.questionLines; count += 1) {
+                const lines = breakTextLines(config.question, count);
+                const units = Math.max(...lines.map((line) => textLineUnits(line)));
+                const size = Math.min((areaWidth - pictureRoom) / (units + L.panelPadX * 2), Math.max(questionBudget, pictureSide) / (lines.length + L.panelPadY * 2), L.maxQuestionLine);
+                if (size > questionSize + 1e-9) {
+                    questionSize = size;
+                    questionLines = lines;
+                }
+            }
+        }
+        const textWidth = hasQuestion
+            ? Math.max(...questionLines.map((line) => textLineUnits(line))) * questionSize + L.panelPadX * 2 * questionSize
+            : 0;
+        const textHeight = hasQuestion ? (questionLines.length + L.panelPadY * 2) * questionSize : 0;
+        panelWidth = Math.min(areaWidth, pictureRoom + textWidth + (hasQuestion ? 0 : gap * 0.5));
+        panelHeight = Math.max(textHeight, hasPicture ? pictureSide + gap * 0.5 : 0);
+    }
+    // The answers: one size for all of them, the arrangement that makes it biggest.
+    const count = config.answers.length;
+    const answersHeight = Math.max(areaHeight - panelHeight - (hasPanel ? gap : 0), 1);
+    const columnChoices = [...new Set([count, Math.min(count, 2), 1])];
+    let best = null;
+    for (const columns of columnChoices) {
+        const rows = Math.ceil(count / columns);
+        const cellWidth = (areaWidth - L.cardGap * (columns - 1)) / columns;
+        const cellHeight = (answersHeight - L.cardGap * (rows - 1)) / rows;
+        for (let lineCount = 1; lineCount <= L.answerLines; lineCount += 1) {
+            const lines = config.answers.map((answer) => breakTextLines(answer.text, lineCount));
+            const units = Math.max(...lines.flat().map((line) => textLineUnits(line)));
+            const high = Math.max(...lines.map((own) => own.length));
+            const size = Math.min(cellWidth / (units + L.cardPadX * 2), cellHeight / (high + L.cardPadY * 2), L.maxAnswerLine);
+            // Bigger wins; of two as big, fewer rows of cards, then fewer lines.
+            if (!best || size > best.size + 0.5
+                || (Math.abs(size - best.size) <= 0.5 && (rows < best.rows || (rows === best.rows && high < best.high)))) {
+                best = { size, columns, rows, lines, units, high };
+            }
+        }
+    }
+    if (!best) {
+        return null;
+    }
+    const size = Math.max(best.size, 1);
+    const cardWidth = Math.min((best.units + L.cardPadX * 2) * size, (areaWidth - L.cardGap * (best.columns - 1)) / best.columns);
+    const cardHeight = (best.high + L.cardPadY * 2) * size;
+    const gridHeight = best.rows * cardHeight + L.cardGap * (best.rows - 1);
+    const free = Math.max(0, areaHeight - panelHeight - gridHeight - (hasPanel ? gap : 0));
+    const panel = hasPanel
+        ? { left: originX + edge + (areaWidth - panelWidth) / 2, top: originY + edge + free * 0.4, width: panelWidth, height: panelHeight }
+        : null;
+    const picture = panel && hasPicture
+        ? { left: panel.left + gap * 0.25, top: panel.top + (panel.height - pictureSide) / 2, width: pictureSide, height: pictureSide }
+        : null;
+    const question = panel && hasQuestion
+        ? placeTextLines(questionLines, questionSize, {
+            left: panel.left + (hasPicture ? pictureSide + gap * 0.5 : 0) + L.panelPadX * questionSize,
+            top: panel.top,
+            width: panel.width - (hasPicture ? pictureSide + gap * 0.5 : 0) - L.panelPadX * 2 * questionSize,
+            height: panel.height,
+        })
+        : [];
+    const gridTop = (panel ? panel.top + panel.height + gap : originY + edge) + free * (panel ? 0.3 : 0.5);
+    const cards = config.answers.map((answer, index) => {
+        const row = Math.floor(index / best.columns);
+        // The last row may hold fewer cards: it is centred like the others.
+        const inRow = Math.min(best.columns, count - row * best.columns);
+        const rowWidth = inRow * cardWidth + L.cardGap * (inRow - 1);
+        const card = {
+            left: originX + edge + (areaWidth - rowWidth) / 2 + (index - row * best.columns) * (cardWidth + L.cardGap),
+            top: gridTop + row * (cardHeight + L.cardGap),
+            width: cardWidth,
+            height: cardHeight,
+        };
+        return {
+            ...card,
+            id: answer.id,
+            lines: placeTextLines(best.lines[index], size, {
+                left: card.left + L.cardPadX * size,
+                top: card.top,
+                width: card.width - L.cardPadX * 2 * size,
+                height: card.height,
+            }),
+        };
+    });
+    return { panel, picture, question, cards };
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -3510,6 +3868,7 @@ exports.GAME_KIND_KEYS = {
     images_order: "imagesOrder",
     jigsaw: "jigsaw",
     "math-equation": "mathEquation",
+    "text-choice": "textChoice",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -3528,6 +3887,7 @@ exports.GAME_TIMINGS_BY_KIND = {
     images_order: exports.GAME_TIMINGS.imagesOrder,
     jigsaw: exports.GAME_TIMINGS.jigsaw,
     "math-equation": exports.GAME_TIMINGS.mathEquation,
+    "text-choice": exports.GAME_TIMINGS.textChoice,
     "memory-cards": exports.GAME_TIMINGS.memoryCards,
     "pattern-next": exports.GAME_TIMINGS.patternNext,
     "select-option": exports.GAME_TIMINGS.selectOption,
@@ -3552,6 +3912,7 @@ exports.GAME_GESTURES = {
     images_order: "tap",
     jigsaw: "drag",
     "math-equation": "tap",
+    "text-choice": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",
