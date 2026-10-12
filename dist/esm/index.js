@@ -4277,7 +4277,7 @@ export function resolveLabelDiagramTap(config, used, labelId) {
 export const LABEL_DIAGRAM_LAYOUT = {
     /** A line of a name never grows past this, in px; under `minLine` a child no longer reads it. */
     maxLine: 40,
-    minLine: 16,
+    minLine: 18,
     /** A name is broken into at most this many lines. */
     lines: 2,
     /** Around a card's writing. */
@@ -4303,8 +4303,8 @@ export const LABEL_DIAGRAM_LAYOUT = {
  * cards, two areas a gap apart, both inside the stage less `insets` and an
  * edge margin. The cards are tried four ways — a column at the right of the
  * sheet or a row under it, their names on one line or broken in two — each as
- * big as it goes, and the way is taken that leaves the sheet biggest for
- * writing a child still reads. Nothing on the sheet is ever moved.
+ * big as it goes, and the way is taken that keeps both the sheet and the
+ * writing big, the writing first. Nothing on the sheet is ever moved.
  */
 export function layoutLabelDiagram(stageWidth, stageHeight, config, insets = {}) {
     const L = LABEL_DIAGRAM_LAYOUT;
@@ -4353,8 +4353,9 @@ export function layoutLabelDiagram(stageWidth, stageHeight, config, insets = {})
             }
             const scale = Math.min(roomWidth / board.width, roomHeight / board.height);
             const sheet = { width: board.width * scale, height: board.height * scale };
-            // The biggest sheet wins, as long as its names can be read: writing under `minLine` is the last choice.
-            const score = sheet.width * sheet.height * (line / L.maxLine) * (line < L.minLine ? 0.25 : 1);
+            // A big sheet and big writing both count, the writing twice: a name a child
+            // cannot read is no name. Writing under `minLine` is the last choice.
+            const score = sheet.width * sheet.height * (line / L.maxLine) ** 2 * (line < L.minLine ? 0.25 : 1);
             if (!best || score > best.score * (1 + 1e-9)) {
                 best = { score, arrangement, line, texts, widths, cardHeight, tray, sheet };
             }

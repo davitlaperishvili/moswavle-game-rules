@@ -1889,7 +1889,7 @@ export declare function resolveLabelDiagramTap(config: Pick<LabelDiagramConfig, 
 export declare const LABEL_DIAGRAM_LAYOUT: {
     /** A line of a name never grows past this, in px; under `minLine` a child no longer reads it. */
     readonly maxLine: 40;
-    readonly minLine: 16;
+    readonly minLine: 18;
     /** A name is broken into at most this many lines. */
     readonly lines: 2;
     /** Around a card's writing. */
@@ -1936,8 +1936,8 @@ export type LabelDiagramLayout = {
  * cards, two areas a gap apart, both inside the stage less `insets` and an
  * edge margin. The cards are tried four ways — a column at the right of the
  * sheet or a row under it, their names on one line or broken in two — each as
- * big as it goes, and the way is taken that leaves the sheet biggest for
- * writing a child still reads. Nothing on the sheet is ever moved.
+ * big as it goes, and the way is taken that keeps both the sheet and the
+ * writing big, the writing first. Nothing on the sheet is ever moved.
  */
 export declare function layoutLabelDiagram(stageWidth: number, stageHeight: number, config: Pick<LabelDiagramConfig, "parts" | "order" | "labels" | "board">, insets?: SceneInsets): LabelDiagramLayout | null;
 /**
