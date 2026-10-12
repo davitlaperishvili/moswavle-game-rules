@@ -434,8 +434,12 @@ export type SvgAssembleConfig = {
   imageUris: string[];
 };
 
-/** The signs an example is written with. `-` is the minus, whatever dash the author typed. */
-export type MathEquationSign = "+" | "-" | "=" | "<" | ">";
+/**
+ * The signs an example is written with. `-` is the minus, whatever dash the
+ * author typed; `×` and `÷` are times and divided by, whatever stood for them
+ * (`*`, `x`, `·`, `/`, `:`). How each is drawn is the players' own.
+ */
+export type MathEquationSign = "+" | "-" | "×" | "÷" | "=" | "<" | ">";
 
 /** Every character an example is drawn with, each a picture from the library when there is one. */
 export type MathEquationGlyph =
@@ -4277,11 +4281,11 @@ export function connectPairsLink(
 
 // --- Math equation ----------------------------------------------------------
 //
-// An example — `1 + ? = 3`, `3 ? 5`, three cows `= ?` — with one or two places
-// left for the child. A card is right when, put in the place being filled,
-// the example can still be made true with the cards that are left. So `5 > ?`
-// takes a 3 or a 4 alike, and `? + ? = 5` takes 1 then 4 or 4 then 1: the
-// child is never told off for an answer that is right.
+// An example — `1 + ? = 3`, `3 ? 5`, `6 × 7 = ?`, three cows `= ?` — with one or
+// two places left for the child. A card is right when, put in the place being
+// filled, the example can still be made true with the cards that are left. So
+// `5 > ?` takes a 3 or a 4 alike, and `? + ? = 5` takes 1 then 4 or 4 then 1:
+// the child is never told off for an answer that is right.
 
 /** The most places an example leaves to fill: more is a puzzle, not a sum. */
 export const MATH_EQUATION_BLANKS_MAX = 2;
@@ -4290,19 +4294,27 @@ export const MATH_EQUATION_CHOICES_MIN = 2;
 export const MATH_EQUATION_CHOICES_MAX = 4;
 /** The most copies of a picture one number shows: counting to ten. */
 export const MATH_EQUATION_PICTURES_MAX = 10;
-/** The largest number an example holds. */
-export const MATH_EQUATION_NUMBER_MAX = 99;
+/** The largest number an example holds: four digits is what its row and its cards have room for. */
+export const MATH_EQUATION_NUMBER_MAX = 9999;
 
-const MATH_OPERATIONS: readonly MathEquationSign[] = ["+", "-"];
+/** The signs a missing `+` or `−` is chosen among… */
+const MATH_SUMS: readonly MathEquationSign[] = ["+", "-"];
+/** …and the ones offered once the example multiplies or divides anywhere. */
+const MATH_OPERATIONS: readonly MathEquationSign[] = ["+", "-", "×", "÷"];
 const MATH_COMPARISONS: readonly MathEquationSign[] = ["<", "=", ">"];
-const MATH_SIGN_ORDER: readonly MathEquationSign[] = ["+", "-", "<", "=", ">"];
+const MATH_SIGN_ORDER: readonly MathEquationSign[] = ["+", "-", "×", "÷", "<", "=", ">"];
 const MATH_GLYPHS: readonly MathEquationGlyph[] = [
-  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "-", "=", "<", ">", "?",
+  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "-", "×", "÷", "=", "<", ">", "?",
 ];
 
-/** Whether a sign compares the two sides (`<`, `=`, `>`) rather than adding or taking away. */
+/** Whether a sign compares the two sides (`<`, `=`, `>`) rather than working a number out. */
 export function isMathComparison(sign: MathEquationSign): boolean {
   return sign === "<" || sign === "=" || sign === ">";
+}
+
+/** Whether a sign multiplies or divides: done before the adding and taking away around it. */
+export function isMathProduct(sign: MathEquationSign): boolean {
+  return sign === "×" || sign === "÷";
 }
 
 function normalizeMathSign(value: unknown): MathEquationSign | null {
@@ -4312,12 +4324,20 @@ function normalizeMathSign(value: unknown): MathEquationSign | null {
   }
 
   const raw = text.trim();
-  const symbols: Record<string, MathEquationSign> = { "+": "+", "-": "-", "−": "-", "–": "-", "—": "-", "=": "=", "<": "<", ">": ">" };
+  const symbols: Record<string, MathEquationSign> = {
+    "+": "+", "-": "-", "−": "-", "–": "-", "—": "-", "=": "=", "<": "<", ">": ">",
+    // Times: the cross, the star of a keyboard, the letter x (Latin or Cyrillic) and the dot of a textbook.
+    "×": "×", "*": "×", "x": "×", "X": "×", "х": "×", "Х": "×", "·": "×", "⋅": "×", "∙": "×",
+    // Divided by: the obelus, the slash and the colon.
+    "÷": "÷", "/": "÷", ":": "÷", "∶": "÷",
+  };
   if (symbols[raw]) return symbols[raw];
 
   const word = raw.toLowerCase().replace(/[\s_-]+/g, "_");
   if (["plus", "add"].includes(word)) return "+";
   if (["minus", "subtract"].includes(word)) return "-";
+  if (["times", "multiply", "multiplied_by", "mul"].includes(word)) return "×";
+  if (["divide", "divided_by", "div"].includes(word)) return "÷";
   if (["equals", "equal", "eq"].includes(word)) return "=";
   if (["less", "less_than", "lt", "smaller"].includes(word)) return "<";
   if (["greater", "greater_than", "gt", "more", "more_than", "bigger"].includes(word)) return ">";
@@ -4338,8 +4358,10 @@ type MathValue = { kind: "number"; value: number } | { kind: "sign"; value: Math
 
 /**
  * Whether an example reads true, the way a child reckons it: numbers and signs
- * alternate, there is exactly one comparison, each side is added up left to
- * right, and no running total goes below zero.
+ * alternate and there is exactly one comparison. On each side the multiplying
+ * and dividing is done first, left to right, then the adding and taking away,
+ * left to right. A division that leaves a remainder, or by zero, is no
+ * example, and neither is one whose running total goes below zero.
  */
 function isMathStatementTrue(values: ReadonlyArray<MathValue>): boolean {
   if (values.length < 3 || values.length % 2 === 0) {
@@ -4348,37 +4370,91 @@ function isMathStatementTrue(values: ReadonlyArray<MathValue>): boolean {
 
   let comparison: MathEquationSign | null = null;
   let left = 0;
+  // The side being read: what is added up so far, and the product still open.
   let total = 0;
+  let product = 0;
+  let sum: MathEquationSign = "+";
   let operation: MathEquationSign = "+";
+
+  // The open product joins the total; false when that takes it below zero.
+  const close = (): boolean => {
+    total = sum === "-" ? total - product : total + product;
+    return total >= 0;
+  };
 
   for (let index = 0; index < values.length; index += 1) {
     const item = values[index];
 
     if (index % 2 === 0) {
       if (item.kind !== "number") return false;
-      total = operation === "-" ? total - item.value : total + item.value;
-      if (total < 0) return false;
+
+      if (operation === "×") {
+        product *= item.value;
+      } else if (operation === "÷") {
+        if (item.value === 0 || product % item.value !== 0) return false;
+        product /= item.value;
+      } else {
+        product = item.value;
+      }
       continue;
     }
 
     if (item.kind !== "sign") return false;
+
+    if (isMathProduct(item.value)) {
+      operation = item.value;
+      continue;
+    }
+
+    if (!close()) return false;
 
     if (isMathComparison(item.value)) {
       if (comparison) return false;
       comparison = item.value;
       left = total;
       total = 0;
-      operation = "+";
+      sum = "+";
     } else {
-      operation = item.value;
+      sum = item.value;
     }
+    operation = "+";
   }
 
-  if (!comparison) {
+  if (!comparison || !close()) {
     return false;
   }
 
   return comparison === "=" ? left === total : comparison === "<" ? left < total : left > total;
+}
+
+/**
+ * Wrong answers worth offering before the numbers next to the right one, the
+ * likeliest first. For a product asked for (`7 × 8 = ?`) its neighbours in the
+ * times table; for an answer past twenty the number a ten away, past two
+ * hundred the one a hundred away. None for the small sums a child counts out.
+ */
+function mathSlips(terms: ReadonlyArray<MathEquationTerm>, answers: ReadonlyArray<number>): number[] {
+  const slips: number[] = [];
+
+  terms.forEach((term, index) => {
+    const sign = terms[index + 1];
+    const other = terms[index + 2];
+    if (
+      term.kind !== "number" || term.missing || !other || other.kind !== "number" || other.missing
+      || !sign || sign.kind !== "sign" || sign.value !== "×" || !answers.includes(term.value * other.value)
+    ) {
+      return;
+    }
+
+    slips.push(term.value * (other.value - 1), term.value * (other.value + 1), (term.value - 1) * other.value, (term.value + 1) * other.value);
+  });
+
+  answers.forEach((answer) => {
+    if (answer > 20) slips.push(answer - 10, answer + 10);
+    if (answer >= 200) slips.push(answer - 100, answer + 100);
+  });
+
+  return slips.filter((value, index) => value >= 0 && !answers.includes(value) && slips.indexOf(value) === index);
 }
 
 /** A card fits a place when it is the same kind — and, for a sign, the same family of signs. */
@@ -4456,8 +4532,10 @@ export function countMathEquationCompletions(
  * The cards: every missing number, then the author's `wrong_answers`, then
  * numbers near the answer that cannot complete the example, until there are
  * `choice_count` number cards. A missing sign brings all the signs of its
- * family: `<`, `=`, `>` for a comparison, `+`, `−` for a sum. `answer_image`
- * draws the number cards as that many pictures instead of digits.
+ * family: `<`, `=`, `>` for a comparison; `+`, `−` for a sum, and `×`, `÷` with
+ * them once the example multiplies or divides anywhere — a child who has not
+ * met those signs is never shown them. `answer_image` draws the number cards
+ * as that many pictures instead of digits.
  */
 export function normalizeMathEquationConfig(config: Record<string, unknown>): MathEquationConfig {
   const rawTerms = Array.isArray(config.terms) ? config.terms : [];
@@ -4510,12 +4588,14 @@ export function normalizeMathEquationConfig(config: Record<string, unknown>): Ma
     numberCards.push({ id: `number_${value}`, kind: "number", value, image: mathPictureFor(answerImage, value) });
   };
 
+  const multiplies = terms.some((term) => term.kind === "sign" && isMathProduct(term.value));
   const signs = new Set<MathEquationSign>();
   blanks.forEach((term) => {
     if (term.kind === "number") {
       addNumber(term.value);
     } else {
-      (isMathComparison(term.value) ? MATH_COMPARISONS : MATH_OPERATIONS).forEach((sign) => signs.add(sign));
+      (isMathComparison(term.value) ? MATH_COMPARISONS : multiplies ? MATH_OPERATIONS : MATH_SUMS)
+        .forEach((sign) => signs.add(sign));
     }
   });
   const signCards: MathEquationCard[] = MATH_SIGN_ORDER
@@ -4552,14 +4632,25 @@ export function normalizeMathEquationConfig(config: Record<string, unknown>): Ma
     const completions = (cards: MathEquationCard[]) =>
       countMathEquationCompletions({ terms, cards: [...cards, ...signCards] }, {}, 4);
 
+    const offer = (candidate: number, ceiling: number) => {
+      if (numberCards.length >= wanted) return;
+      if (candidate < lowest || candidate > ceiling || numberCards.some((card) => card.value === candidate)) return;
+      const before = completions(numberCards);
+      const trial = [...numberCards, { id: `number_${candidate}`, kind: "number" as const, value: candidate, image: null }];
+      if (completions(trial) === before) addNumber(candidate);
+    };
+
+    // The slips a child really makes come first: the next line of the times
+    // table (7 × 8 answered 48 or 63, not 55), and a ten or a hundred too many
+    // or too few in a number that has them (473 answered 463 or 573).
+    if (!answerImage) {
+      mathSlips(terms, answers).forEach((candidate) => offer(candidate, MATH_EQUATION_NUMBER_MAX));
+    }
+
     for (let distance = 1; numberCards.length < wanted && distance <= highest; distance += 1) {
       for (const answer of answers) {
         for (const candidate of [answer - distance, answer + distance]) {
-          if (numberCards.length >= wanted) break;
-          if (candidate < lowest || candidate > highest || numberCards.some((card) => card.value === candidate)) continue;
-          const before = completions(numberCards);
-          const trial = [...numberCards, { id: `number_${candidate}`, kind: "number" as const, value: candidate, image: null }];
-          if (completions(trial) === before) addNumber(candidate);
+          offer(candidate, highest);
         }
       }
     }

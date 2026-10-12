@@ -1086,6 +1086,41 @@ section('math_equation: an example with a place or two to fill');
   const big = rules.normalizeMathEquationConfig({ terms: [n(7), s('+'), n(8), s('<'), n(16, { missing: true })] });
   check('7 + 8 < ?: only numbers from 16 up are right, and only one is offered', numbers(big).filter((value) => value > 15).join() === '16', numbers(big).join());
 
+  // Times and divided by.
+  const example = (...terms) => rules.normalizeMathEquationConfig({ terms });
+  const ways = (...terms) => rules.countMathEquationCompletions(example(...terms));
+  const times = example(n(7), s('×'), n(8), s('='), n(56, { missing: true }));
+  check('7 × 8 = ?: 56 is right', tap(times, {}, 'number_56').type === 'place' && rules.countMathEquationCompletions(times) === 1);
+  check('and the wrong cards are the next lines of the times table, not 55 and 57', numbers(times).join() === '49,56,63', numbers(times).join());
+  check('times is read from a star, an x or a dot', ['*', 'x', 'X', 'х', '·', 'times'].every((sign) => example(n(2), s(sign), n(3), s('='), n(6, { missing: true })).terms[1].value === '×'));
+  check('divided by from a slash or a colon', ['/', ':', '÷', 'divided by'].every((sign) => example(n(6), s(sign), n(3), s('='), n(2, { missing: true })).terms[1].value === '÷'));
+  const divide = example(n(12), s('÷'), n(3, { missing: true }), s('='), n(4));
+  check('12 ÷ ? = 4: only 3 is right', rules.countMathEquationCompletions(divide) === 1 && tap(divide, {}, 'number_3').type === 'place'
+    && numbers(divide).filter((value) => value !== 3).every((value) => tap(divide, {}, `number_${value}`).type === 'wrong'), numbers(divide).join());
+  check('a division that leaves a remainder is no example', ways(n(7), s('÷'), n(2), s('='), n(3, { missing: true })) === 0);
+  check('nor is one by zero', ways(n(7), s('÷'), n(0), s('='), n(0, { missing: true })) === 0);
+  check('times and divided by come before plus and minus: 2 + 3 × 4 is 14', ways(n(2), s('+'), n(3), s('×'), n(4), s('='), n(14, { missing: true })) === 1
+    && ways(n(2), s('+'), n(3), s('×'), n(4), s('='), n(20, { missing: true })) === 0);
+  check('8 − 2 × 3 is 2, and 20 ÷ 4 + 1 is 6', ways(n(8), s('-'), n(2), s('×'), n(3), s('='), n(2, { missing: true })) === 1
+    && ways(n(20), s('÷'), n(4), s('+'), n(1), s('='), n(6, { missing: true })) === 1);
+  check('a row of them is worked left to right: 12 ÷ 3 × 2 is 8', ways(n(12), s('÷'), n(3), s('×'), n(2), s('='), n(8, { missing: true })) === 1);
+  check('a total that dips below zero on the way is still no example', ways(n(2), s('-'), n(3), s('×'), n(1), s('+'), n(5), s('='), n(4, { missing: true })) === 0);
+  check('both sides are worked out before they are compared: 3 × 4 > 2 × 5', ways(n(3), s('×'), n(4), s('>', { missing: true }), n(2), s('×'), n(5)) === 1);
+  const whichSign = example(n(6), s('×', { missing: true }), n(3), s('='), n(18));
+  check('a missing sign of an example that multiplies offers all four', values(whichSign).join('') === '+-×÷'
+    && tap(whichSign, {}, 'sign_+').type === 'wrong' && tap(whichSign, {}, 'sign_×').type === 'place');
+  check('a missing sign of a sum still offers + and − alone', values(operation).join('') === '+-');
+  check('2 ? 2 = 4 with times in it takes + and × alike', rules.countMathEquationCompletions(example(n(2), s('×', { missing: true }), n(2), s('='), n(4))) === 2);
+
+  // Numbers past ninety-nine.
+  const hundreds = example(n(348), s('+'), n(125), s('='), n(473, { missing: true }));
+  check('348 + 125 = ?: the wrong cards are a ten out, as a slip in carrying is', numbers(hundreds).join() === '463,473,483', numbers(hundreds).join());
+  check('a number is written in up to four digits', rules.mathNumberGlyphs(1000).join() === '1,0,0,0'
+    && example(n(123456), s('='), n(123456, { missing: true })).terms[0].value === rules.MATH_EQUATION_NUMBER_MAX && rules.MATH_EQUATION_NUMBER_MAX === 9999);
+  const thousands = example(n(2500), s('+'), n(3750), s('='), n(6250, { missing: true }));
+  check('2500 + 3750 = ?: a hundred out, then a ten', numbers(thousands).includes(6250) && numbers(thousands).length === 3 && numbers(thousands).every((value) => value <= 9999), numbers(thousands).join());
+  check('the small sums keep the numbers next to the answer', numbers(example(n(8), s('+'), n(5), s('='), n(13, { missing: true }))).join() === '12,13,14');
+
   // Glyphs, pieces and the layout.
   check('a number is written digit by digit', rules.mathNumberGlyphs(15).join() === '1,5' && rules.mathNumberGlyphs(0).join() === '0');
   const within = (box) => box.left >= -1e-9 && box.top >= -1e-9 && box.left + box.width <= 1 + 1e-9 && box.top + box.height <= 1 + 1e-9;
@@ -1115,7 +1150,7 @@ section('math_equation: an example with a place or two to fill');
   const inStage = (rect, w, h, insets = {}) => rect.left >= (insets.left || 0) - 1e-6 && rect.top >= (insets.top || 0) - 1e-6
     && rect.left + rect.width <= w - (insets.right || 0) + 1e-6 && rect.top + rect.height <= h - (insets.bottom || 0) + 1e-6;
   const stages = [[844, 322, { top: 68 }], [1250, 750, {}], [390, 700, {}], [1024, 768, {}], [667, 300, { top: 60 }]];
-  const configs = [plus, greater, compare, two, mixed, cows, big, asPictures];
+  const configs = [plus, greater, compare, two, mixed, cows, big, asPictures, times, divide, whichSign, hundreds, thousands];
   let whole = true;
   stages.forEach(([w, h, insets]) => configs.forEach((config, index) => {
     const layout = rules.layoutMathEquation(w, h, config, insets);

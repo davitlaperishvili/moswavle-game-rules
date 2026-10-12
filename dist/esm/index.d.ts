@@ -379,8 +379,12 @@ export type SvgAssembleConfig = {
      */
     imageUris: string[];
 };
-/** The signs an example is written with. `-` is the minus, whatever dash the author typed. */
-export type MathEquationSign = "+" | "-" | "=" | "<" | ">";
+/**
+ * The signs an example is written with. `-` is the minus, whatever dash the
+ * author typed; `×` and `÷` are times and divided by, whatever stood for them
+ * (`*`, `x`, `·`, `/`, `:`). How each is drawn is the players' own.
+ */
+export type MathEquationSign = "+" | "-" | "×" | "÷" | "=" | "<" | ">";
 /** Every character an example is drawn with, each a picture from the library when there is one. */
 export type MathEquationGlyph = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | MathEquationSign | "?";
 /** One place in the example, left to right: a number or a sign, shown or left for the child to fill. */
@@ -1286,10 +1290,12 @@ export declare const MATH_EQUATION_CHOICES_MIN = 2;
 export declare const MATH_EQUATION_CHOICES_MAX = 4;
 /** The most copies of a picture one number shows: counting to ten. */
 export declare const MATH_EQUATION_PICTURES_MAX = 10;
-/** The largest number an example holds. */
-export declare const MATH_EQUATION_NUMBER_MAX = 99;
-/** Whether a sign compares the two sides (`<`, `=`, `>`) rather than adding or taking away. */
+/** The largest number an example holds: four digits is what its row and its cards have room for. */
+export declare const MATH_EQUATION_NUMBER_MAX = 9999;
+/** Whether a sign compares the two sides (`<`, `=`, `>`) rather than working a number out. */
 export declare function isMathComparison(sign: MathEquationSign): boolean;
+/** Whether a sign multiplies or divides: done before the adding and taking away around it. */
+export declare function isMathProduct(sign: MathEquationSign): boolean;
 /** The glyphs a number is written with: 15 is "1" then "5". */
 export declare function mathNumberGlyphs(value: number): MathEquationGlyph[];
 /**
@@ -1308,8 +1314,10 @@ export declare function countMathEquationCompletions(config: Pick<MathEquationCo
  * The cards: every missing number, then the author's `wrong_answers`, then
  * numbers near the answer that cannot complete the example, until there are
  * `choice_count` number cards. A missing sign brings all the signs of its
- * family: `<`, `=`, `>` for a comparison, `+`, `−` for a sum. `answer_image`
- * draws the number cards as that many pictures instead of digits.
+ * family: `<`, `=`, `>` for a comparison; `+`, `−` for a sum, and `×`, `÷` with
+ * them once the example multiplies or divides anywhere — a child who has not
+ * met those signs is never shown them. `answer_image` draws the number cards
+ * as that many pictures instead of digits.
  */
 export declare function normalizeMathEquationConfig(config: Record<string, unknown>): MathEquationConfig;
 export type MathEquationTapResult = 
