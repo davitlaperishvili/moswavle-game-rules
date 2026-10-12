@@ -68,6 +68,7 @@ export type RuntimeGameKind =
   | "math-equation"
   | "text-choice"
   | "math-input"
+  | "word-build"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -1355,6 +1356,18 @@ export function resolveGameKind(
     "type_the_answer",
   ].includes(normalizedType)) {
     return "math-input";
+  }
+
+  if ([
+    "word_build",
+    "wordbuild",
+    "build_word",
+    "make_word",
+    "spell_word",
+    "word_spell",
+    "letters_to_word",
+  ].includes(normalizedType)) {
+    return "word-build";
   }
 
   if ([
@@ -4151,6 +4164,12 @@ export const GAME_TIMINGS = {
    * example whole before the win.
    */
   mathInput: { wrongFeedbackMs: 620, successSettleMs: 700, livesOutDelayMs: 320 },
+  /**
+   * A right letter flies to its place over `flyMs`; a wrong one shakes for
+   * `wrongFeedbackMs`. The word stays `successSettleMs` once built, so the
+   * child reads it whole before the win.
+   */
+  wordBuild: { wrongFeedbackMs: 520, flyMs: 420, successSettleMs: 900, livesOutDelayMs: 320 },
   mathEquation: {
     wrongFeedbackMs: 560,
     flyMs: 620,
@@ -5727,6 +5746,259 @@ export function layoutMathInput(
   return { panel, row, terms, pad, keys, pictureCell };
 }
 
+// --- Word build -------------------------------------------------------------
+//
+// A word put together from its letters: a picture of a cow, five empty places
+// and the letters of "ძროხა" lying mixed below, with a few that do not belong.
+// The child taps the letter that comes next; a right one flies to its place, a
+// wrong one shakes and costs a life. It is the game of a child who reads and
+// is learning to spell — in Georgian, Russian or English, whichever the word
+// is in.
+
+/** A word of one letter is nothing to build, and more than eight do not fit a phone at a size a child reads. */
+export const WORD_BUILD_LETTERS_MIN = 2;
+export const WORD_BUILD_LETTERS_MAX = 8;
+/** The most letters that do not belong: more and the tray is a search, not a spelling. */
+export const WORD_BUILD_EXTRA_MAX = 4;
+
+export type WordBuildTile = {
+  id: string;
+  letter: string;
+};
+
+export type WordBuildConfig = {
+  /** The word, a letter a place, in small letters, in the language the game is played in. */
+  letters: string[];
+  /** What it is built from: its own letters and the ones that do not belong, mixed once here. */
+  tiles: WordBuildTile[];
+  /** A picture of what the word names; null when the word is only said. */
+  questionImage: string | null;
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+  /** The background and the picture: preload before the clock. */
+  imageUris: string[];
+};
+
+/** The letters of a word: only letters of the three alphabets count, a capital as its small letter. */
+function readWordLetters(source: unknown): string[] {
+  const known = Object.values(LETTER_ALPHABETS).join("");
+  return [...(extractText(source) ?? "").toLowerCase()].filter((char) => known.includes(char));
+}
+
+/**
+ * The game as the players draw it. `word` arrives already in the language of
+ * the game. `extra_letters` is how many letters that do not belong lie among
+ * the tiles (a number: they are drawn from the word's own alphabet, none of
+ * them a letter of the word) or the letters themselves (a text). The tiles
+ * are mixed so that they do not already spell the word.
+ */
+export function normalizeWordBuildConfig(config: Record<string, unknown>): WordBuildConfig {
+  const letters = readWordLetters(config.word).slice(0, WORD_BUILD_LETTERS_MAX);
+  const alphabet = Object.values(LETTER_ALPHABETS).find((set) => letters.length > 0 && set.includes(letters[0])) ?? "";
+
+  const wanted = extractNumber(config.extra_letters);
+  const extra = wanted !== null
+    ? shuffle([...alphabet].filter((char) => !letters.includes(char))).slice(0, Math.max(0, Math.floor(wanted)))
+    : readWordLetters(config.extra_letters).filter((char) => !letters.includes(char));
+  const all = letters.length > 0 ? [...letters, ...[...new Set(extra)].slice(0, WORD_BUILD_EXTRA_MAX)] : [];
+
+  let order = shuffle(all.map((letter, index) => ({ id: `tile_${index + 1}`, letter })));
+  // Mixed is mixed: a tray that reads as the word already gives it away.
+  for (let attempt = 0; attempt < 6 && all.length > 1 && order.slice(0, letters.length).every((tile, index) => tile.letter === letters[index]); attempt += 1) {
+    order = shuffle(order);
+  }
+
+  const questionImage = extractMediaUrl(config.question_image);
+  const bg = normalizeBackground(config);
+
+  return {
+    letters,
+    tiles: order,
+    questionImage,
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    imageUris: [bg, questionImage].filter((uri): uri is string => Boolean(uri)),
+  };
+}
+
+export type WordBuildTapResult =
+  /** The word is built already, the tile is in it, or the game does not have it. */
+  | { type: "ignored" }
+  /** The letter that comes next: it goes to `slot`; `complete` when that was the last. */
+  | { type: "place"; slot: number; complete: boolean }
+  /** Not the letter that comes next: a mistake. */
+  | { type: "wrong"; slot: number };
+
+/**
+ * What a tap on a tile does: the whole play rule, so both players follow it
+ * tap for tap. The word is built left to right; `placed` are the tiles in it
+ * so far, in order. Any tile of the right letter is right — "მამა" has two of
+ * each, and either goes first.
+ */
+export function resolveWordBuildTap(
+  config: Pick<WordBuildConfig, "letters" | "tiles">,
+  placed: readonly string[],
+  tileId: string,
+): WordBuildTapResult {
+  const slot = placed.length;
+  const tile = config.tiles.find((item) => item.id === tileId);
+
+  if (!tile || slot >= config.letters.length || placed.includes(tileId)) {
+    return { type: "ignored" };
+  }
+
+  if (tile.letter !== config.letters[slot]) {
+    return { type: "wrong", slot };
+  }
+
+  return { type: "place", slot, complete: slot + 1 === config.letters.length };
+}
+
+/** Proportions of the word and its tiles. Shares are of the height of a letter's place. */
+export const WORD_BUILD_LAYOUT = {
+  /** A letter's place and a tile: this wide for its height. */
+  aspect: 0.86,
+  /** A place never grows past this, in px, nor a tile past its own. */
+  maxSlot: 116,
+  maxTile: 100,
+  /** Under this a tile is hard for a small finger to hit: the word gives up height first. */
+  minTile: 46,
+  /** Between two places, and around the word on its panel. */
+  slotGap: 0.1,
+  pad: 0.18,
+  /** The picture: a square this many places high, with this much room before the word. */
+  picture: 1.45,
+  pictureGap: 0.3,
+  /** The most of the free height the word's panel takes. */
+  maxPanelShare: 0.46,
+  /** In px: between tiles. */
+  tileGap: 10,
+} as const;
+
+export type WordBuildLayout = {
+  /** The panel the word sits on, floating on the background. */
+  panel: BoardRect;
+  picture: BoardRect | null;
+  /** A place for every letter of the word, left to right. */
+  slots: BoardRect[];
+  /** Around the tiles, and each tile in `tiles` order: where a letter lies until it is taken. */
+  tray: BoardRect;
+  tiles: BoardRect[];
+};
+
+/**
+ * Where everything of a word to build goes on its stage. The background
+ * covers the whole stage; the word's places sit on a panel above — its picture
+ * at their left when it has one — and the tiles below, in one row or two,
+ * whichever stands them biggest: two safe areas a gap apart, both inside the
+ * stage less `insets` and an edge margin.
+ */
+export function layoutWordBuild(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<WordBuildConfig, "letters" | "tiles" | "questionImage">,
+  insets: SceneInsets = {},
+): WordBuildLayout | null {
+  const L = WORD_BUILD_LAYOUT;
+  const originX = insets.left ?? 0;
+  const originY = insets.top ?? 0;
+  const usableWidth = stageWidth - originX - (insets.right ?? 0);
+  const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+  const count = config.letters.length;
+  const tileCount = config.tiles.length;
+
+  if (usableWidth <= 0 || usableHeight <= 0 || count === 0 || tileCount === 0) {
+    return null;
+  }
+
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const gap = sceneGap(stageWidth, stageHeight);
+  const areaWidth = Math.max(usableWidth - edge * 2, 1);
+  const areaHeight = Math.max(usableHeight - edge * 2, 1);
+  const hasPicture = Boolean(config.questionImage);
+
+  // The panel in places: as wide and as high as its picture and its word ask.
+  const unitsWide = (hasPicture ? L.picture + L.pictureGap : 0) + count * L.aspect + (count - 1) * L.slotGap + L.pad * 2;
+  const unitsHigh = (hasPicture ? L.picture : 1) + L.pad * 2;
+
+  // The tiles, given the height the word leaves them: one row, or two when there are many.
+  const tilesFor = (height: number) =>
+    [1, 2]
+      .filter((rows) => rows === 1 || tileCount > 4)
+      .map((rows) => {
+        const columns = Math.ceil(tileCount / rows);
+        const size = Math.min(
+          L.maxTile,
+          (height - L.tileGap * (rows - 1)) / rows,
+          (areaWidth - L.tileGap * (columns - 1)) / columns / L.aspect,
+        );
+        return { rows, columns, size };
+      })
+      // The bigger tiles win; of two as big, the single row.
+      .reduce((best, grid) => (grid.size > best.size + 0.5 ? grid : best));
+
+  let slot = Math.min(L.maxSlot, areaWidth / unitsWide, (areaHeight * L.maxPanelShare) / unitsHigh);
+  let grid = tilesFor(areaHeight - slot * unitsHigh - gap);
+
+  // Tiles too small to hit: the word gives up height until they are not, or it has given up half.
+  if (grid.size < L.minTile) {
+    const wanted = 2 * L.minTile + L.tileGap;
+    slot = Math.max(slot * 0.5, Math.min(slot, (areaHeight - gap - wanted) / unitsHigh));
+    grid = tilesFor(areaHeight - slot * unitsHigh - gap);
+  }
+  slot = Math.max(slot, 1);
+
+  const tile = Math.max(grid.size, 1);
+  const tileWidth = tile * L.aspect;
+  const panelWidth = slot * unitsWide;
+  const panelHeight = slot * unitsHigh;
+  const trayHeight = grid.rows * tile + L.tileGap * (grid.rows - 1);
+  const free = Math.max(0, areaHeight - panelHeight - trayHeight - gap);
+
+  const panel: BoardRect = {
+    left: originX + edge + (areaWidth - panelWidth) / 2,
+    top: originY + edge + free * 0.4,
+    width: panelWidth,
+    height: panelHeight,
+  };
+  const picture: BoardRect | null = hasPicture
+    ? { left: panel.left + L.pad * slot, top: panel.top + L.pad * slot, width: L.picture * slot, height: L.picture * slot }
+    : null;
+  const wordLeft = panel.left + L.pad * slot + (hasPicture ? (L.picture + L.pictureGap) * slot : 0);
+  const slots = config.letters.map((_, index): BoardRect => ({
+    left: wordLeft + index * (L.aspect + L.slotGap) * slot,
+    top: panel.top + (panelHeight - slot) / 2,
+    width: L.aspect * slot,
+    height: slot,
+  }));
+
+  const trayTop = panel.top + panelHeight + gap + free * 0.3;
+  const tiles = config.tiles.map((_, index): BoardRect => {
+    const row = Math.floor(index / grid.columns);
+    // The last row may hold fewer tiles: it is centred like the others.
+    const inRow = Math.min(grid.columns, tileCount - row * grid.columns);
+    const rowWidth = inRow * tileWidth + L.tileGap * (inRow - 1);
+    return {
+      left: originX + edge + (areaWidth - rowWidth) / 2 + (index - row * grid.columns) * (tileWidth + L.tileGap),
+      top: trayTop + row * (tile + L.tileGap),
+      width: tileWidth,
+      height: tile,
+    };
+  });
+  const trayLeft = Math.min(...tiles.map((rect) => rect.left));
+  const trayRight = Math.max(...tiles.map((rect) => rect.left + rect.width));
+
+  return {
+    panel,
+    picture,
+    slots,
+    tray: { left: trayLeft, top: trayTop, width: trayRight - trayLeft, height: trayHeight },
+    tiles,
+  };
+}
+
 // --- Attempt metrics --------------------------------------------------------
 
 /**
@@ -5787,6 +6059,13 @@ export type MathEquationMetrics = BaseGameMetrics & {
   /** Places the example left to fill, and how many were filled. */
   blanks: number;
   filled: number;
+  livesRemaining: number;
+};
+
+export type WordBuildMetrics = BaseGameMetrics & {
+  /** Letters the word has, and how many of them stand in it. */
+  letters: number;
+  placed: number;
   livesRemaining: number;
 };
 
@@ -5869,6 +6148,7 @@ export const GAME_KIND_KEYS = {
   "math-equation": "mathEquation",
   "text-choice": "textChoice",
   "math-input": "mathInput",
+  "word-build": "wordBuild",
   "memory-cards": "memoryCards",
   "pattern-next": "patternNext",
   "select-option": "selectOption",
@@ -5894,6 +6174,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "math-equation": GAME_TIMINGS.mathEquation,
   "text-choice": GAME_TIMINGS.textChoice,
   "math-input": GAME_TIMINGS.mathInput,
+  "word-build": GAME_TIMINGS.wordBuild,
   "memory-cards": GAME_TIMINGS.memoryCards,
   "pattern-next": GAME_TIMINGS.patternNext,
   "select-option": GAME_TIMINGS.selectOption,
@@ -5926,6 +6207,7 @@ export const GAME_GESTURES = {
   "math-equation": "tap",
   "text-choice": "tap",
   "math-input": "tap",
+  "word-build": "tap",
   "memory-cards": "tap",
   "pattern-next": "tap",
   "select-option": "tap",
@@ -6002,6 +6284,7 @@ export type GameMetricsByKind = {
   "math-equation": MathEquationMetrics;
   "text-choice": TextChoiceMetrics;
   "math-input": MathInputMetrics;
+  "word-build": WordBuildMetrics;
   "memory-cards": MemoryCardsMetrics;
   "pattern-next": PatternNextMetrics;
   "select-option": SelectOptionMetrics;

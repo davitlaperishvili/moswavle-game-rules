@@ -480,14 +480,14 @@ const tinyHotspot = rules.layoutSelectOptionItems({ width: 1600, height: 900 }, 
 check('a tiny hotspot is grown to a tappable size', tinyHotspot.width >= 900 * 0.08 - 0.001);
 check('no hotspots before the stage is measured', rules.layoutSelectOptionItems({ width: 0, height: 0 }, { items: [{ id: 'a', x: 1, y: 1, width: 1, height: 1 }], board_width: 1, board_height: 1 }).length === 0);
 
-check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 17);
+check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 18);
 check('failure reasons are named', rules.FAILURE_REASON.wrongCatch === 'wrong_catch' && rules.FAILURE_REASON.livesOut === 'lives_out');
 
 
 section('every playable kind is registered');
 
 const playableKinds = Object.keys(rules.GAME_KIND_KEYS);
-check('seventeen kinds, generic excluded', playableKinds.length === 17 && !playableKinds.includes('generic'));
+check('eighteen kinds, generic excluded', playableKinds.length === 18 && !playableKinds.includes('generic'));
 check('each kind resolves to itself', playableKinds.every((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) === kind), playableKinds.filter((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) !== kind).join());
 check('each kind has timings', playableKinds.every((kind) => rules.GAME_TIMINGS_BY_KIND[kind] === rules.GAME_TIMINGS[rules.GAME_KIND_KEYS[kind]]));
 check('no timing key is orphaned', Object.keys(rules.GAME_TIMINGS).every((key) => Object.values(rules.GAME_KIND_KEYS).includes(key)));
@@ -1520,6 +1520,92 @@ section('math_input: an example whose answer is typed');
   check('the place is as wide as the digits it takes', Math.abs(blankRect.units - times.maxDigits * rules.MATH_EQUATION_LAYOUT.digit) < 1e-9);
   check('no example, no game', rules.layoutMathInput(852, 393, make([]), {}) === null);
   check('the timings and the gesture are there', rules.GAME_TIMINGS.mathInput.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['math-input'] === rules.GAME_TIMINGS.mathInput && rules.GAME_GESTURES['math-input'] === 'tap');
+}
+
+section('word_build: a word put together from its letters');
+
+{
+  ['word_build', 'build_word', 'spell_word', 'Word Build'].forEach((type) => {
+    check(`${type} resolves to word-build`, rules.resolveGameKind(type, {}) === 'word-build');
+  });
+  check('a question in words is still its own game', rules.resolveGameKind('text_choice', {}) === 'text-choice');
+
+  const make = (word, extra = {}) => rules.normalizeWordBuildConfig({ word, ...extra });
+  const sorted = (letters) => [...letters].sort().join('');
+
+  const cow = make('ძროხა', { extra_letters: 2, question_image: 'https://x/cow.webp', bg_image: 'https://x/bg-farm.webp' });
+  check('the word is read a letter a place', cow.letters.join('') === 'ძროხა');
+  check('its tiles are its letters and two that do not belong', cow.tiles.length === 7
+    && cow.tiles.filter((tile) => !cow.letters.includes(tile.letter)).length === 2
+    && sorted(cow.tiles.filter((tile) => cow.letters.includes(tile.letter)).map((tile) => tile.letter)) === sorted(cow.letters));
+  check('the letters that do not belong are of the word\'s own alphabet', cow.tiles.every((tile) => rules.LETTER_ALPHABETS.ka.includes(tile.letter)));
+  check('every tile has its own id', new Set(cow.tiles.map((tile) => tile.id)).size === 7);
+  check('defaults: lives 3, no timer, the background and the picture to preload', cow.lives === 3 && cow.time_limit === null
+    && cow.questionImage === 'https://x/cow.webp' && cow.imageUris.join() === 'https://x/bg-farm.webp,https://x/cow.webp');
+
+  let mixed = true;
+  for (let i = 0; i < 60; i += 1) {
+    const again = make('სახლი');
+    if (again.tiles.map((tile) => tile.letter).join('') === 'სახლი') mixed = false;
+  }
+  check('the tiles never lie in the word\'s own order', mixed);
+
+  const russian = make('Корова', { extra_letters: 'пс' });
+  check('a capital is its small letter', russian.letters.join('') === 'корова');
+  check('letters that do not belong can be named', russian.tiles.length === 8 && sorted(russian.tiles.map((tile) => tile.letter)) === sorted([...'корова', 'п', 'с']));
+  check('a named letter the word has is not one that does not belong', make('корова', { extra_letters: 'ок' }).tiles.length === 6);
+  check('an English word is built from English letters', make('cat', { extra_letters: 3 }).tiles.every((tile) => rules.LETTER_ALPHABETS.en.includes(tile.letter)));
+  check('no more than four letters that do not belong', make('cat', { extra_letters: 9 }).tiles.length === 3 + rules.WORD_BUILD_EXTRA_MAX
+    && make('cat', { extra_letters: 'bdfghjk' }).tiles.length === 3 + rules.WORD_BUILD_EXTRA_MAX);
+  check('what is no letter is left out: a space, a hyphen, a digit', make('ice-cream 2').letters.join('') === 'icecream');
+  check('a word past eight letters is cut to eight', make('hippopotamus').letters.length === rules.WORD_BUILD_LETTERS_MAX);
+  check('no word, no tiles', make('').letters.length === 0 && make('', { extra_letters: 3 }).tiles.length === 0);
+
+  // მამა: two of each letter, and either goes first.
+  const dad = { letters: [...'მამა'], tiles: [{ id: 'a', letter: 'ა' }, { id: 'b', letter: 'მ' }, { id: 'c', letter: 'ა' }, { id: 'd', letter: 'მ' }, { id: 'e', letter: 'ს' }] };
+  const tap = rules.resolveWordBuildTap;
+  check('the letter that comes next goes to its place', JSON.stringify(tap(dad, [], 'b')) === '{"type":"place","slot":0,"complete":false}');
+  check('either tile of that letter is right', tap(dad, [], 'd').type === 'place');
+  check('a letter of the word out of its turn is a mistake', JSON.stringify(tap(dad, [], 'a')) === '{"type":"wrong","slot":0}');
+  check('so is one that does not belong', tap(dad, ['b'], 'e').type === 'wrong');
+  check('a tile in the word already is not tapped again', tap(dad, ['b', 'a'], 'b').type === 'ignored');
+  check('the last letter completes the word', JSON.stringify(tap(dad, ['b', 'a', 'd'], 'c')) === '{"type":"place","slot":3,"complete":true}');
+  check('a built word takes no more', tap(dad, ['b', 'a', 'd', 'c'], 'e').type === 'ignored');
+  check('a tile the game does not have is ignored', tap(dad, [], 'zzz').type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  const configs = [cow, russian, make('ია'), make('elephant', { extra_letters: 4, question_image: 'https://x/e.webp' }), make('elephant', { extra_letters: 4 }), make('cat', { question_image: 'https://x/c.webp' })];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => configs.forEach((config, index) => {
+    const layout = rules.layoutWordBuild(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout
+      && inside(layout.panel, stage) && inside(layout.tray, stage) && !overlap(layout.panel, layout.tray)
+      && layout.slots.length === config.letters.length && layout.slots.every((rect) => inside(rect, layout.panel))
+      && layout.slots.every((rect, i) => layout.slots.every((other, j) => i === j || !overlap(rect, other)))
+      && (config.questionImage ? layout.picture && inside(layout.picture, layout.panel) && layout.slots.every((rect) => !overlap(rect, layout.picture)) : layout.picture === null)
+      && layout.tiles.length === config.tiles.length && layout.tiles.every((rect) => inside(rect, layout.tray))
+      && layout.tiles.every((rect, i) => layout.tiles.every((other, j) => i === j || !overlap(rect, other)))
+      && layout.tiles.every((rect) => Math.abs(rect.width - layout.tiles[0].width) < 1e-6 && Math.abs(rect.height - layout.tiles[0].height) < 1e-6);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the word and its tiles are whole, apart and inside the safe area', whole, detail);
+
+  const phone = rules.layoutWordBuild(852, 393, cow, { top: 56, left: 59, right: 59, bottom: 21 });
+  check('a phone on its side has the tiles in one row, big enough to hit', new Set(phone.tiles.map((rect) => Math.round(rect.top))).size === 1 && phone.tiles[0].height >= rules.WORD_BUILD_LAYOUT.minTile);
+  check('the picture stands at the left of the word', phone.picture.left + phone.picture.width < phone.slots[0].left);
+  const long = rules.layoutWordBuild(852, 393, configs[3], { top: 56, left: 59, right: 59, bottom: 21 });
+  check('twelve tiles stand in two rows, still big enough to hit', new Set(long.tiles.map((rect) => Math.round(rect.top))).size === 2 && long.tiles[0].height >= rules.WORD_BUILD_LAYOUT.minTile, String(long.tiles[0].height));
+  const low = rules.layoutWordBuild(667, 250, configs[3], { top: 60 });
+  check('where there is little height the word gives way before the tiles', low.tiles[0].height >= low.slots[0].height * 0.5 && inside(low.tray, { left: 0, top: 60, width: 667, height: 190 }), JSON.stringify([low.slots[0].height, low.tiles[0].height]));
+  check('a place and a tile have one shape', Math.abs(phone.slots[0].width / phone.slots[0].height - phone.tiles[0].width / phone.tiles[0].height) < 1e-6);
+  check('no word, no game', rules.layoutWordBuild(852, 393, make(''), {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.wordBuild.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-build'] === rules.GAME_TIMINGS.wordBuild && rules.GAME_GESTURES['word-build'] === 'tap');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

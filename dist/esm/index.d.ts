@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1206,6 +1206,17 @@ export declare const GAME_TIMINGS: {
         readonly successSettleMs: 700;
         readonly livesOutDelayMs: 320;
     };
+    /**
+     * A right letter flies to its place over `flyMs`; a wrong one shakes for
+     * `wrongFeedbackMs`. The word stays `successSettleMs` once built, so the
+     * child reads it whole before the win.
+     */
+    readonly wordBuild: {
+        readonly wrongFeedbackMs: 520;
+        readonly flyMs: 420;
+        readonly successSettleMs: 900;
+        readonly livesOutDelayMs: 320;
+    };
     readonly mathEquation: {
         readonly wrongFeedbackMs: 560;
         readonly flyMs: 620;
@@ -1681,6 +1692,97 @@ export type MathInputLayout = {
  * to hit the example is drawn smaller to make room.
  */
 export declare function layoutMathInput(stageWidth: number, stageHeight: number, config: Pick<MathInputConfig, "terms" | "maxDigits">, insets?: SceneInsets): MathInputLayout | null;
+/** A word of one letter is nothing to build, and more than eight do not fit a phone at a size a child reads. */
+export declare const WORD_BUILD_LETTERS_MIN = 2;
+export declare const WORD_BUILD_LETTERS_MAX = 8;
+/** The most letters that do not belong: more and the tray is a search, not a spelling. */
+export declare const WORD_BUILD_EXTRA_MAX = 4;
+export type WordBuildTile = {
+    id: string;
+    letter: string;
+};
+export type WordBuildConfig = {
+    /** The word, a letter a place, in small letters, in the language the game is played in. */
+    letters: string[];
+    /** What it is built from: its own letters and the ones that do not belong, mixed once here. */
+    tiles: WordBuildTile[];
+    /** A picture of what the word names; null when the word is only said. */
+    questionImage: string | null;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background and the picture: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `word` arrives already in the language of
+ * the game. `extra_letters` is how many letters that do not belong lie among
+ * the tiles (a number: they are drawn from the word's own alphabet, none of
+ * them a letter of the word) or the letters themselves (a text). The tiles
+ * are mixed so that they do not already spell the word.
+ */
+export declare function normalizeWordBuildConfig(config: Record<string, unknown>): WordBuildConfig;
+export type WordBuildTapResult = 
+/** The word is built already, the tile is in it, or the game does not have it. */
+{
+    type: "ignored";
+}
+/** The letter that comes next: it goes to `slot`; `complete` when that was the last. */
+ | {
+    type: "place";
+    slot: number;
+    complete: boolean;
+}
+/** Not the letter that comes next: a mistake. */
+ | {
+    type: "wrong";
+    slot: number;
+};
+/**
+ * What a tap on a tile does: the whole play rule, so both players follow it
+ * tap for tap. The word is built left to right; `placed` are the tiles in it
+ * so far, in order. Any tile of the right letter is right — "მამა" has two of
+ * each, and either goes first.
+ */
+export declare function resolveWordBuildTap(config: Pick<WordBuildConfig, "letters" | "tiles">, placed: readonly string[], tileId: string): WordBuildTapResult;
+/** Proportions of the word and its tiles. Shares are of the height of a letter's place. */
+export declare const WORD_BUILD_LAYOUT: {
+    /** A letter's place and a tile: this wide for its height. */
+    readonly aspect: 0.86;
+    /** A place never grows past this, in px, nor a tile past its own. */
+    readonly maxSlot: 116;
+    readonly maxTile: 100;
+    /** Under this a tile is hard for a small finger to hit: the word gives up height first. */
+    readonly minTile: 46;
+    /** Between two places, and around the word on its panel. */
+    readonly slotGap: 0.1;
+    readonly pad: 0.18;
+    /** The picture: a square this many places high, with this much room before the word. */
+    readonly picture: 1.45;
+    readonly pictureGap: 0.3;
+    /** The most of the free height the word's panel takes. */
+    readonly maxPanelShare: 0.46;
+    /** In px: between tiles. */
+    readonly tileGap: 10;
+};
+export type WordBuildLayout = {
+    /** The panel the word sits on, floating on the background. */
+    panel: BoardRect;
+    picture: BoardRect | null;
+    /** A place for every letter of the word, left to right. */
+    slots: BoardRect[];
+    /** Around the tiles, and each tile in `tiles` order: where a letter lies until it is taken. */
+    tray: BoardRect;
+    tiles: BoardRect[];
+};
+/**
+ * Where everything of a word to build goes on its stage. The background
+ * covers the whole stage; the word's places sit on a panel above — its picture
+ * at their left when it has one — and the tiles below, in one row or two,
+ * whichever stands them biggest: two safe areas a gap apart, both inside the
+ * stage less `insets` and an edge margin.
+ */
+export declare function layoutWordBuild(stageWidth: number, stageHeight: number, config: Pick<WordBuildConfig, "letters" | "tiles" | "questionImage">, insets?: SceneInsets): WordBuildLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -1732,6 +1834,12 @@ export type MathEquationMetrics = BaseGameMetrics & {
     /** Places the example left to fill, and how many were filled. */
     blanks: number;
     filled: number;
+    livesRemaining: number;
+};
+export type WordBuildMetrics = BaseGameMetrics & {
+    /** Letters the word has, and how many of them stand in it. */
+    letters: number;
+    placed: number;
     livesRemaining: number;
 };
 export type MathInputMetrics = BaseGameMetrics & {
@@ -1800,6 +1908,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "math-equation": "mathEquation";
     readonly "text-choice": "textChoice";
     readonly "math-input": "mathInput";
+    readonly "word-build": "wordBuild";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -1832,6 +1941,7 @@ export declare const GAME_GESTURES: {
     readonly "math-equation": "tap";
     readonly "text-choice": "tap";
     readonly "math-input": "tap";
+    readonly "word-build": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -1890,6 +2000,7 @@ export type GameMetricsByKind = {
     "math-equation": MathEquationMetrics;
     "text-choice": TextChoiceMetrics;
     "math-input": MathInputMetrics;
+    "word-build": WordBuildMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;
