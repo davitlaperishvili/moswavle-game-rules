@@ -105,6 +105,7 @@ exports.normalizeMathInputConfig = normalizeMathInputConfig;
 exports.pressMathInputKey = pressMathInputKey;
 exports.resolveMathInputEntry = resolveMathInputEntry;
 exports.layoutMathInput = layoutMathInput;
+exports.wordBuildLetterBox = wordBuildLetterBox;
 exports.normalizeWordBuildConfig = normalizeWordBuildConfig;
 exports.resolveWordBuildTap = resolveWordBuildTap;
 exports.layoutWordBuild = layoutWordBuild;
@@ -4054,6 +4055,34 @@ exports.WORD_BUILD_EXTRA_MAX = 4;
  * a word is written at one size, whichever tile it stands on.
  */
 exports.WORD_BUILD_LETTER_UNITS = Math.max(...Object.values(exports.LETTER_ALPHABETS).flatMap((set) => [...set].map((char) => textLineUnits(char))));
+/** The ink of the three alphabets, in ems: the widest letter, and from the top of the tallest to the foot of the deepest. */
+const WORD_BUILD_INK = Object.values(exports.LETTER_ALPHABETS)
+    .flatMap((set) => [...set])
+    .reduce((ink, char) => {
+    const shape = (0, letters_js_1.glyphShape)(char);
+    return shape
+        ? {
+            width: Math.max(ink.width, shape.box.width / letters_js_1.OUTLINE_EM),
+            top: Math.min(ink.top, shape.box.y / letters_js_1.OUTLINE_EM),
+            bottom: Math.max(ink.bottom, (shape.box.y + shape.box.height) / letters_js_1.OUTLINE_EM),
+        }
+        : ink;
+}, { width: 0, top: 0, bottom: 0 });
+/** What the players' brush adds round a letter, in ems: its outline and the thickness under it. */
+const WORD_BUILD_BRUSH = 0.14;
+/**
+ * The box a letter is drawn in on a tile whose face is `width` × `height`:
+ * a line's box (`TEXT_ART`), sized so that every letter of the three
+ * alphabets is written at one size — the biggest at which the widest ("ლ")
+ * and the tallest keep inside the face, outline and all. A line's box has air
+ * round its letters, so the box itself may be larger than the face: it is
+ * centred on it and only air hangs over.
+ */
+function wordBuildLetterBox(width, height) {
+    const em = Math.max(0, Math.min(width / (WORD_BUILD_INK.width + WORD_BUILD_BRUSH), height / (WORD_BUILD_INK.bottom - WORD_BUILD_INK.top + WORD_BUILD_BRUSH)));
+    const lineHeight = em * exports.TEXT_ART.lineHeight;
+    return { width: lineHeight * exports.WORD_BUILD_LETTER_UNITS, height: lineHeight };
+}
 /** The letters of a word: only letters of the three alphabets count, a capital as its small letter. */
 function readWordLetters(source) {
     const known = Object.values(exports.LETTER_ALPHABETS).join("");

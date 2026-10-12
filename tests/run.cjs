@@ -1606,6 +1606,14 @@ section('word_build: a word put together from its letters');
   check('a place and a tile have one shape', Math.abs(phone.slots[0].width / phone.slots[0].height - phone.tiles[0].width / phone.tiles[0].height) < 1e-6);
   check('the box of a letter holds the widest letter of every alphabet', Object.values(rules.LETTER_ALPHABETS).every((set) => [...set].every((char) => rules.textLineUnits(char) <= rules.WORD_BUILD_LETTER_UNITS))
     && rules.WORD_BUILD_LETTER_UNITS > 0.8 && rules.WORD_BUILD_LETTER_UNITS < 1);
+  const letterBox = rules.wordBuildLetterBox(74, 88);
+  const em = letterBox.height / rules.TEXT_ART.lineHeight;
+  const inks = Object.values(rules.LETTER_ALPHABETS).flatMap((set) => [...set].map((char) => rules.glyphShape(char).box));
+  check('every letter is written at one size, and its ink keeps inside the face of its tile',
+    inks.every((box) => (box.width / rules.OUTLINE_EM) * em < 74 && (box.height / rules.OUTLINE_EM) * em < 88)
+      && Math.abs(letterBox.width / letterBox.height - rules.WORD_BUILD_LETTER_UNITS) < 1e-9, JSON.stringify(letterBox));
+  check('the letter is as big as the face allows: the widest fills most of it', Math.max(...inks.map((box) => box.width / rules.OUTLINE_EM)) * em > 74 * 0.82);
+  check('a face with no room draws nothing', rules.wordBuildLetterBox(0, 50).height === 0);
   check('no word, no game', rules.layoutWordBuild(852, 393, make(''), {}) === null);
   check('the timings and the gesture are there', rules.GAME_TIMINGS.wordBuild.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-build'] === rules.GAME_TIMINGS.wordBuild && rules.GAME_GESTURES['word-build'] === 'tap');
 }

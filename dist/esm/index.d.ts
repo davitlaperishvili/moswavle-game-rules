@@ -1703,6 +1703,18 @@ export declare const WORD_BUILD_EXTRA_MAX = 4;
  * a word is written at one size, whichever tile it stands on.
  */
 export declare const WORD_BUILD_LETTER_UNITS: number;
+/**
+ * The box a letter is drawn in on a tile whose face is `width` × `height`:
+ * a line's box (`TEXT_ART`), sized so that every letter of the three
+ * alphabets is written at one size — the biggest at which the widest ("ლ")
+ * and the tallest keep inside the face, outline and all. A line's box has air
+ * round its letters, so the box itself may be larger than the face: it is
+ * centred on it and only air hangs over.
+ */
+export declare function wordBuildLetterBox(width: number, height: number): {
+    width: number;
+    height: number;
+};
 export type WordBuildTile = {
     id: string;
     letter: string;

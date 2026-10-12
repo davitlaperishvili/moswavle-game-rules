@@ -10,7 +10,7 @@
  * game scores differently depending on the device it is played on.
  */
 
-import { textCharAdvance } from "./letters.js";
+import { OUTLINE_EM, glyphShape, textCharAdvance } from "./letters.js";
 
 /**
  * The bits of a game these rules actually read.
@@ -5769,6 +5769,43 @@ export const WORD_BUILD_EXTRA_MAX = 4;
 export const WORD_BUILD_LETTER_UNITS = Math.max(
   ...Object.values(LETTER_ALPHABETS).flatMap((set) => [...set].map((char) => textLineUnits(char))),
 );
+
+/** The ink of the three alphabets, in ems: the widest letter, and from the top of the tallest to the foot of the deepest. */
+const WORD_BUILD_INK = Object.values(LETTER_ALPHABETS)
+  .flatMap((set) => [...set])
+  .reduce(
+    (ink, char) => {
+      const shape = glyphShape(char);
+      return shape
+        ? {
+            width: Math.max(ink.width, shape.box.width / OUTLINE_EM),
+            top: Math.min(ink.top, shape.box.y / OUTLINE_EM),
+            bottom: Math.max(ink.bottom, (shape.box.y + shape.box.height) / OUTLINE_EM),
+          }
+        : ink;
+    },
+    { width: 0, top: 0, bottom: 0 },
+  );
+/** What the players' brush adds round a letter, in ems: its outline and the thickness under it. */
+const WORD_BUILD_BRUSH = 0.14;
+
+/**
+ * The box a letter is drawn in on a tile whose face is `width` × `height`:
+ * a line's box (`TEXT_ART`), sized so that every letter of the three
+ * alphabets is written at one size — the biggest at which the widest ("ლ")
+ * and the tallest keep inside the face, outline and all. A line's box has air
+ * round its letters, so the box itself may be larger than the face: it is
+ * centred on it and only air hangs over.
+ */
+export function wordBuildLetterBox(width: number, height: number): { width: number; height: number } {
+  const em = Math.max(
+    0,
+    Math.min(width / (WORD_BUILD_INK.width + WORD_BUILD_BRUSH), height / (WORD_BUILD_INK.bottom - WORD_BUILD_INK.top + WORD_BUILD_BRUSH)),
+  );
+  const lineHeight = em * TEXT_ART.lineHeight;
+
+  return { width: lineHeight * WORD_BUILD_LETTER_UNITS, height: lineHeight };
+}
 
 export type WordBuildTile = {
   id: string;
