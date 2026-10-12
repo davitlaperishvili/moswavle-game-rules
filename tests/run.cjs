@@ -1604,7 +1604,7 @@ section('word_build: a word put together from its letters');
   const low = rules.layoutWordBuild(667, 250, configs[3], { top: 60 });
   check('where there is little height the word gives way before the tiles', low.tiles[0].height >= low.slots[0].height * 0.5 && inside(low.tray, { left: 0, top: 60, width: 667, height: 190 }), JSON.stringify([low.slots[0].height, low.tiles[0].height]));
   check('a place and a tile have one shape', Math.abs(phone.slots[0].width / phone.slots[0].height - phone.tiles[0].width / phone.tiles[0].height) < 1e-6);
-  check('a letter's box holds the widest letter of every alphabet', Object.values(rules.LETTER_ALPHABETS).every((set) => [...set].every((char) => rules.textLineUnits(char) <= rules.WORD_BUILD_LETTER_UNITS))
+  check('the box of a letter holds the widest letter of every alphabet', Object.values(rules.LETTER_ALPHABETS).every((set) => [...set].every((char) => rules.textLineUnits(char) <= rules.WORD_BUILD_LETTER_UNITS))
     && rules.WORD_BUILD_LETTER_UNITS > 0.8 && rules.WORD_BUILD_LETTER_UNITS < 1);
   check('no word, no game', rules.layoutWordBuild(852, 393, make(''), {}) === null);
   check('the timings and the gesture are there', rules.GAME_TIMINGS.wordBuild.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-build'] === rules.GAME_TIMINGS.wordBuild && rules.GAME_GESTURES['word-build'] === 'tap');
