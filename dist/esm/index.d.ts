@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1196,6 +1196,16 @@ export declare const GAME_TIMINGS: {
         readonly successSettleMs: 600;
         readonly livesOutDelayMs: 320;
     };
+    /**
+     * A wrong number shakes in its place for `wrongFeedbackMs` and is then
+     * wiped. The right one stays `successSettleMs` so the child sees the
+     * example whole before the win.
+     */
+    readonly mathInput: {
+        readonly wrongFeedbackMs: 620;
+        readonly successSettleMs: 700;
+        readonly livesOutDelayMs: 320;
+    };
     readonly mathEquation: {
         readonly wrongFeedbackMs: 560;
         readonly flyMs: 620;
@@ -1313,21 +1323,6 @@ export declare function mathNumberGlyphs(value: number): MathEquationGlyph[];
  * `placed` maps a filled place to the card in it.
  */
 export declare function countMathEquationCompletions(config: Pick<MathEquationConfig, "terms" | "cards">, placed?: Readonly<Record<string, string>>, limit?: number): number;
-/**
- * The example as the players draw it.
- *
- * `terms` are the places left to right, each a number (`value`, optionally an
- * `image` to show it as that many pictures) or a sign, and `missing` for the
- * one or two the child fills. With none marked, the last number is missing.
- *
- * The cards: every missing number, then the author's `wrong_answers`, then
- * numbers near the answer that cannot complete the example, until there are
- * `choice_count` number cards. A missing sign brings all the signs of its
- * family: `<`, `=`, `>` for a comparison; `+`, `−` for a sum, and `×`, `÷` with
- * them once the example multiplies or divides anywhere — a child who has not
- * met those signs is never shown them. `answer_image` draws the number cards
- * as that many pictures instead of digits.
- */
 export declare function normalizeMathEquationConfig(config: Record<string, unknown>): MathEquationConfig;
 export type MathEquationTapResult = 
 /** Nothing left to fill, or the card is already in the example. */
@@ -1596,6 +1591,96 @@ export type TextChoiceLayout = {
  * broken into lines the same way.
  */
 export declare function layoutTextChoice(stageWidth: number, stageHeight: number, config: Pick<TextChoiceConfig, "question" | "questionImage" | "answers">, insets?: SceneInsets): TextChoiceLayout | null;
+/** The keys of the pad, in the order they are laid out: the digits, wiping the last one, and the tick. */
+export type MathInputKey = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "erase" | "enter";
+/** Two rows of six read left to right: 1–5 and wipe, 6–0 and the tick. In three columns or four the same order runs on. */
+export declare const MATH_INPUT_KEYS: readonly MathInputKey[];
+/** The place always has room for two digits at least, so a one-digit answer is not told by its width. */
+export declare const MATH_INPUT_DIGITS_MIN = 2;
+export type MathInputConfig = {
+    /** The example, left to right; exactly one number is missing. */
+    terms: MathEquationTerm[];
+    /** The missing number's place. */
+    blankId: string;
+    /** How many digits can be typed: as many as the longest number of the example has, the answer included. */
+    maxDigits: number;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background and every picture a number is drawn with: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The example as the players draw it. `terms` are read as a math example's
+ * (`normalizeMathEquationConfig`); the place to fill is the first number
+ * marked `missing`, or the last number when none is — a sign is never typed,
+ * so a sign marked missing simply stands in the example.
+ */
+export declare function normalizeMathInputConfig(config: Record<string, unknown>): MathInputConfig;
+/**
+ * What is typed after a key: a digit is added while there is room — a lone
+ * zero is typed over, so no number starts with one — and wiping takes the last
+ * digit away. The tick changes nothing here: see `resolveMathInputEntry`.
+ */
+export declare function pressMathInputKey(entry: string, key: MathInputKey, maxDigits: number): string;
+export type MathInputEntryResult = 
+/** Nothing is typed yet: the tick does nothing. */
+{
+    type: "ignored";
+}
+/** The number typed makes the example true. */
+ | {
+    type: "right";
+    value: number;
+}
+/** It does not: a mistake. */
+ | {
+    type: "wrong";
+    value: number;
+};
+/** What the tick does with what is typed: the whole play rule, so both players follow it tap for tap. */
+export declare function resolveMathInputEntry(config: Pick<MathInputConfig, "terms" | "blankId">, entry: string): MathInputEntryResult;
+/** Proportions of the pad; the example above it is a math example's (`MATH_EQUATION_LAYOUT`). */
+export declare const MATH_INPUT_LAYOUT: {
+    /** The most of the free height the example's panel takes. */
+    readonly maxPanelShare: 0.4;
+    /** A key is never taller than this, in px, nor wider than this many times its height. */
+    readonly maxKey: 96;
+    readonly keyAspect: 1.5;
+    /** Under this a key is hard for a small finger to hit: the example gives up height first. */
+    readonly minKey: 46;
+    /** In px: between keys. */
+    readonly keyGap: 10;
+    /** The ways the twelve keys can stand: columns by rows, the widest first. */
+    readonly grids: readonly [readonly [6, 2], readonly [4, 3], readonly [3, 4]];
+};
+export type MathInputLayout = {
+    /** The panel the example sits on, floating on the background. */
+    panel: BoardRect;
+    /** Height of the example's row, in px. */
+    row: number;
+    /** Each place of the example, in `terms` order; the missing one is the place the typed number stands in. */
+    terms: Array<BoardRect & {
+        id: string;
+        units: number;
+    }>;
+    /** The pad, and its keys in `MATH_INPUT_KEYS` order. */
+    pad: BoardRect;
+    keys: Array<BoardRect & {
+        key: MathInputKey;
+    }>;
+    /** The copy size of every number drawn as pictures: pass it to `mathEquationPieces`. */
+    pictureCell: number;
+};
+/**
+ * Where everything of a typed example goes on its stage. The background covers
+ * the whole stage; the example sits on a panel above and the pad of keys
+ * below — two safe areas a gap apart, both inside the stage less `insets` and
+ * an edge margin. The keys stand in two rows of six, three of four or four of
+ * three, whichever makes them biggest, and where they would come out too small
+ * to hit the example is drawn smaller to make room.
+ */
+export declare function layoutMathInput(stageWidth: number, stageHeight: number, config: Pick<MathInputConfig, "terms" | "maxDigits">, insets?: SceneInsets): MathInputLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -1647,6 +1732,11 @@ export type MathEquationMetrics = BaseGameMetrics & {
     /** Places the example left to fill, and how many were filled. */
     blanks: number;
     filled: number;
+    livesRemaining: number;
+};
+export type MathInputMetrics = BaseGameMetrics & {
+    /** How many times the tick was pressed with a number typed. */
+    attempts: number;
     livesRemaining: number;
 };
 export type TextChoiceMetrics = BaseGameMetrics & {
@@ -1709,6 +1799,7 @@ export declare const GAME_KIND_KEYS: {
     readonly jigsaw: "jigsaw";
     readonly "math-equation": "mathEquation";
     readonly "text-choice": "textChoice";
+    readonly "math-input": "mathInput";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -1740,6 +1831,7 @@ export declare const GAME_GESTURES: {
     readonly jigsaw: "drag";
     readonly "math-equation": "tap";
     readonly "text-choice": "tap";
+    readonly "math-input": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -1797,6 +1889,7 @@ export type GameMetricsByKind = {
     jigsaw: JigsawMetrics;
     "math-equation": MathEquationMetrics;
     "text-choice": TextChoiceMetrics;
+    "math-input": MathInputMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

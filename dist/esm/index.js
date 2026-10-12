@@ -694,6 +694,17 @@ export function resolveGameKind(type, config) {
         return "text-choice";
     }
     if ([
+        "math_input",
+        "mathinput",
+        "math_keypad",
+        "number_input",
+        "number_entry",
+        "type_answer",
+        "type_the_answer",
+    ].includes(normalizedType)) {
+        return "math-input";
+    }
+    if ([
         "memory_cards",
         "memory",
         "memorycards",
@@ -2719,6 +2730,12 @@ export const GAME_TIMINGS = {
      * right one stays lit `successSettleMs` before the win.
      */
     textChoice: { wrongFeedbackMs: 560, successSettleMs: 600, livesOutDelayMs: 320 },
+    /**
+     * A wrong number shakes in its place for `wrongFeedbackMs` and is then
+     * wiped. The right one stays `successSettleMs` so the child sees the
+     * example whole before the win.
+     */
+    mathInput: { wrongFeedbackMs: 620, successSettleMs: 700, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -3062,8 +3079,9 @@ export function countMathEquationCompletions(config, placed = {}, limit = Number
  * met those signs is never shown them. `answer_image` draws the number cards
  * as that many pictures instead of digits.
  */
-export function normalizeMathEquationConfig(config) {
-    const rawTerms = Array.isArray(config.terms) ? config.terms : [];
+/** The authored `terms` as places of an example, `missing` as marked; what is neither a number nor a sign is dropped. */
+function readMathTerms(source) {
+    const rawTerms = Array.isArray(source) ? source : [];
     const terms = [];
     rawTerms.forEach((raw, index) => {
         const record = asRecord(raw);
@@ -3088,6 +3106,10 @@ export function normalizeMathEquationConfig(config) {
             });
         }
     });
+    return terms;
+}
+export function normalizeMathEquationConfig(config) {
+    const terms = readMathTerms(config.terms);
     // One or two places to fill, the first ones marked; none marked means the answer.
     let missingSeen = 0;
     terms.forEach((term) => {
@@ -3734,6 +3756,167 @@ export function layoutTextChoice(stageWidth, stageHeight, config, insets = {}) {
     });
     return { panel, picture, question, cards };
 }
+/** Two rows of six read left to right: 1–5 and wipe, 6–0 and the tick. In three columns or four the same order runs on. */
+export const MATH_INPUT_KEYS = [
+    "1", "2", "3", "4", "5", "erase",
+    "6", "7", "8", "9", "0", "enter",
+];
+/** The place always has room for two digits at least, so a one-digit answer is not told by its width. */
+export const MATH_INPUT_DIGITS_MIN = 2;
+/**
+ * The example as the players draw it. `terms` are read as a math example's
+ * (`normalizeMathEquationConfig`); the place to fill is the first number
+ * marked `missing`, or the last number when none is — a sign is never typed,
+ * so a sign marked missing simply stands in the example.
+ */
+export function normalizeMathInputConfig(config) {
+    const terms = readMathTerms(config.terms);
+    const numbers = terms.filter((term) => term.kind === "number");
+    const blank = numbers.find((term) => term.missing) ?? numbers[numbers.length - 1] ?? null;
+    terms.forEach((term) => {
+        term.missing = term === blank;
+    });
+    // The answer is typed in digits, whatever the other numbers are drawn with.
+    if (blank && blank.kind === "number")
+        blank.image = null;
+    const longest = Math.max(0, ...numbers.map((term) => mathNumberGlyphs(term.value).length));
+    const bg = extractMediaUrl(config.bg_image);
+    const imageUris = [bg, ...terms.map((term) => (term.kind === "number" ? term.image : null))]
+        .filter((uri) => Boolean(uri));
+    return {
+        terms,
+        blankId: blank?.id ?? "",
+        maxDigits: Math.max(MATH_INPUT_DIGITS_MIN, Math.min(mathNumberGlyphs(MATH_EQUATION_NUMBER_MAX).length, longest)),
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [...new Set(imageUris)],
+    };
+}
+/**
+ * What is typed after a key: a digit is added while there is room — a lone
+ * zero is typed over, so no number starts with one — and wiping takes the last
+ * digit away. The tick changes nothing here: see `resolveMathInputEntry`.
+ */
+export function pressMathInputKey(entry, key, maxDigits) {
+    if (key === "enter") {
+        return entry;
+    }
+    if (key === "erase") {
+        return entry.slice(0, -1);
+    }
+    if (entry === "0") {
+        return key;
+    }
+    return entry.length < maxDigits ? entry + key : entry;
+}
+/** What the tick does with what is typed: the whole play rule, so both players follow it tap for tap. */
+export function resolveMathInputEntry(config, entry) {
+    if (!/^[0-9]+$/.test(entry)) {
+        return { type: "ignored" };
+    }
+    const value = Number(entry);
+    const values = config.terms.map((term) => term.kind === "sign"
+        ? { kind: "sign", value: term.value }
+        : { kind: "number", value: term.id === config.blankId ? value : term.value });
+    return isMathStatementTrue(values) ? { type: "right", value } : { type: "wrong", value };
+}
+/** Proportions of the pad; the example above it is a math example's (`MATH_EQUATION_LAYOUT`). */
+export const MATH_INPUT_LAYOUT = {
+    /** The most of the free height the example's panel takes. */
+    maxPanelShare: 0.4,
+    /** A key is never taller than this, in px, nor wider than this many times its height. */
+    maxKey: 96,
+    keyAspect: 1.5,
+    /** Under this a key is hard for a small finger to hit: the example gives up height first. */
+    minKey: 46,
+    /** In px: between keys. */
+    keyGap: 10,
+    /** The ways the twelve keys can stand: columns by rows, the widest first. */
+    grids: [[6, 2], [4, 3], [3, 4]],
+};
+/**
+ * Where everything of a typed example goes on its stage. The background covers
+ * the whole stage; the example sits on a panel above and the pad of keys
+ * below — two safe areas a gap apart, both inside the stage less `insets` and
+ * an edge margin. The keys stand in two rows of six, three of four or four of
+ * three, whichever makes them biggest, and where they would come out too small
+ * to hit the example is drawn smaller to make room.
+ */
+export function layoutMathInput(stageWidth, stageHeight, config, insets = {}) {
+    const E = MATH_EQUATION_LAYOUT;
+    const L = MATH_INPUT_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    if (usableWidth <= 0 || usableHeight <= 0 || config.terms.length === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const areaWidth = Math.max(usableWidth - edge * 2, 1);
+    const areaHeight = Math.max(usableHeight - edge * 2, 1);
+    const pictureCell = mathEquationPictureCell({ terms: config.terms, cards: [] });
+    const termUnits = config.terms.map((term) => term.missing ? config.maxDigits * E.digit : mathEquationItemUnits(term, pictureCell));
+    const rowUnits = termUnits.reduce((sum, units) => sum + units, 0) + E.gap * (termUnits.length - 1) + E.pad * 2;
+    const panelUnitsHigh = 1 + E.pad * 2;
+    // The keys of a grid, given the height the example leaves them.
+    const keysFor = (columns, rows, height) => {
+        const keyHeight = Math.min((height - L.keyGap * (rows - 1)) / rows, L.maxKey);
+        const keyWidth = Math.min((areaWidth - L.keyGap * (columns - 1)) / columns, keyHeight * L.keyAspect);
+        return { columns, rows, keyWidth, keyHeight: Math.min(keyHeight, keyWidth) > 0 ? keyHeight : 0 };
+    };
+    const bestGrid = (height) => L.grids
+        .map(([columns, rows]) => keysFor(columns, rows, height))
+        // The tallest keys win; of two as tall, the wider.
+        .reduce((best, grid) => grid.keyHeight > best.keyHeight + 0.5 || (Math.abs(grid.keyHeight - best.keyHeight) <= 0.5 && grid.keyWidth > best.keyWidth)
+        ? grid
+        : best);
+    let row = Math.min(areaWidth / rowUnits, (areaHeight * L.maxPanelShare) / panelUnitsHigh, E.maxRow);
+    let grid = bestGrid(areaHeight - row * panelUnitsHigh - gap);
+    // Keys too small to hit: the example gives up height until they are not, or it has given up half.
+    if (grid.keyHeight < L.minKey) {
+        const tallest = L.grids.reduce((most, [, rows]) => Math.min(most, rows), Number.POSITIVE_INFINITY);
+        const wanted = tallest * L.minKey + L.keyGap * (tallest - 1);
+        row = Math.max(row * 0.5, Math.min(row, (areaHeight - gap - wanted) / panelUnitsHigh));
+        grid = bestGrid(areaHeight - row * panelUnitsHigh - gap);
+    }
+    row = Math.max(row, 1);
+    const keyWidth = Math.max(grid.keyWidth, 1);
+    const keyHeight = Math.max(grid.keyHeight, 1);
+    const panelWidth = row * rowUnits;
+    const panelHeight = row * panelUnitsHigh;
+    const padWidth = grid.columns * keyWidth + L.keyGap * (grid.columns - 1);
+    const padHeight = grid.rows * keyHeight + L.keyGap * (grid.rows - 1);
+    const free = Math.max(0, areaHeight - panelHeight - padHeight - gap);
+    const panel = {
+        left: originX + edge + (areaWidth - panelWidth) / 2,
+        top: originY + edge + free * 0.4,
+        width: panelWidth,
+        height: panelHeight,
+    };
+    let x = panel.left + E.pad * row;
+    const terms = config.terms.map((term, index) => {
+        const rect = { id: term.id, units: termUnits[index], left: x, top: panel.top + E.pad * row, width: termUnits[index] * row, height: row };
+        x += rect.width + E.gap * row;
+        return rect;
+    });
+    const pad = {
+        left: originX + edge + (areaWidth - padWidth) / 2,
+        top: panel.top + panelHeight + gap + free * 0.3,
+        width: padWidth,
+        height: padHeight,
+    };
+    const keys = MATH_INPUT_KEYS.map((key, index) => ({
+        key,
+        left: pad.left + (index % grid.columns) * (keyWidth + L.keyGap),
+        top: pad.top + Math.floor(index / grid.columns) * (keyHeight + L.keyGap),
+        width: keyWidth,
+        height: keyHeight,
+    }));
+    return { panel, row, terms, pad, keys, pictureCell };
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -3750,6 +3933,7 @@ export const GAME_KIND_KEYS = {
     jigsaw: "jigsaw",
     "math-equation": "mathEquation",
     "text-choice": "textChoice",
+    "math-input": "mathInput",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -3769,6 +3953,7 @@ export const GAME_TIMINGS_BY_KIND = {
     jigsaw: GAME_TIMINGS.jigsaw,
     "math-equation": GAME_TIMINGS.mathEquation,
     "text-choice": GAME_TIMINGS.textChoice,
+    "math-input": GAME_TIMINGS.mathInput,
     "memory-cards": GAME_TIMINGS.memoryCards,
     "pattern-next": GAME_TIMINGS.patternNext,
     "select-option": GAME_TIMINGS.selectOption,
@@ -3794,6 +3979,7 @@ export const GAME_GESTURES = {
     jigsaw: "drag",
     "math-equation": "tap",
     "text-choice": "tap",
+    "math-input": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",

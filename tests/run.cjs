@@ -480,14 +480,14 @@ const tinyHotspot = rules.layoutSelectOptionItems({ width: 1600, height: 900 }, 
 check('a tiny hotspot is grown to a tappable size', tinyHotspot.width >= 900 * 0.08 - 0.001);
 check('no hotspots before the stage is measured', rules.layoutSelectOptionItems({ width: 0, height: 0 }, { items: [{ id: 'a', x: 1, y: 1, width: 1, height: 1 }], board_width: 1, board_height: 1 }).length === 0);
 
-check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 16);
+check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 17);
 check('failure reasons are named', rules.FAILURE_REASON.wrongCatch === 'wrong_catch' && rules.FAILURE_REASON.livesOut === 'lives_out');
 
 
 section('every playable kind is registered');
 
 const playableKinds = Object.keys(rules.GAME_KIND_KEYS);
-check('sixteen kinds, generic excluded', playableKinds.length === 16 && !playableKinds.includes('generic'));
+check('seventeen kinds, generic excluded', playableKinds.length === 17 && !playableKinds.includes('generic'));
 check('each kind resolves to itself', playableKinds.every((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) === kind), playableKinds.filter((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) !== kind).join());
 check('each kind has timings', playableKinds.every((kind) => rules.GAME_TIMINGS_BY_KIND[kind] === rules.GAME_TIMINGS[rules.GAME_KIND_KEYS[kind]]));
 check('no timing key is orphaned', Object.keys(rules.GAME_TIMINGS).every((key) => Object.values(rules.GAME_KIND_KEYS).includes(key)));
@@ -1435,6 +1435,91 @@ section('letters drawn in code: outlines, not pictures');
   check('as wide as the players are told it is', Math.abs(line.width - rules.textLineAdvance('და 5 კატა?')) < 1e-9);
   check('a space has room and no ink; a letter, a digit and a mark have both', line.glyphs[2].path === null && line.glyphs[2].advance > 0.1 && Boolean(line.glyphs[0].path && line.glyphs[3].path && line.glyphs[9].path));
   check('a character we cannot draw still takes its room', rules.layoutTextLine('字').glyphs[0].path === null && rules.layoutTextLine('字').width > 0.5);
+}
+
+section('math_input: an example whose answer is typed');
+
+{
+  ['math_input', 'number_input', 'type_answer', 'Math Input'].forEach((type) => {
+    check(`${type} resolves to math-input`, rules.resolveGameKind(type, {}) === 'math-input');
+  });
+  check('a math example with cards is still its own game', rules.resolveGameKind('math_equation', {}) === 'math-equation');
+
+  const n = (value, extra = {}) => ({ type: 'number', value, ...extra });
+  const s = (value, extra = {}) => ({ type: 'sign', value, ...extra });
+  const make = (terms, extra = {}) => rules.normalizeMathInputConfig({ terms, ...extra });
+
+  // 7 × 8 = ?
+  const times = make([n(7), s('×'), n(8), s('='), n(56, { missing: true })], { bg_image: 'https://x/bg-classroom.webp' });
+  check('the terms are read as a math example\'s', times.terms.map((term) => `${term.kind}:${term.value}`).join(' ') === 'number:7 sign:× number:8 sign:= number:56');
+  check('the place to fill is the number marked', times.blankId === 'term_5' && times.terms.filter((term) => term.missing).length === 1);
+  check('defaults: lives 3, no timer, the background to preload', times.lives === 3 && times.time_limit === null && times.imageUris.join() === 'https://x/bg-classroom.webp');
+  check('with none marked the last number is typed', make([n(2), s('+'), n(2), s('='), n(4)]).blankId === 'term_5');
+  check('a sign is never typed: one marked missing just stands there', make([n(6), s('×', { missing: true }), n(3), s('='), n(18)]).terms[1].missing === false
+    && make([n(6), s('×', { missing: true }), n(3), s('='), n(18)]).blankId === 'term_5');
+  check('of two numbers marked only the first is typed', make([n(2, { missing: true }), s('+'), n(3, { missing: true }), s('='), n(5)]).blankId === 'term_1');
+  const cows = make([n(3, { image: 'https://x/cow.webp' }), s('+'), n(2, { image: 'https://x/cow.webp' }), s('='), n(5, { missing: true, image: 'https://x/cow.webp' })]);
+  check('numbers may stand as pictures, the answer is typed in digits', cows.terms[0].image === 'https://x/cow.webp' && cows.terms[4].image === null && cows.imageUris.join() === 'https://x/cow.webp');
+
+  check('the place has room for two digits at least, so 8 is not told by its width', make([n(5), s('+'), n(3), s('='), n(8, { missing: true })]).maxDigits === 2);
+  check('and for as many as the longest number of the example', times.maxDigits === 2
+    && make([n(348), s('+'), n(125), s('='), n(473, { missing: true })]).maxDigits === 3
+    && make([n(50), s('+'), n(50), s('='), n(100, { missing: true })]).maxDigits === 3
+    && make([n(2500), s('+'), n(3750), s('='), n(6250, { missing: true })]).maxDigits === 4);
+
+  const press = rules.pressMathInputKey;
+  check('digits are typed one after another', press(press('', '5', 2), '6', 2) === '56');
+  check('no more than the place has room for', press('56', '7', 2) === '56' && press('56', '7', 3) === '567');
+  check('wiping takes the last digit', press('56', 'erase', 2) === '5' && press('', 'erase', 2) === '');
+  check('a lone zero is typed over, so no number starts with one', press('0', '7', 2) === '7' && press('', '0', 2) === '0' && press('0', '0', 2) === '0');
+  check('the tick types nothing', press('56', 'enter', 2) === '56');
+  check('twelve keys: the ten digits, wiping and the tick', rules.MATH_INPUT_KEYS.length === 12 && new Set(rules.MATH_INPUT_KEYS).size === 12
+    && rules.MATH_INPUT_KEYS[5] === 'erase' && rules.MATH_INPUT_KEYS[11] === 'enter');
+
+  const enter = rules.resolveMathInputEntry;
+  check('56 makes 7 × 8 = ? true', JSON.stringify(enter(times, '56')) === '{"type":"right","value":56}');
+  check('54 does not', JSON.stringify(enter(times, '54')) === '{"type":"wrong","value":54}');
+  check('with nothing typed the tick does nothing', enter(times, '').type === 'ignored');
+  const greater = make([n(5), s('>'), n(3, { missing: true })]);
+  check('5 > ? takes any number under five, as the example with cards does', enter(greater, '0').type === 'right' && enter(greater, '4').type === 'right' && enter(greater, '5').type === 'wrong');
+  const factor = make([n(7), s('×'), n(8, { missing: true }), s('='), n(56)]);
+  check('a number in the middle is typed the same way', enter(factor, '8').type === 'right' && enter(factor, '7').type === 'wrong');
+  check('a division that does not come out whole is wrong, not a crash', enter(make([n(12), s('÷'), n(3, { missing: true }), s('='), n(4)]), '5').type === 'wrong'
+    && enter(make([n(12), s('÷'), n(3, { missing: true }), s('='), n(4)]), '0').type === 'wrong');
+  check('the order of working is the example\'s: 2 + 3 × 4 = 14', enter(make([n(2), s('+'), n(3), s('×'), n(4), s('='), n(14, { missing: true })]), '14').type === 'right'
+    && enter(make([n(2), s('+'), n(3), s('×'), n(4), s('='), n(14, { missing: true })]), '20').type === 'wrong');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  const configs = [times, greater, factor, cows, make([n(348), s('+'), n(125), s('='), n(473, { missing: true })]), make([n(2500), s('+'), n(3750), s('='), n(6250, { missing: true })])];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => configs.forEach((config, index) => {
+    const layout = rules.layoutMathInput(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout
+      && inside(layout.panel, stage) && inside(layout.pad, stage) && !overlap(layout.panel, layout.pad)
+      && layout.terms.length === config.terms.length && layout.terms.every((rect) => inside(rect, layout.panel))
+      && layout.keys.length === 12 && layout.keys.every((key, i) => key.key === rules.MATH_INPUT_KEYS[i] && inside(key, layout.pad))
+      && layout.keys.every((key, i) => layout.keys.every((other, j) => i === j || !overlap(key, other)))
+      && layout.keys.every((key) => Math.abs(key.width - layout.keys[0].width) < 1e-6 && Math.abs(key.height - layout.keys[0].height) < 1e-6);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the example and the keys are whole, apart and inside the safe area', whole, detail);
+
+  const phone = rules.layoutMathInput(852, 393, times, { top: 56, left: 59, right: 59, bottom: 21 });
+  check('a phone on its side has two rows of six keys, big enough to hit', new Set(phone.keys.map((key) => Math.round(key.top))).size === 2 && phone.keys[0].height >= rules.MATH_INPUT_LAYOUT.minKey);
+  const upright = rules.layoutMathInput(390, 700, times, { top: 60 });
+  check('an upright stage has three columns', new Set(upright.keys.map((key) => Math.round(key.left))).size === 3);
+  const low = rules.layoutMathInput(667, 250, times, { top: 60 });
+  check('where there is little height the example gives way and the keys stay hittable', low.keys[0].height >= rules.MATH_INPUT_LAYOUT.minKey - 1 && inside(low.pad, { left: 0, top: 60, width: 667, height: 190 }), JSON.stringify([low.row, low.keys[0].height]));
+  const blankRect = phone.terms.find((rect) => rect.id === times.blankId);
+  check('the place is as wide as the digits it takes', Math.abs(blankRect.units - times.maxDigits * rules.MATH_EQUATION_LAYOUT.digit) < 1e-9);
+  check('no example, no game', rules.layoutMathInput(852, 393, make([]), {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.mathInput.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['math-input'] === rules.GAME_TIMINGS.mathInput && rules.GAME_GESTURES['math-input'] === 'tap');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
