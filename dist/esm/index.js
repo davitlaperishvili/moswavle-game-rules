@@ -3947,6 +3947,12 @@ export const WORD_BUILD_LETTERS_MIN = 2;
 export const WORD_BUILD_LETTERS_MAX = 8;
 /** The most letters that do not belong: more and the tray is a search, not a spelling. */
 export const WORD_BUILD_EXTRA_MAX = 4;
+/**
+ * How wide a letter's box is for its height so that the widest letter of the
+ * three alphabets fits it ("ლ"): drawn in a box of this shape, every letter of
+ * a word is written at one size, whichever tile it stands on.
+ */
+export const WORD_BUILD_LETTER_UNITS = Math.max(...Object.values(LETTER_ALPHABETS).flatMap((set) => [...set].map((char) => textLineUnits(char))));
 /** The letters of a word: only letters of the three alphabets count, a capital as its small letter. */
 function readWordLetters(source) {
     const known = Object.values(LETTER_ALPHABETS).join("");
