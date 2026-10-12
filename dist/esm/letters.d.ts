@@ -64,6 +64,12 @@ export type LetterArt = {
  */
 export declare function letterArt(char: string): LetterArt | null;
 /**
+ * The size a letter's picture says it has, as a library picture has one: what
+ * is drawn where nothing else sizes it — a canvas, a texture. It is a drawing,
+ * so it is as sharp at any other size.
+ */
+export declare const LETTER_PICTURE_PX = 512;
+/**
  * The letter as an SVG document — what `letterArt` describes, painted in
  * `tone`. For wherever a picture is wanted as an address (see
  * `letterPictureUri`); a player that draws with its own SVG elements builds

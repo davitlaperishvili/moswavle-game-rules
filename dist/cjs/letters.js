@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TEXT_TRACKING = exports.TEXT_UNKNOWN_ADVANCE = exports.LETTER_PICTURE_PREFIX = exports.LETTER_ART = exports.OUTLINE_EM = exports.LETTER_SETS = void 0;
+exports.TEXT_TRACKING = exports.TEXT_UNKNOWN_ADVANCE = exports.LETTER_PICTURE_PREFIX = exports.LETTER_PICTURE_PX = exports.LETTER_ART = exports.OUTLINE_EM = exports.LETTER_SETS = void 0;
 exports.glyphShape = glyphShape;
 exports.letterSetOf = letterSetOf;
 exports.letterArt = letterArt;
@@ -103,6 +103,12 @@ function letterArt(char) {
 }
 const short = (value) => String(Math.round(value * 10) / 10);
 /**
+ * The size a letter's picture says it has, as a library picture has one: what
+ * is drawn where nothing else sizes it — a canvas, a texture. It is a drawing,
+ * so it is as sharp at any other size.
+ */
+exports.LETTER_PICTURE_PX = 512;
+/**
  * The letter as an SVG document — what `letterArt` describes, painted in
  * `tone`. For wherever a picture is wanted as an address (see
  * `letterPictureUri`); a player that draws with its own SVG elements builds
@@ -117,7 +123,7 @@ function letterSvg(char, tone) {
     const viewBox = [view.x, view.y, view.width, view.height].map(short).join(" ");
     const edge = `fill="${tone.outline}" stroke="${tone.outline}" stroke-width="${short(art.outline)}" stroke-linejoin="round"`;
     const frame = `x="${short(view.x)}" y="${short(view.y)}" width="${short(view.width)}" height="${short(view.height)}"`;
-    return (`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">` +
+    return (`<svg xmlns="http://www.w3.org/2000/svg" width="${exports.LETTER_PICTURE_PX}" height="${exports.LETTER_PICTURE_PX}" viewBox="${viewBox}">` +
         `<defs>` +
         `<linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="${short(ink.y)}" x2="0" y2="${short(ink.y + ink.height)}">` +
         `<stop offset="0" stop-color="${tone.light}"/><stop offset="1" stop-color="${tone.deep}"/>` +

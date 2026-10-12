@@ -151,6 +151,13 @@ export function letterArt(char: string): LetterArt | null {
 const short = (value: number): string => String(Math.round(value * 10) / 10);
 
 /**
+ * The size a letter's picture says it has, as a library picture has one: what
+ * is drawn where nothing else sizes it — a canvas, a texture. It is a drawing,
+ * so it is as sharp at any other size.
+ */
+export const LETTER_PICTURE_PX = 512;
+
+/**
  * The letter as an SVG document — what `letterArt` describes, painted in
  * `tone`. For wherever a picture is wanted as an address (see
  * `letterPictureUri`); a player that draws with its own SVG elements builds
@@ -168,7 +175,7 @@ export function letterSvg(char: string, tone: LetterTone): string | null {
   const frame = `x="${short(view.x)}" y="${short(view.y)}" width="${short(view.width)}" height="${short(view.height)}"`;
 
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${LETTER_PICTURE_PX}" height="${LETTER_PICTURE_PX}" viewBox="${viewBox}">` +
     `<defs>` +
     `<linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="${short(ink.y)}" x2="0" y2="${short(ink.y + ink.height)}">` +
     `<stop offset="0" stop-color="${tone.light}"/><stop offset="1" stop-color="${tone.deep}"/>` +

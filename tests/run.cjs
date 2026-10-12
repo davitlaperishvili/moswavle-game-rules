@@ -1426,6 +1426,7 @@ section('letters drawn in code: outlines, not pictures');
   check('and the address of a picture that is fetched from nowhere', uri.startsWith(rules.LETTER_PICTURE_PREFIX) && decodeURIComponent(uri.slice(rules.LETTER_PICTURE_PREFIX.length)) === svg);
   check('safe inside a quoted attribute, a CSS url() and another SVG', letters.every((char) => !/["'()<>\s&]/.test(rules.letterPictureUri(char, tone))));
   check('the players take it for a picture, not for a word', rules.isImageReference(uri) && !rules.isImageReference('ჭ'));
+  check('with a size of its own, for a canvas that asks the picture how big it is', svg.includes(`width="${rules.LETTER_PICTURE_PX}" height="${rules.LETTER_PICTURE_PX}"`) && rules.LETTER_PICTURE_PX >= 256);
   check('what is not a letter has no address', rules.letterPictureUri('7', tone) === null && rules.letterSvg(' ', tone) === null);
   check('a letter weighs little as an address', letters.every((char) => rules.letterPictureUri(char, tone).length < 3200), String(Math.max(...letters.map((char) => rules.letterPictureUri(char, tone).length))));
 
