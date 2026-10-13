@@ -2236,6 +2236,157 @@ function keepSceneRectClear(rect: BoardRect, frame: BoardRect, keepOut: BoardRec
   return best;
 }
 
+/** How far apart two boxes are: the wider of the gaps across and down; negative while one lies over the other. */
+function sceneRectsApart(a: BoardRect, b: BoardRect): number {
+  return Math.max(
+    Math.max(a.left, b.left) - Math.min(a.left + a.width, b.left + b.width),
+    Math.max(a.top, b.top) - Math.min(a.top + a.height, b.top + b.height),
+  );
+}
+
+/** The sizes a picture with no free place is tried at, one after another. */
+const SCENE_SQUEEZE_STEPS = [1, 0.9, 0.8, 0.7, 0.6, SCENE_SAFE_AREA.minScale] as const;
+
+/**
+ * Pictures that stood apart keep apart.
+ *
+ * Fitting the pictures into a small stage moves them: one the crop cut is
+ * lifted into the frame, one under the answers is moved from under them — and
+ * each of those is decided for one picture alone, so on a phone lying on its
+ * side two of them came to stand over one another. Here every picture that now
+ * lies over another it was clear of (or further over one than its author put
+ * it), or was left over the answers or a button, is given the free place
+ * nearest to where it stands: inside the frame,
+ * clear of the answers and the player's buttons, and of every other picture.
+ * With no such place at its size it is made smaller, standing on the same
+ * spot, until there is one. A scene too full for that — eight or nine
+ * pictures on a phone — has all its pictures made a little smaller together,
+ * and is tried again.
+ *
+ * A layout with nothing over anything comes back as it was.
+ */
+function keepSceneRectsApart(
+  rects: ReadonlyArray<BoardRect>,
+  authored: ReadonlyArray<BoardRect>,
+  frame: BoardRect,
+  keepOuts: ReadonlyArray<BoardRect>,
+  room: number,
+): BoardRect[] {
+  let last: BoardRect[] = rects.slice();
+
+  for (const step of SCENE_SQUEEZE_STEPS) {
+    // Each on its own feet, so the scene keeps its shape.
+    const smaller = step === 1 ? rects : rects.map((rect) => ({
+      left: rect.left + (rect.width * (1 - step)) / 2,
+      top: rect.top + rect.height * (1 - step),
+      width: rect.width * step,
+      height: rect.height * step,
+    }));
+    const attempt = placeSceneRectsApart(smaller, authored, frame, keepOuts, room);
+    last = attempt.placed;
+    if (attempt.settled) break;
+  }
+
+  return last;
+}
+
+/** One go at `keepSceneRectsApart`; `settled` is false when a picture was left over another. */
+function placeSceneRectsApart(
+  rects: ReadonlyArray<BoardRect>,
+  authored: ReadonlyArray<BoardRect>,
+  frame: BoardRect,
+  keepOuts: ReadonlyArray<BoardRect>,
+  room: number,
+): { placed: BoardRect[]; settled: boolean } {
+  const epsilon = 1e-6;
+  const count = rects.length;
+  // No nearer than they were put, and a little air between two that had it.
+  const needed = (i: number, j: number) => Math.min(sceneRectsApart(authored[i], authored[j]), room);
+  // In the way of another picture — or of the answers or a button: moved from
+  // under the answers, a picture could come to lie in the speaker's corner.
+  const crowded = rects.map((rect, i) =>
+    rects.some((other, j) => j !== i && sceneRectsApart(rect, other) < needed(i, j) - epsilon)
+    || keepOuts.some((keepOut) => sceneRectsApart(rect, keepOut) < -epsilon),
+  );
+  if (!crowded.some(Boolean) || frame.width <= 0 || frame.height <= 0) {
+    return { placed: rects.slice(), settled: true };
+  }
+
+  const moved = (i: number) =>
+    Math.hypot(
+      rects[i].left + rects[i].width / 2 - (authored[i].left + authored[i].width / 2),
+      rects[i].top + rects[i].height / 2 - (authored[i].top + authored[i].height / 2),
+    ) + Math.abs(authored[i].width - rects[i].width) + Math.abs(authored[i].height - rects[i].height);
+  // The pictures nothing is wrong with stay; of the others, the one moved
+  // least so far keeps its place and the rest find theirs around it.
+  const order = rects
+    .map((_, index) => index)
+    .sort((a, b) => Number(crowded[a]) - Number(crowded[b]) || moved(a) - moved(b) || a - b);
+
+  const placed: BoardRect[] = rects.slice();
+  const done: number[] = [];
+  let settled = true;
+  const frameRight = frame.left + frame.width;
+  const frameBottom = frame.top + frame.height;
+
+  for (const index of order) {
+    if (crowded[index]) {
+      const rect = rects[index];
+      // What it may not lie over: each as a box to stay out of.
+      const obstacles = [
+        ...keepOuts,
+        ...done.map((other) => growRect(placed[other], needed(index, other))),
+      ].filter((obstacle) => obstacle.width > epsilon && obstacle.height > epsilon);
+
+      let found = false;
+      for (const step of SCENE_SQUEEZE_STEPS) {
+        const width = rect.width * step;
+        const height = rect.height * step;
+        // Smaller on the spot: its feet stay where they were.
+        const want = { left: rect.left + (rect.width - width) / 2, top: rect.top + rect.height - height };
+        const maxLeft = frameRight - width;
+        const maxTop = frameBottom - height;
+        if (maxLeft < frame.left - epsilon || maxTop < frame.top - epsilon) continue;
+
+        // The nearest free place has each of its sides where the picture
+        // stands, at the frame, or against something it keeps out of.
+        const lefts = [want.left, frame.left, maxLeft];
+        const tops = [want.top, frame.top, maxTop];
+        for (const obstacle of obstacles) {
+          lefts.push(obstacle.left - width, obstacle.left + obstacle.width);
+          tops.push(obstacle.top - height, obstacle.top + obstacle.height);
+        }
+
+        let best: BoardRect | null = null;
+        let bestShift = Number.POSITIVE_INFINITY;
+        for (const left of lefts) {
+          if (left < frame.left - epsilon || left > maxLeft + epsilon) continue;
+          for (const top of tops) {
+            if (top < frame.top - epsilon || top > maxTop + epsilon) continue;
+            const shift = Math.hypot(left - want.left, top - want.top);
+            if (shift >= bestShift) continue;
+            const candidate = { left, top, width, height };
+            if (obstacles.some((obstacle) => sceneRectsApart(candidate, obstacle) < -epsilon)) continue;
+            best = candidate;
+            bestShift = shift;
+          }
+        }
+
+        if (best) {
+          placed[index] = best;
+          found = true;
+          break;
+        }
+      }
+      if (!found) settled = false;
+    }
+
+    done.push(index);
+  }
+
+  return { placed, settled };
+}
+
 export type SceneLayout = {
   /** Where the background goes: over the whole stage. */
   cover: SceneCover;
@@ -2258,7 +2409,9 @@ export type SceneLayout = {
  *   stage and clear of its controls;
  * - every content box stays inside the frame and at least a gap away from the
  *   answers. A picture the crop cuts is shrunk until it is whole again; one in
- *   the answers' way is moved clear of them (`fitSceneRect`).
+ *   the answers' way is moved clear of them (`fitSceneRect`);
+ * - two content boxes that stood apart still do: one that all this has put
+ *   over another is given the nearest free place (`keepSceneRectsApart`).
  *
  * `content` is everything that must stay whole — the pictures of the scene as
  * well as its zones and slots. `overlay` is the measured size of the answers.
@@ -2286,10 +2439,11 @@ export function layoutScene(
   const controlKeepOuts = controls.map((rect) => growRect(rect, edge));
   const clearOfControls = (rect: BoardRect) =>
     controlKeepOuts.reduce((current, keepOut) => keepSceneRectClear(current, frame, keepOut), rect);
-  const whole = content.map((box) => clearOfControls(fitSceneRect(sceneBoxToStage(box, cover), frame)));
+  const authored = content.map((box) => sceneBoxToStage(box, cover));
+  const whole = authored.map((rect) => clearOfControls(fitSceneRect(rect, frame)));
 
   if (cover.width <= 0 || !overlay || overlay.width <= 0 || overlay.height <= 0) {
-    return { cover, frame, content: whole, overlay: null };
+    return { cover, frame, content: keepSceneRectsApart(whole, authored, frame, controlKeepOuts, edge), overlay: null };
   }
 
   const gap = sceneGap(stageWidth, stageHeight);
@@ -2309,7 +2463,14 @@ export function layoutScene(
     cover,
     frame,
     // Clear of the answers last: they are the bigger thing to keep apart from.
-    content: whole.map((rect) => keepSceneRectClear(rect, frame, keepOut)),
+    // And then of one another, which none of the moves above looks at.
+    content: keepSceneRectsApart(
+      whole.map((rect) => keepSceneRectClear(rect, frame, keepOut)),
+      authored,
+      frame,
+      [...controlKeepOuts, keepOut],
+      edge,
+    ),
     overlay: placed,
   };
 }

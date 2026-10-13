@@ -44,7 +44,8 @@ Yes: reading authored config, defaults and fallbacks, correctness, lives, timers
 resolving a game type to a renderer kind, and scene geometry in stage pixels. Every game drawn
 as a scene goes through `layoutScene`: the background covers the stage, and two safe areas —
 the content (pictures, zones, slots) and the answers — never touch and never leave the stage;
-a picture the crop cuts is shrunk until it is whole (`fitSceneRect`). A card that shows one
+a picture the crop cuts is shrunk until it is whole (`fitSceneRect`), and two pictures that
+stood apart still do on the smallest stage (`keepSceneRectsApart`). A card that shows one
 picture several times — three apples on a memory card, two cats on an answer card, a pattern of counts — places the
 copies with `layoutPictureCopies`, so a count looks the same on every device.
 

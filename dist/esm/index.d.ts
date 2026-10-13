@@ -706,7 +706,9 @@ export type SceneLayout = {
  *   stage and clear of its controls;
  * - every content box stays inside the frame and at least a gap away from the
  *   answers. A picture the crop cuts is shrunk until it is whole again; one in
- *   the answers' way is moved clear of them (`fitSceneRect`).
+ *   the answers' way is moved clear of them (`fitSceneRect`);
+ * - two content boxes that stood apart still do: one that all this has put
+ *   over another is given the nearest free place (`keepSceneRectsApart`).
  *
  * `content` is everything that must stay whole — the pictures of the scene as
  * well as its zones and slots. `overlay` is the measured size of the answers.

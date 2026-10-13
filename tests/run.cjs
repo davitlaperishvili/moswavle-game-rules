@@ -738,6 +738,59 @@ section('scene safe areas: the content and the answers never touch, nothing leav
   const bare = rules.layoutScene(1000, 600, board, content);
   check('no answers: no overlay, and the pictures still fit', bare.overlay === null && bare.content.every((rect) => inside(rect, bare.frame)));
 
+  // A phone lying on its side: the band of the player on top, the camera and
+  // the system's buttons at the sides, the speaker in its corner. The frame
+  // is so low that pictures lifted into it and moved from under the answers
+  // came to stand over one another.
+  const phone = { width: 800, height: 360, insets: { top: 92, left: 37, right: 39 }, speaker: { left: 0, top: 281, width: 111, height: 79 } };
+  const apart = (list) => list.every((rect, index) => list.every((other, at) => at <= index || !overlaps(rect, other)));
+  // Things to count as the importer scatters them: one row on the ground, nearer and farther.
+  const scattered = (count, seed) => {
+    let state = seed;
+    const next = () => ((state = (state * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const rows = count <= 5 ? 1 : 2;
+    const perRow = Math.ceil(count / rows);
+    return Array.from({ length: count }, (_, index) => {
+      const row = Math.floor(index / perRow);
+      const inRow = Math.min(perRow, count - row * perRow);
+      const slot = 88 / inRow;
+      const depth = next();
+      const height = (rows === 1 ? 34 : 23) * (1 - 0.24 * depth);
+      const width = Math.min(height * 0.5, slot * 0.84);
+      const centre = 6 + slot * (index - row * perRow + 0.5) + (next() - 0.5) * 0.86 * (slot - width);
+      const bottom = 90 - row * 26 - depth * (rows === 1 ? 20 : 3);
+      return { x: centre - width / 2, y: bottom - height, width, height };
+    });
+  };
+  let scenes = 0;
+  let clean = 0;
+  let whole = 0;
+  for (let count = 2; count <= 9; count += 1) {
+    for (let seed = 1; seed <= 25; seed += 1) {
+      const boxes = scattered(count, seed * 977 + count);
+      const scene = rules.layoutScene(phone.width, phone.height, { width: 1600, height: 900 }, boxes, { width: 304, height: 96 }, phone.insets, [phone.speaker]);
+      scenes += 1;
+      if (apart(scene.content)) clean += 1;
+      if (scene.content.every((rect) => inside(rect, scene.frame) && !overlaps(rect, phone.speaker)
+        && distance(rect, scene.overlay) >= phone.height * rules.SCENE_SAFE_AREA.gap - 1e-6)) whole += 1;
+    }
+  }
+  check('on a phone on its side no picture stands over another', clean === scenes, clean + ' of ' + scenes);
+  check('and each is still whole, clear of the answers and of the speaker', whole === scenes, whole + ' of ' + scenes);
+
+  const calm = scattered(4, 4885);
+  const roomy = rules.layoutScene(1250, 747, { width: 1600, height: 900 }, calm, { width: 460, height: 150 });
+  check('with room for all of them nothing is moved', roomy.content.every((rect, index) => {
+    const was = rules.sceneBoxToStage(calm[index], roomy.cover);
+    return Math.abs(rect.left - was.left) < 1e-6 && Math.abs(rect.top - was.top) < 1e-6 && Math.abs(rect.width - was.width) < 1e-6;
+  }), JSON.stringify(roomy.content));
+
+  // A bird on a tree: put over one another on purpose, and left so.
+  const perched = [{ x: 30, y: 20, width: 30, height: 60 }, { x: 40, y: 25, width: 8, height: 10 }];
+  const tree = rules.layoutScene(1000, 600, { width: 1000, height: 600 }, perched);
+  check('pictures put over one another on purpose stay so', overlaps(tree.content[0], tree.content[1])
+    && Math.abs(tree.content[1].left - 400) < 1e-6 && Math.abs(tree.content[1].top - 150) < 1e-6, JSON.stringify(tree.content));
+
   const insetCover = rules.coverSceneBoard(1000, 500, { width: 1600, height: 1200 }, [{ x: 40, y: 0, width: 20, height: 20 }], { top: 100 });
   const plainCover = rules.coverSceneBoard(1000, 500, { width: 1600, height: 1200 }, [{ x: 40, y: 0, width: 20, height: 20 }]);
   check('the crop centres content in the part the controls leave free', insetCover.top === 0 && plainCover.top === 0
