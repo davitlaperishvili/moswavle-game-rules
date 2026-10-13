@@ -785,6 +785,11 @@ section('scene safe areas: the content and the answers never touch, nothing leav
     return Math.abs(rect.left - was.left) < 1e-6 && Math.abs(rect.top - was.top) < 1e-6 && Math.abs(rect.width - was.width) < 1e-6;
   }), JSON.stringify(roomy.content));
 
+  // Answers as big as the stage leave no free place: nothing is made smaller for nothing.
+  const smothered = rules.layoutScene(800, 400, { width: 1600, height: 1200 }, calm, { width: 800, height: 400 });
+  check('with no free place at all the pictures keep their size', smothered.content.every((rect, index) =>
+    Math.abs(rect.width - rules.sceneBoxToStage(calm[index], smothered.cover).width) < 1e-6), JSON.stringify(smothered.content));
+
   // A bird on a tree: put over one another on purpose, and left so.
   const perched = [{ x: 30, y: 20, width: 30, height: 60 }, { x: 40, y: 25, width: 8, height: 10 }];
   const tree = rules.layoutScene(1000, 600, { width: 1000, height: 600 }, perched);

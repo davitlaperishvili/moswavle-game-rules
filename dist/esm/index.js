@@ -1421,12 +1421,14 @@ const SCENE_SQUEEZE_STEPS = [1, 0.9, 0.8, 0.7, 0.6, SCENE_SAFE_AREA.minScale];
  * With no such place at its size it is made smaller, standing on the same
  * spot, until there is one. A scene too full for that — eight or nine
  * pictures on a phone — has all its pictures made a little smaller together,
- * and is tried again.
+ * and is tried again. Where nothing helps (answers as big as the stage), the
+ * go that left the fewest pictures in the way is kept, the biggest of those.
  *
  * A layout with nothing over anything comes back as it was.
  */
 function keepSceneRectsApart(rects, authored, frame, keepOuts, room) {
-    let last = rects.slice();
+    let best = rects.slice();
+    let fewest = Number.POSITIVE_INFINITY;
     for (const step of SCENE_SQUEEZE_STEPS) {
         // Each on its own feet, so the scene keeps its shape.
         const smaller = step === 1 ? rects : rects.map((rect) => ({
@@ -1436,13 +1438,16 @@ function keepSceneRectsApart(rects, authored, frame, keepOuts, room) {
             height: rect.height * step,
         }));
         const attempt = placeSceneRectsApart(smaller, authored, frame, keepOuts, room);
-        last = attempt.placed;
-        if (attempt.settled)
+        if (attempt.unplaced < fewest) {
+            fewest = attempt.unplaced;
+            best = attempt.placed;
+        }
+        if (attempt.unplaced === 0)
             break;
     }
-    return last;
+    return best;
 }
-/** One go at `keepSceneRectsApart`; `settled` is false when a picture was left over another. */
+/** One go at `keepSceneRectsApart`; `unplaced` is how many pictures found no free place. */
 function placeSceneRectsApart(rects, authored, frame, keepOuts, room) {
     const epsilon = 1e-6;
     const count = rects.length;
@@ -1453,7 +1458,7 @@ function placeSceneRectsApart(rects, authored, frame, keepOuts, room) {
     const crowded = rects.map((rect, i) => rects.some((other, j) => j !== i && sceneRectsApart(rect, other) < needed(i, j) - epsilon)
         || keepOuts.some((keepOut) => sceneRectsApart(rect, keepOut) < -epsilon));
     if (!crowded.some(Boolean) || frame.width <= 0 || frame.height <= 0) {
-        return { placed: rects.slice(), settled: true };
+        return { placed: rects.slice(), unplaced: 0 };
     }
     const moved = (i) => Math.hypot(rects[i].left + rects[i].width / 2 - (authored[i].left + authored[i].width / 2), rects[i].top + rects[i].height / 2 - (authored[i].top + authored[i].height / 2)) + Math.abs(authored[i].width - rects[i].width) + Math.abs(authored[i].height - rects[i].height);
     // The pictures nothing is wrong with stay; of the others, the one moved
@@ -1463,7 +1468,7 @@ function placeSceneRectsApart(rects, authored, frame, keepOuts, room) {
         .sort((a, b) => Number(crowded[a]) - Number(crowded[b]) || moved(a) - moved(b) || a - b);
     const placed = rects.slice();
     const done = [];
-    let settled = true;
+    let unplaced = 0;
     const frameRight = frame.left + frame.width;
     const frameBottom = frame.top + frame.height;
     for (const index of order) {
@@ -1517,11 +1522,11 @@ function placeSceneRectsApart(rects, authored, frame, keepOuts, room) {
                 }
             }
             if (!found)
-                settled = false;
+                unplaced += 1;
         }
         done.push(index);
     }
-    return { placed, settled };
+    return { placed, unplaced };
 }
 /**
  * The layout of every game drawn as a scene, in one place.

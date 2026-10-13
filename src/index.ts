@@ -2261,7 +2261,8 @@ const SCENE_SQUEEZE_STEPS = [1, 0.9, 0.8, 0.7, 0.6, SCENE_SAFE_AREA.minScale] as
  * With no such place at its size it is made smaller, standing on the same
  * spot, until there is one. A scene too full for that — eight or nine
  * pictures on a phone — has all its pictures made a little smaller together,
- * and is tried again.
+ * and is tried again. Where nothing helps (answers as big as the stage), the
+ * go that left the fewest pictures in the way is kept, the biggest of those.
  *
  * A layout with nothing over anything comes back as it was.
  */
@@ -2272,7 +2273,8 @@ function keepSceneRectsApart(
   keepOuts: ReadonlyArray<BoardRect>,
   room: number,
 ): BoardRect[] {
-  let last: BoardRect[] = rects.slice();
+  let best: BoardRect[] = rects.slice();
+  let fewest = Number.POSITIVE_INFINITY;
 
   for (const step of SCENE_SQUEEZE_STEPS) {
     // Each on its own feet, so the scene keeps its shape.
@@ -2283,21 +2285,24 @@ function keepSceneRectsApart(
       height: rect.height * step,
     }));
     const attempt = placeSceneRectsApart(smaller, authored, frame, keepOuts, room);
-    last = attempt.placed;
-    if (attempt.settled) break;
+    if (attempt.unplaced < fewest) {
+      fewest = attempt.unplaced;
+      best = attempt.placed;
+    }
+    if (attempt.unplaced === 0) break;
   }
 
-  return last;
+  return best;
 }
 
-/** One go at `keepSceneRectsApart`; `settled` is false when a picture was left over another. */
+/** One go at `keepSceneRectsApart`; `unplaced` is how many pictures found no free place. */
 function placeSceneRectsApart(
   rects: ReadonlyArray<BoardRect>,
   authored: ReadonlyArray<BoardRect>,
   frame: BoardRect,
   keepOuts: ReadonlyArray<BoardRect>,
   room: number,
-): { placed: BoardRect[]; settled: boolean } {
+): { placed: BoardRect[]; unplaced: number } {
   const epsilon = 1e-6;
   const count = rects.length;
   // No nearer than they were put, and a little air between two that had it.
@@ -2309,7 +2314,7 @@ function placeSceneRectsApart(
     || keepOuts.some((keepOut) => sceneRectsApart(rect, keepOut) < -epsilon),
   );
   if (!crowded.some(Boolean) || frame.width <= 0 || frame.height <= 0) {
-    return { placed: rects.slice(), settled: true };
+    return { placed: rects.slice(), unplaced: 0 };
   }
 
   const moved = (i: number) =>
@@ -2325,7 +2330,7 @@ function placeSceneRectsApart(
 
   const placed: BoardRect[] = rects.slice();
   const done: number[] = [];
-  let settled = true;
+  let unplaced = 0;
   const frameRight = frame.left + frame.width;
   const frameBottom = frame.top + frame.height;
 
@@ -2378,13 +2383,13 @@ function placeSceneRectsApart(
           break;
         }
       }
-      if (!found) settled = false;
+      if (!found) unplaced += 1;
     }
 
     done.push(index);
   }
 
-  return { placed, settled };
+  return { placed, unplaced };
 }
 
 export type SceneLayout = {
