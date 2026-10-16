@@ -4926,7 +4926,8 @@ function layoutReadingText(stageWidth, stageHeight, config, insets = {}) {
             };
         });
         // Of two as good, the questions beside the text: a phone on its side has the width.
-        const score = smallest + (arrangement === "side" ? 0.25 : 0);
+        // Where every writing is at its biggest already, the text in fewer lines.
+        const score = smallest + (arrangement === "side" ? 0.25 : 0) - passage.lines.length * 1e-3;
         if (!best || score > best.score + 1e-9) {
             best = { score, layout: { sheet, lines, arrangement, steps } };
         }
