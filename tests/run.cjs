@@ -480,14 +480,14 @@ const tinyHotspot = rules.layoutSelectOptionItems({ width: 1600, height: 900 }, 
 check('a tiny hotspot is grown to a tappable size', tinyHotspot.width >= 900 * 0.08 - 0.001);
 check('no hotspots before the stage is measured', rules.layoutSelectOptionItems({ width: 0, height: 0 }, { items: [{ id: 'a', x: 1, y: 1, width: 1, height: 1 }], board_width: 1, board_height: 1 }).length === 0);
 
-check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 19);
+check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 20);
 check('failure reasons are named', rules.FAILURE_REASON.wrongCatch === 'wrong_catch' && rules.FAILURE_REASON.livesOut === 'lives_out');
 
 
 section('every playable kind is registered');
 
 const playableKinds = Object.keys(rules.GAME_KIND_KEYS);
-check('nineteen kinds, generic excluded', playableKinds.length === 19 && !playableKinds.includes('generic'));
+check('twenty kinds, generic excluded', playableKinds.length === 20 && !playableKinds.includes('generic'));
 check('each kind resolves to itself', playableKinds.every((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) === kind), playableKinds.filter((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) !== kind).join());
 check('each kind has timings', playableKinds.every((kind) => rules.GAME_TIMINGS_BY_KIND[kind] === rules.GAME_TIMINGS[rules.GAME_KIND_KEYS[kind]]));
 check('no timing key is orphaned', Object.keys(rules.GAME_TIMINGS).every((key) => Object.values(rules.GAME_KIND_KEYS).includes(key)));
@@ -1802,6 +1802,95 @@ section('label_diagram: a picture whose parts are named');
   check('a name of two words may be broken in two lines, never cut', wide.cards.every((card) => card.lines.map((line) => line.text).join(' ') === world.labels.find((label) => label.id === card.id).text));
   check('no picture, no game', rules.layoutLabelDiagram(852, 393, make({ placements: [] }), {}) === null);
   check('the timings and the gesture are there', rules.GAME_TIMINGS.labelDiagram.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['label-diagram'] === rules.GAME_TIMINGS.labelDiagram && rules.GAME_GESTURES['label-diagram'] === 'tap');
+}
+
+section('reading_text: a text to read and questions about it');
+
+{
+  ['reading_text', 'reading', 'reading_comprehension', 'Reading Text'].forEach((type) => {
+    check(`${type} resolves to reading-text`, rules.resolveGameKind(type, {}) === 'reading-text');
+  });
+  check('a question in words is still its own game', rules.resolveGameKind('text_choice', {}) === 'text-choice');
+
+  const story = 'ნინომ ბაღში პატარა კატა იპოვა. კატა ძალიან მშიერი იყო. ნინომ მას რძე მისცა და სახლში წაიყვანა. დედამ თქვა, რომ კატა მათთან დარჩება. ნინომ კატას ფისო დაარქვა.';
+  const make = (questions, extra = {}) => rules.normalizeReadingTextConfig({ id: 7 }, { text: story, questions, ...extra });
+  const q = (question, right, ...wrong) => ({
+    question,
+    answers: [{ text: right, is_correct: true }, ...wrong.map((text) => ({ text }))],
+  });
+  const game = make([
+    q('სად იპოვა ნინომ კატა?', 'ბაღში', 'სკოლაში', 'მაღაზიაში'),
+    q('რა მისცა ნინომ კატას?', 'რძე', 'წყალი'),
+    q('რა დაარქვა კატას?', 'ფისო', 'მურა', 'ციცი'),
+  ], { bg_image: 'https://x/bg-room.webp', time_limit: 120 });
+
+  check('the text is kept in one line of words', game.text === story);
+  check('three questions, in their order', game.questions.length === 3 && game.questions[1].question === 'რა მისცა ნინომ კატას?');
+  check('every question has its right answer among its answers', game.questions.every((item) => item.answers.some((answer) => answer.id === item.correctId && answer.isCorrect)));
+  check('the answers are kept whole: three, two, three', game.questions.map((item) => item.answers.length).join() === '3,2,3');
+  check('every answer has its own id', new Set(game.questions.flatMap((item) => item.answers.map((answer) => answer.id))).size === 8);
+  check('defaults: lives 3, the background to preload', game.lives === 3 && game.time_limit === 120 && game.imageUris.join() === 'https://x/bg-room.webp');
+
+  let moved = false;
+  for (let i = 0; i < 40; i += 1) {
+    if (make([q('?', 'a', 'b', 'c')]).questions[0].answers[0].text !== 'a') moved = true;
+  }
+  check('the right answer is not always the first card', moved);
+
+  check('a question without a right answer is dropped', make([{ question: 'რა?', answers: [{ text: 'a' }, { text: 'b' }] }]).questions.length === 0);
+  check('a question with one answer is dropped', make([q('რა?', 'a')]).questions.length === 0);
+  check('a question with no words is dropped', make([q('', 'a', 'b')]).questions.length === 0);
+  const two = make([{ question: 'რა?', answers: [{ text: 'a', is_correct: true }, { text: 'b', is_correct: true }, { text: 'c' }] }]).questions[0];
+  check('of two marked right the first is the answer, the second goes', two.answers.length === 2 && two.answers.find((answer) => answer.id === two.correctId).text === 'a' && !two.answers.some((answer) => answer.text === 'b'));
+  check('no more than three answers, the right one kept', make([q('რა?', 'a', 'b', 'c', 'd', 'e')]).questions[0].answers.length === rules.READING_TEXT_ANSWERS_MAX
+    && make([{ question: 'რა?', answers: [{ text: 'b' }, { text: 'c' }, { text: 'd' }, { text: 'a', is_correct: true }] }]).questions[0].answers.some((answer) => answer.text === 'a'));
+  check('no more than three questions', make([q('1', 'a', 'b'), q('2', 'a', 'b'), q('3', 'a', 'b'), q('4', 'a', 'b')]).questions.length === rules.READING_TEXT_QUESTIONS_MAX);
+  check('the text may come as a passage, its line breaks as spaces', rules.normalizeReadingTextConfig({ id: 1 }, { passage: ' one\ntwo  three ', questions: [] }).text === 'one two three');
+
+  const tap = rules.resolveReadingTextTap;
+  const first = game.questions[0];
+  const wrong = first.answers.find((answer) => answer.id !== first.correctId).id;
+  check('the right answer of the question asked is right', JSON.stringify(tap(game, 0, [], first.correctId)) === '{"type":"right","complete":false}');
+  check('a wrong one is a mistake', tap(game, 0, [], wrong).type === 'wrong');
+  check('a wrong one crossed out is not tapped again', tap(game, 0, [wrong], wrong).type === 'ignored');
+  check('an answer of another question is ignored', tap(game, 0, [], game.questions[1].correctId).type === 'ignored');
+  check('the last question completes the game', tap(game, 2, [], game.questions[2].correctId).complete === true);
+  check('past the last question nothing is right', tap(game, 3, [], game.questions[2].correctId).type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const russian = make([q('Где Нино нашла котёнка?', 'В саду', 'В школе', 'В магазине')], { text: 'Нино нашла в саду маленького котёнка. Котёнок был очень голодный. Нино дала ему молока и отнесла домой. Мама сказала, что котёнок останется у них. Нино назвала его Мурзик.' });
+  const short = make([q('What is red?', 'The ball', 'The cat')], { text: 'Tom has a red ball.' });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [game, russian, short].forEach((config, index) => {
+    const layout = rules.layoutReadingText(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout && inside(layout.sheet, stage)
+      && layout.lines.length > 0 && layout.lines.every((line) => inside(line, layout.sheet))
+      && layout.lines.join(' ') !== '' && layout.lines.map((line) => line.text).join(' ') === config.text
+      && layout.steps.length === config.questions.length
+      && layout.steps.every((step, s) => step.panel && inside(step.panel, stage) && !overlap(step.panel, layout.sheet)
+        && step.cards.length === config.questions[s].answers.length
+        && step.cards.every((card) => inside(card, stage) && !overlap(card, layout.sheet) && !overlap(card, step.panel)));
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the text, the question and its answers are whole, apart and inside the safe area', whole, detail);
+
+  const phone = rules.layoutReadingText(852, 393, game, { top: 56, left: 59, right: 59, bottom: 21 });
+  const long = make(game.questions.map((item) => ({ question: item.question, answers: item.answers.map((answer) => ({ text: answer.text, is_correct: answer.id === item.correctId })) })), { text: [story, story, story].join(' ') });
+  const longPhone = rules.layoutReadingText(852, 393, long, { top: 56, left: 59, right: 59, bottom: 21 });
+  check('a long text on a phone on its side has the questions beside it, still big enough to read', longPhone.arrangement === 'side' && longPhone.steps[0].panel.left > longPhone.sheet.left + longPhone.sheet.width && longPhone.lines[0].height >= 16, JSON.stringify([longPhone.arrangement, longPhone.lines[0].height]));
+  check('on a phone on its side a short text is written big', phone.lines[0].height >= 26, String(phone.lines[0].height));
+  const upright = rules.layoutReadingText(390, 700, game, { top: 60 });
+  check('an upright stage has them under it', upright.arrangement === 'stack' && upright.steps[0].panel.top > upright.sheet.top + upright.sheet.height);
+  check('the lines of the text start at one edge', new Set(phone.lines.map((line) => Math.round(line.left))).size === 1);
+  check('no text or no question, no game', rules.layoutReadingText(852, 393, { text: '', questions: game.questions }, {}) === null
+    && rules.layoutReadingText(852, 393, { text: story, questions: [] }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.readingText.nextQuestionMs > 0 && rules.GAME_TIMINGS_BY_KIND['reading-text'] === rules.GAME_TIMINGS.readingText && rules.GAME_GESTURES['reading-text'] === 'tap');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

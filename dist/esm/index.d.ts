@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1228,6 +1228,17 @@ export declare const GAME_TIMINGS: {
         readonly successSettleMs: 1000;
         readonly livesOutDelayMs: 320;
     };
+    /**
+     * A wrong answer shakes for `wrongFeedbackMs`. A right one stays lit for
+     * `nextQuestionMs` before the next question comes; after the last, the
+     * game waits `successSettleMs`.
+     */
+    readonly readingText: {
+        readonly wrongFeedbackMs: 560;
+        readonly nextQuestionMs: 700;
+        readonly successSettleMs: 700;
+        readonly livesOutDelayMs: 320;
+    };
     readonly mathEquation: {
         readonly wrongFeedbackMs: 560;
         readonly flyMs: 620;
@@ -1610,9 +1621,10 @@ export type TextChoiceLayout = {
  * The answers are set in whichever of one row, two columns or one column, and
  * in however many lines each, writes them biggest; all of them at one size,
  * so the right one is not the one that looks different. A long question is
- * broken into lines the same way.
+ * broken into lines the same way. `limits` replaces any of
+ * `TEXT_CHOICE_LAYOUT` — a question beside a text is written nearer its size.
  */
-export declare function layoutTextChoice(stageWidth: number, stageHeight: number, config: Pick<TextChoiceConfig, "question" | "questionImage" | "answers">, insets?: SceneInsets): TextChoiceLayout | null;
+export declare function layoutTextChoice(stageWidth: number, stageHeight: number, config: Pick<TextChoiceConfig, "question" | "questionImage" | "answers">, insets?: SceneInsets, limits?: Partial<Record<keyof typeof TEXT_CHOICE_LAYOUT, number>>): TextChoiceLayout | null;
 /** The keys of the pad, in the order they are laid out: the digits, wiping the last one, and the tick. */
 export type MathInputKey = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "erase" | "enter";
 /** Two rows of six read left to right: 1–5 and wipe, 6–0 and the tick. In three columns or four the same order runs on. */
@@ -1942,6 +1954,102 @@ export type LabelDiagramLayout = {
  * writing big, the writing first. Nothing on the sheet is ever moved.
  */
 export declare function layoutLabelDiagram(stageWidth: number, stageHeight: number, config: Pick<LabelDiagramConfig, "parts" | "order" | "labels" | "board">, insets?: SceneInsets): LabelDiagramLayout | null;
+export declare const READING_TEXT_QUESTIONS_MAX = 3;
+export declare const READING_TEXT_ANSWERS_MIN = 2;
+/** Beside a text, a fourth answer would not fit a phone at a size a child reads. */
+export declare const READING_TEXT_ANSWERS_MAX = 3;
+export type ReadingTextQuestion = {
+    id: string;
+    /** The question as the child reads it. */
+    question: string;
+    /** Shuffled once here: the right answer is not always the first card. */
+    answers: TextChoiceOption[];
+    correctId: string;
+};
+export type ReadingTextConfig = {
+    /** The text the child reads, in the game's language. */
+    text: string;
+    /** In the order they are asked. */
+    questions: ReadingTextQuestion[];
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. A question with no text, no right answer
+ * or fewer than two answers is dropped; of several marked right only the first
+ * is kept right, and the others go — a question here has one answer. No more
+ * than `READING_TEXT_QUESTIONS_MAX` questions and `READING_TEXT_ANSWERS_MAX`
+ * answers to each are kept, the right one always among them.
+ */
+export declare function normalizeReadingTextConfig(game: AuthoredGame, config: Record<string, unknown>): ReadingTextConfig;
+export type ReadingTextTapResult = 
+/** An answer already crossed out, one of another question, or a game already answered. */
+{
+    type: "ignored";
+}
+/** The right answer; `complete` when it was the last question. */
+ | {
+    type: "right";
+    complete: boolean;
+}
+/** A wrong answer: it is crossed out, and a life is lost. */
+ | {
+    type: "wrong";
+};
+/**
+ * What a tap on an answer does: the whole play rule, so both players follow
+ * it tap for tap. `step` is the question asked now (its index), `crossed` the
+ * wrong answers of it tapped so far.
+ */
+export declare function resolveReadingTextTap(config: Pick<ReadingTextConfig, "questions">, step: number, crossed: readonly string[], answerId: string): ReadingTextTapResult;
+/** Proportions of the text and of its questions. Paddings are shares of the line they surround. */
+export declare const READING_TEXT_LAYOUT: {
+    /** The most lines the text is broken into. */
+    readonly passageLines: 16;
+    /** A line of the text never grows past this, in px. */
+    readonly maxPassageLine: 46;
+    /** Around the text on its sheet. */
+    readonly passagePadX: 0.7;
+    readonly passagePadY: 0.5;
+    /** The text's share of the width when the questions stand beside it, tried in turn. */
+    readonly sideShares: readonly [0.46, 0.52, 0.58, 0.64];
+    /** Its share of the height when they stand under it. */
+    readonly stackShares: readonly [0.42, 0.5, 0.58];
+    /** The question and its answers: a text game of its own, its lines kept near the text's. */
+    readonly question: {
+        readonly maxQuestionLine: 50;
+        readonly maxAnswerLine: 56;
+        readonly answerLines: 2;
+        readonly questionShare: 0.42;
+    };
+};
+export type ReadingTextLayout = {
+    /** The sheet the text is written on, and its lines. */
+    sheet: BoardRect;
+    lines: TextLineBox[];
+    /** Whether the questions stand beside the text or under it. */
+    arrangement: "side" | "stack";
+    /**
+     * In `questions` order: where the question and its answers stand while it is
+     * asked. The text keeps its place through them all.
+     */
+    steps: TextChoiceLayout[];
+};
+/**
+ * Where everything of a reading game goes on its stage. The background covers
+ * the whole stage; the text is written on a sheet at the left — or at the top,
+ * where the stage is tall — and the question asked now with its answers stands
+ * beside it: two safe areas a gap apart, inside the stage less `insets` and an
+ * edge margin.
+ *
+ * How much room the text takes is chosen so that the smallest of the three
+ * writings — the text, a question, an answer — is as big as it can be, over
+ * every question of the game: the text never moves when the next one is asked.
+ */
+export declare function layoutReadingText(stageWidth: number, stageHeight: number, config: Pick<ReadingTextConfig, "text" | "questions">, insets?: SceneInsets): ReadingTextLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -1999,6 +2107,12 @@ export type WordBuildMetrics = BaseGameMetrics & {
     /** Letters the word has, and how many of them stand in it. */
     letters: number;
     placed: number;
+    livesRemaining: number;
+};
+export type ReadingTextMetrics = BaseGameMetrics & {
+    /** Questions the game asks, and how many of them were answered. */
+    questions: number;
+    answered: number;
     livesRemaining: number;
 };
 export type LabelDiagramMetrics = BaseGameMetrics & {
@@ -2075,6 +2189,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "math-input": "mathInput";
     readonly "word-build": "wordBuild";
     readonly "label-diagram": "labelDiagram";
+    readonly "reading-text": "readingText";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -2109,6 +2224,7 @@ export declare const GAME_GESTURES: {
     readonly "math-input": "tap";
     readonly "word-build": "tap";
     readonly "label-diagram": "tap";
+    readonly "reading-text": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -2169,6 +2285,7 @@ export type GameMetricsByKind = {
     "math-input": MathInputMetrics;
     "word-build": WordBuildMetrics;
     "label-diagram": LabelDiagramMetrics;
+    "reading-text": ReadingTextMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

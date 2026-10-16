@@ -726,6 +726,17 @@ export function resolveGameKind(type, config) {
         return "label-diagram";
     }
     if ([
+        "reading_text",
+        "readingtext",
+        "reading",
+        "read_text",
+        "reading_comprehension",
+        "text_reading",
+        "story_questions",
+    ].includes(normalizedType)) {
+        return "reading-text";
+    }
+    if ([
         "memory_cards",
         "memory",
         "memorycards",
@@ -2899,6 +2910,12 @@ export const GAME_TIMINGS = {
      * scene stays `successSettleMs`, so the child sees it whole with its legend.
      */
     labelDiagram: { wrongFeedbackMs: 520, successSettleMs: 1000, livesOutDelayMs: 320 },
+    /**
+     * A wrong answer shakes for `wrongFeedbackMs`. A right one stays lit for
+     * `nextQuestionMs` before the next question comes; after the last, the
+     * game waits `successSettleMs`.
+     */
+    readingText: { wrongFeedbackMs: 560, nextQuestionMs: 700, successSettleMs: 700, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -3671,10 +3688,11 @@ export function breakTextLines(text, maxLines) {
     if (words.length === 0) {
         return [];
     }
-    const widths = words.map((word) => textLineAdvance(word));
     const space = textLineAdvance(" ");
+    const sums = [0];
+    words.forEach((word) => sums.push(sums[sums.length - 1] + textLineAdvance(word)));
     // The width of words[from..to) set as one line.
-    const span = (from, to) => widths.slice(from, to).reduce((sum, width) => sum + width, 0) + space * (to - from - 1);
+    const span = (from, to) => sums[to] - sums[from] + space * (to - from - 1);
     // best[k][i]: the longest line when words[i..] are set in k lines, and where the first of them ends.
     const best = [];
     for (let k = 1; k <= lines; k += 1) {
@@ -3806,10 +3824,11 @@ function placeTextLines(lines, size, area) {
  * The answers are set in whichever of one row, two columns or one column, and
  * in however many lines each, writes them biggest; all of them at one size,
  * so the right one is not the one that looks different. A long question is
- * broken into lines the same way.
+ * broken into lines the same way. `limits` replaces any of
+ * `TEXT_CHOICE_LAYOUT` — a question beside a text is written nearer its size.
  */
-export function layoutTextChoice(stageWidth, stageHeight, config, insets = {}) {
-    const L = TEXT_CHOICE_LAYOUT;
+export function layoutTextChoice(stageWidth, stageHeight, config, insets = {}, limits = {}) {
+    const L = { ...TEXT_CHOICE_LAYOUT, ...limits };
     const originX = insets.left ?? 0;
     const originY = insets.top ?? 0;
     const usableWidth = stageWidth - originX - (insets.right ?? 0);
@@ -4565,6 +4584,210 @@ export function layoutLabelDiagram(stageWidth, stageHeight, config, insets = {})
         .filter((pin) => Boolean(pin));
     return { sheet, parts, pins, arrangement, tray, cards };
 }
+// --- Reading text -----------------------------------------------------------
+//
+// A short text the child reads, and questions about it asked one after
+// another — the game of a child who reads a story and understands it. The
+// text stays on the screen the whole game; each question has two or three
+// answers in words and one of them is right. A right answer brings the next
+// question; a wrong one is crossed out and costs a life. Everything written
+// arrives in the language the game is played in: the server has chosen it.
+export const READING_TEXT_QUESTIONS_MAX = 3;
+export const READING_TEXT_ANSWERS_MIN = 2;
+/** Beside a text, a fourth answer would not fit a phone at a size a child reads. */
+export const READING_TEXT_ANSWERS_MAX = 3;
+/**
+ * The game as the players draw it. A question with no text, no right answer
+ * or fewer than two answers is dropped; of several marked right only the first
+ * is kept right, and the others go — a question here has one answer. No more
+ * than `READING_TEXT_QUESTIONS_MAX` questions and `READING_TEXT_ANSWERS_MAX`
+ * answers to each are kept, the right one always among them.
+ */
+export function normalizeReadingTextConfig(game, config) {
+    const rawQuestions = Array.isArray(config.questions) ? config.questions : [];
+    const questions = rawQuestions
+        .map((raw, questionIndex) => {
+        const record = asRecord(raw);
+        if (!record) {
+            return null;
+        }
+        const question = (extractText(record.question) ?? extractText(record.text) ?? "").trim();
+        const id = extractText(record.id) ?? `${game.id}-question-${questionIndex}`;
+        const rawAnswers = Array.isArray(record.answers) ? record.answers : [];
+        const answers = rawAnswers
+            .map((answer, index) => {
+            const item = asRecord(answer);
+            const text = (item ? extractText(item.text) ?? extractText(item.label) : extractText(answer))?.trim();
+            if (!text) {
+                return null;
+            }
+            return {
+                id: item ? extractText(item.id) ?? `${id}-answer-${index}` : `${id}-answer-${index}`,
+                text,
+                isCorrect: item ? extractBoolean(item.is_correct) ?? extractBoolean(item.correct) ?? false : false,
+            };
+        })
+            .filter((answer) => Boolean(answer));
+        const right = answers.find((answer) => answer.isCorrect);
+        if (question === "" || !right) {
+            return null;
+        }
+        const kept = [right, ...answers.filter((answer) => !answer.isCorrect)].slice(0, READING_TEXT_ANSWERS_MAX);
+        if (kept.length < READING_TEXT_ANSWERS_MIN) {
+            return null;
+        }
+        return { id, question, answers: shuffle(kept), correctId: right.id };
+    })
+        .filter((question) => Boolean(question))
+        .slice(0, READING_TEXT_QUESTIONS_MAX);
+    const bg = normalizeBackground(config);
+    return {
+        text: (extractText(config.text) ?? extractText(config.passage) ?? "").replace(/\s+/g, " ").trim(),
+        questions,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: bg ? [bg] : [],
+    };
+}
+/**
+ * What a tap on an answer does: the whole play rule, so both players follow
+ * it tap for tap. `step` is the question asked now (its index), `crossed` the
+ * wrong answers of it tapped so far.
+ */
+export function resolveReadingTextTap(config, step, crossed, answerId) {
+    const question = config.questions[step];
+    const answer = question?.answers.find((item) => item.id === answerId);
+    if (!question || !answer || crossed.includes(answerId)) {
+        return { type: "ignored" };
+    }
+    if (answer.id !== question.correctId) {
+        return { type: "wrong" };
+    }
+    return { type: "right", complete: step >= config.questions.length - 1 };
+}
+/** Proportions of the text and of its questions. Paddings are shares of the line they surround. */
+export const READING_TEXT_LAYOUT = {
+    /** The most lines the text is broken into. */
+    passageLines: 16,
+    /** A line of the text never grows past this, in px. */
+    maxPassageLine: 46,
+    /** Around the text on its sheet. */
+    passagePadX: 0.7,
+    passagePadY: 0.5,
+    /** The text's share of the width when the questions stand beside it, tried in turn. */
+    sideShares: [0.46, 0.52, 0.58, 0.64],
+    /** Its share of the height when they stand under it. */
+    stackShares: [0.42, 0.5, 0.58],
+    /** The question and its answers: a text game of its own, its lines kept near the text's. */
+    question: { maxQuestionLine: 50, maxAnswerLine: 56, answerLines: 2, questionShare: 0.42 },
+};
+/** A text set as big as it goes into `width` × `height`, with its paddings. */
+function fitPassage(text, width, height) {
+    const L = READING_TEXT_LAYOUT;
+    let best = { lines: [], size: 0 };
+    for (let count = 1; count <= L.passageLines; count += 1) {
+        const lines = breakTextLines(text, count);
+        if (lines.length < count && count > 1) {
+            break;
+        }
+        const units = Math.max(...lines.map((line) => textLineUnits(line)));
+        const size = Math.min(width / (units + L.passagePadX * 2), height / (lines.length + L.passagePadY * 2), L.maxPassageLine);
+        if (size > best.size + 1e-9) {
+            best = { lines, size };
+        }
+    }
+    return best;
+}
+/**
+ * Where everything of a reading game goes on its stage. The background covers
+ * the whole stage; the text is written on a sheet at the left — or at the top,
+ * where the stage is tall — and the question asked now with its answers stands
+ * beside it: two safe areas a gap apart, inside the stage less `insets` and an
+ * edge margin.
+ *
+ * How much room the text takes is chosen so that the smallest of the three
+ * writings — the text, a question, an answer — is as big as it can be, over
+ * every question of the game: the text never moves when the next one is asked.
+ */
+export function layoutReadingText(stageWidth, stageHeight, config, insets = {}) {
+    const L = READING_TEXT_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    if (usableWidth <= 0 || usableHeight <= 0 || config.text === "" || config.questions.length === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const areaLeft = originX + edge;
+    const areaTop = originY + edge;
+    const areaWidth = Math.max(usableWidth - edge * 2, 1);
+    const areaHeight = Math.max(usableHeight - edge * 2, 1);
+    let best = null;
+    const tryArrangement = (arrangement, share) => {
+        const slot = arrangement === "side"
+            ? { left: areaLeft, top: areaTop, width: areaWidth * share - gap / 2, height: areaHeight }
+            : { left: areaLeft, top: areaTop, width: areaWidth, height: areaHeight * share - gap / 2 };
+        const column = arrangement === "side"
+            ? { left: slot.left + slot.width + gap, top: areaTop, width: areaWidth - slot.width - gap, height: areaHeight }
+            : { left: areaLeft, top: slot.top + slot.height + gap, width: areaWidth, height: areaHeight - slot.height - gap };
+        if (slot.width <= 0 || slot.height <= 0 || column.width <= 0 || column.height <= 0) {
+            return;
+        }
+        const passage = fitPassage(config.text, slot.width, slot.height);
+        if (passage.size <= 0) {
+            return;
+        }
+        // The question's own layout, given exactly the column: its edge is ours.
+        const columnInsets = {
+            left: column.left - edge,
+            top: column.top - edge,
+            right: stageWidth - (column.left + column.width) - edge,
+            bottom: stageHeight - (column.top + column.height) - edge,
+        };
+        const steps = [];
+        let smallest = passage.size;
+        for (const question of config.questions) {
+            const step = layoutTextChoice(stageWidth, stageHeight, { question: question.question, questionImage: null, answers: question.answers }, columnInsets, L.question);
+            if (!step) {
+                return;
+            }
+            steps.push(step);
+            smallest = Math.min(smallest, step.question[0]?.height ?? smallest, ...step.cards.map((card) => card.lines[0]?.height ?? smallest));
+        }
+        const textWidth = Math.max(...passage.lines.map((line) => textLineUnits(line))) * passage.size;
+        const sheetWidth = Math.min(slot.width, textWidth + L.passagePadX * 2 * passage.size);
+        const sheetHeight = Math.min(slot.height, (passage.lines.length + L.passagePadY * 2) * passage.size);
+        // Beside the questions the sheet stands in the middle of its height; over them, at the top.
+        const sheet = {
+            left: slot.left + (slot.width - sheetWidth) / 2,
+            top: slot.top + (arrangement === "side" ? (slot.height - sheetHeight) / 2 : slot.height - sheetHeight),
+            width: sheetWidth,
+            height: sheetHeight,
+        };
+        const lines = passage.lines.map((text, index) => {
+            const width = Math.min(textLineUnits(text) * passage.size, sheet.width - L.passagePadX * 2 * passage.size);
+            // A text is read from the left: its lines start at one edge.
+            return {
+                text,
+                left: sheet.left + L.passagePadX * passage.size,
+                top: sheet.top + L.passagePadY * passage.size + index * passage.size,
+                width,
+                height: passage.size,
+            };
+        });
+        // Of two as good, the questions beside the text: a phone on its side has the width.
+        const score = smallest + (arrangement === "side" ? 0.25 : 0);
+        if (!best || score > best.score + 1e-9) {
+            best = { score, layout: { sheet, lines, arrangement, steps } };
+        }
+    };
+    L.sideShares.forEach((share) => tryArrangement("side", share));
+    L.stackShares.forEach((share) => tryArrangement("stack", share));
+    return best?.layout ?? null;
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -4584,6 +4807,7 @@ export const GAME_KIND_KEYS = {
     "math-input": "mathInput",
     "word-build": "wordBuild",
     "label-diagram": "labelDiagram",
+    "reading-text": "readingText",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -4606,6 +4830,7 @@ export const GAME_TIMINGS_BY_KIND = {
     "math-input": GAME_TIMINGS.mathInput,
     "word-build": GAME_TIMINGS.wordBuild,
     "label-diagram": GAME_TIMINGS.labelDiagram,
+    "reading-text": GAME_TIMINGS.readingText,
     "memory-cards": GAME_TIMINGS.memoryCards,
     "pattern-next": GAME_TIMINGS.patternNext,
     "select-option": GAME_TIMINGS.selectOption,
@@ -4634,6 +4859,7 @@ export const GAME_GESTURES = {
     "math-input": "tap",
     "word-build": "tap",
     "label-diagram": "tap",
+    "reading-text": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",
