@@ -6781,8 +6781,6 @@ export function resolveReadingTextTap(
 
 /** Proportions of the text and of its questions. Paddings are shares of the line they surround. */
 export const READING_TEXT_LAYOUT = {
-  /** The most lines the text is broken into. */
-  passageLines: 16,
   /** A line of the text never grows past this, in px. */
   maxPassageLine: 46,
   /** Around the text on its sheet. */
@@ -6809,28 +6807,69 @@ export type ReadingTextLayout = {
   steps: TextChoiceLayout[];
 };
 
-/** A text set as big as it goes into `width` × `height`, with its paddings. */
+/**
+ * A text's words set from the left into lines no wider than `units`, as a
+ * book sets them. `advances` are the words' own widths in ems, measured once.
+ */
+function wrapTextLines(words: readonly string[], advances: readonly number[], units: number): string[] {
+  const space = textLineAdvance(" ");
+  // The widest a line's letters may be, in ems: `textLineUnits` turned round.
+  const room = units * TEXT_ART.lineHeight - TEXT_ART.pad * 2;
+  const lines: string[] = [];
+  let from = 0;
+  let width = 0;
+
+  words.forEach((word, index) => {
+    if (index > from && width + space + advances[index] > room) {
+      lines.push(words.slice(from, index).join(" "));
+      from = index;
+      width = advances[index];
+    } else {
+      width += (index > from ? space : 0) + advances[index];
+    }
+  });
+
+  if (from < words.length) {
+    lines.push(words.slice(from).join(" "));
+  }
+  return lines;
+}
+
+/**
+ * A text set as big as it goes into `width` × `height`, with its paddings:
+ * the biggest size at which its lines, filled from the left, are no more than
+ * the height holds — found by halving.
+ */
 function fitPassage(text: string, width: number, height: number): { lines: string[]; size: number } {
   const L = READING_TEXT_LAYOUT;
-  let best = { lines: [] as string[], size: 0 };
+  const words = text.split(" ").filter(Boolean);
 
-  for (let count = 1; count <= L.passageLines; count += 1) {
-    const lines = breakTextLines(text, count);
-    if (lines.length < count && count > 1) {
-      break;
-    }
-    const units = Math.max(...lines.map((line) => textLineUnits(line)));
-    const size = Math.min(
-      width / (units + L.passagePadX * 2),
-      height / (lines.length + L.passagePadY * 2),
-      L.maxPassageLine,
-    );
-    if (size > best.size + 1e-9) {
-      best = { lines, size };
+  if (words.length === 0) {
+    return { lines: [], size: 0 };
+  }
+
+  const advances = words.map((word) => textLineAdvance(word));
+  const widest = Math.max(...words.map((word) => textLineUnits(word)));
+  const set = (size: number) => wrapTextLines(words, advances, width / size - L.passagePadX * 2);
+  const fits = (size: number) =>
+    widest <= width / size - L.passagePadX * 2 && (set(size).length + L.passagePadY * 2) * size <= height;
+
+  if (fits(L.maxPassageLine)) {
+    return { lines: set(L.maxPassageLine), size: L.maxPassageLine };
+  }
+
+  let low = 0;
+  let high: number = L.maxPassageLine;
+  for (let step = 0; step < 24; step += 1) {
+    const middle = (low + high) / 2;
+    if (fits(middle)) {
+      low = middle;
+    } else {
+      high = middle;
     }
   }
 
-  return best;
+  return low > 0 ? { lines: set(low), size: low } : { lines: [], size: 0 };
 }
 
 /**

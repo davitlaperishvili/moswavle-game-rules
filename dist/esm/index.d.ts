@@ -2007,8 +2007,6 @@ export type ReadingTextTapResult =
 export declare function resolveReadingTextTap(config: Pick<ReadingTextConfig, "questions">, step: number, crossed: readonly string[], answerId: string): ReadingTextTapResult;
 /** Proportions of the text and of its questions. Paddings are shares of the line they surround. */
 export declare const READING_TEXT_LAYOUT: {
-    /** The most lines the text is broken into. */
-    readonly passageLines: 16;
     /** A line of the text never grows past this, in px. */
     readonly maxPassageLine: 46;
     /** Around the text on its sheet. */
