@@ -25,7 +25,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GAME_KIND_KEYS = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.SORT_BINS_SORTED_SHARE = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
+exports.GAME_KIND_KEYS = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
 exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
@@ -69,6 +69,7 @@ exports.catchCorrectFallDurationMs = catchCorrectFallDurationMs;
 exports.fitSquares = fitSquares;
 exports.layoutSortBinsTray = layoutSortBinsTray;
 exports.sortBinsSortedSide = sortBinsSortedSide;
+exports.layoutImageOrder = layoutImageOrder;
 exports.layoutMemoryCards = layoutMemoryCards;
 exports.memoryCardColor = memoryCardColor;
 exports.layoutPatternNext = layoutPatternNext;
@@ -2605,8 +2606,6 @@ function fitSquares(width, height, count, gap = 0) {
 }
 /** No tile of the tray is longer than this on a side: a big screen makes no giants. */
 exports.SORT_BINS_TILE_MAX = 190;
-/** A thing already sorted is drawn this much of a tray tile, when its group has the room. */
-exports.SORT_BINS_SORTED_SHARE = 0.86;
 /**
  * The things still to sort, in their tray (`width` x `height`, the room
  * inside its padding).
@@ -2636,15 +2635,89 @@ function layoutSortBinsTray(width, height, count, reserveLeft = 0) {
 }
 /**
  * The side of a thing lying in its group (`width` x `height`, the room for
- * the group's things). It stays close to a tray tile — shrinking it made the
- * finished half of the game look like a discard pile — but `most`, the most
- * things one group ends with, must all fit.
+ * the group's things). It fills that room: `most`, the most things one group
+ * ends with, are as big as they can all be in it, so the first thing sorted
+ * already has its place's size and none shrinks as the group fills. Kept to
+ * the tray's tile it was too small on a phone on its side: a group had the
+ * room for things twice that size and showed them as icons. Before the room
+ * is measured, a thing is as big as a tile (`tile`).
  */
 function sortBinsSortedSide(width, height, most, tile, gap = 4) {
     if (width <= 0 || height <= 0) {
-        return Math.floor(tile * exports.SORT_BINS_SORTED_SHARE);
+        return Math.max(0, Math.floor(tile));
     }
-    return Math.max(0, Math.min(Math.floor(tile * exports.SORT_BINS_SORTED_SHARE), fitSquares(width, height, most, gap).side));
+    return Math.max(0, Math.min(exports.SORT_BINS_TILE_MAX, fitSquares(width, height, most, gap).side));
+}
+// --- Image Order ------------------------------------------------------------
+/** No tile of the order game is longer than this on a side: a big screen makes no giants. */
+exports.IMAGE_ORDER_TILE_MAX = 220;
+/**
+ * The order game's board in the room it has (`width` x `height`): the
+ * numbered slots in one panel, the pictures to place under them in another.
+ *
+ * Every slot and every picture is one square, as big as the room lets them be
+ * — the line count chosen for that, the fewer lines when two give the same —
+ * so four steps stand in one line of slots and one of pictures on a phone on
+ * its side, not three and one. `bankCount` is the pictures the game starts
+ * with: their panel keeps its size as it empties. The panels hug the tiles
+ * and stand in the middle of the whole room, and move right only as far as
+ * `reserveLeft`, the strip the speaker's corner takes, makes them.
+ */
+function layoutImageOrder(width, height, count, bankCount, reserveLeft = 0) {
+    const total = Math.max(1, Math.floor(count));
+    const bank = Math.max(0, Math.min(total, Math.floor(bankCount)));
+    const empty = {
+        tile: 0,
+        columns: total,
+        slotRows: 1,
+        bankRows: bank > 0 ? 1 : 0,
+        gap: 0,
+        padding: 0,
+        sectionGap: 0,
+        panelWidth: 0,
+        slotPanelHeight: 0,
+        bankPanelHeight: 0,
+        left: 0,
+        top: 0,
+    };
+    if (width <= 0 || height <= 0) {
+        return empty;
+    }
+    const reserve = clampNumber(reserveLeft, 0, width);
+    const gap = Math.round(clampNumber(Math.min(width, height) * 0.03, 6, 14));
+    const padding = gap;
+    const sectionGap = bank > 0 ? gap : 0;
+    const panels = bank > 0 ? 2 : 1;
+    let best = { tile: 0, columns: total, slotRows: 1, bankRows: bank > 0 ? 1 : 0 };
+    for (let columns = 1; columns <= total; columns += 1) {
+        const slotRows = Math.ceil(total / columns);
+        const bankRows = bank > 0 ? Math.ceil(bank / columns) : 0;
+        const across = (width - reserve - padding * 2 - gap * (columns - 1)) / columns;
+        const down = (height - panels * padding * 2 - sectionGap - gap * (slotRows - 1) - gap * Math.max(0, bankRows - 1)) /
+            (slotRows + bankRows);
+        const tile = Math.max(0, Math.floor(Math.min(across, down, exports.IMAGE_ORDER_TILE_MAX)));
+        const rows = slotRows + bankRows;
+        if (tile > best.tile || (tile === best.tile && tile > 0 && rows < best.slotRows + best.bankRows)) {
+            best = { tile, columns, slotRows, bankRows };
+        }
+    }
+    if (best.tile <= 0) {
+        return { ...empty, gap, padding, sectionGap };
+    }
+    const panelWidth = best.columns * best.tile + gap * (best.columns - 1) + padding * 2;
+    const slotPanelHeight = best.slotRows * best.tile + gap * (best.slotRows - 1) + padding * 2;
+    const bankPanelHeight = best.bankRows > 0 ? best.bankRows * best.tile + gap * (best.bankRows - 1) + padding * 2 : 0;
+    return {
+        ...best,
+        gap,
+        padding,
+        sectionGap,
+        panelWidth,
+        slotPanelHeight,
+        bankPanelHeight,
+        left: Math.round(Math.max(reserve, (width - panelWidth) / 2)),
+        top: Math.round(Math.max(0, (height - slotPanelHeight - sectionGap - bankPanelHeight) / 2)),
+    };
 }
 /** No card is longer than this on a side: a big screen makes no giants. */
 exports.MEMORY_CARD_MAX_SIDE = 230;

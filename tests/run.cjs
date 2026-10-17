@@ -387,10 +387,47 @@ section('Sort Bins: the tray is filled, and its tiles stand in the middle');
   check('a big screen makes no giants', rules.layoutSortBinsTray(1600, 400, 4).tile === rules.SORT_BINS_TILE_MAX);
   check('no tray, no sizes', rules.layoutSortBinsTray(0, 0, 6).tile === 0);
 
-  check('a sorted thing stays close to a tile', rules.sortBinsSortedSide(340, 140, 3, 100) === 86);
-  check('but all of a group must fit', rules.sortBinsSortedSide(340, 140, 6, 100) < 86 && rules.sortBinsSortedSide(340, 140, 6, 100) > 0);
+  // A group on a phone on its side: 340 x 140 of room, three things in it by the end.
+  check('a sorted thing fills its group, bigger than a tray tile', rules.sortBinsSortedSide(340, 140, 3, 100, 4) === 110, String(rules.sortBinsSortedSide(340, 140, 3, 100, 4)));
+  check('and all of a group still fit', rules.sortBinsSortedSide(340, 140, 6, 100, 4) === 68, String(rules.sortBinsSortedSide(340, 140, 6, 100, 4)));
+  check('a big group makes no giants', rules.sortBinsSortedSide(900, 600, 2, 100) === rules.SORT_BINS_TILE_MAX);
+  check('an unmeasured group has things the size of a tile', rules.sortBinsSortedSide(0, 0, 3, 100) === 100);
   const squares = rules.fitSquares(300, 100, 6, 10);
   check('squares take the grid that makes them biggest', squares.columns === 3 && squares.rows === 2 && squares.side === 45, JSON.stringify(squares));
+}
+
+section('Image Order: slots and pictures are big squares, one line each where they fit');
+{
+  // A phone on its side, as in the owner's screenshot: four steps.
+  const phone = rules.layoutImageOrder(734, 320, 4, 4);
+  check('four steps stand in one line of slots and one of pictures', phone.columns === 4 && phone.slotRows === 1 && phone.bankRows === 1, JSON.stringify(phone));
+  check('and are far bigger than the old cards', phone.tile >= 130, JSON.stringify(phone));
+  check('the board fits the room', phone.left + phone.panelWidth <= 734 && phone.top + phone.slotPanelHeight + phone.sectionGap + phone.bankPanelHeight <= 320);
+  check('in its middle', Math.abs(phone.left + phone.panelWidth / 2 - 734 / 2) <= 1);
+
+  const small = rules.layoutImageOrder(560, 250, 4, 4);
+  check('a small phone keeps them in one line too', small.columns === 4 && small.tile >= 95, JSON.stringify(small));
+
+  const six = rules.layoutImageOrder(734, 320, 6, 6);
+  check('six steps stand in one line where that is bigger', six.columns === 6 && six.tile > 0, JSON.stringify(six));
+
+  const shown = rules.layoutImageOrder(734, 320, 4, 3);
+  check('a step shown as an example leaves the pictures one fewer, in the same lines', shown.columns === 4 && shown.bankRows === 1);
+  const allShown = rules.layoutImageOrder(734, 320, 4, 0);
+  check('nothing to place, no pictures panel', allShown.bankRows === 0 && allShown.bankPanelHeight === 0 && allShown.sectionGap === 0);
+
+  const tablet = rules.layoutImageOrder(1000, 700, 4, 4);
+  check('a big screen makes no giants, and keeps one line', tablet.tile === rules.IMAGE_ORDER_TILE_MAX && tablet.columns === 4, JSON.stringify(tablet));
+
+  const upright = rules.layoutImageOrder(360, 600, 4, 4);
+  check('a tall room breaks the line where that is bigger', upright.columns === 2 && upright.slotRows === 2, JSON.stringify(upright));
+
+  const beside = rules.layoutImageOrder(600, 300, 4, 4, 80);
+  check('the speaker\'s corner moves the board no further than it must', beside.left >= 80 && beside.left + beside.panelWidth <= 600, JSON.stringify(beside));
+  const clear = rules.layoutImageOrder(1000, 300, 4, 4, 40);
+  check('a board clear of the corner stays in the middle', Math.abs(clear.left + clear.panelWidth / 2 - 500) <= 1, JSON.stringify(clear));
+
+  check('no room, no sizes', rules.layoutImageOrder(0, 0, 4, 4).tile === 0);
 }
 
 section('Memory Cards: the board fills the stage');

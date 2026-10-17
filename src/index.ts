@@ -3693,8 +3693,6 @@ export function fitSquares(width: number, height: number, count: number, gap = 0
 
 /** No tile of the tray is longer than this on a side: a big screen makes no giants. */
 export const SORT_BINS_TILE_MAX = 190;
-/** A thing already sorted is drawn this much of a tray tile, when its group has the room. */
-export const SORT_BINS_SORTED_SHARE = 0.86;
 
 export type SortBinsTrayLayout = {
   /** The side of one tile. */
@@ -3745,16 +3743,131 @@ export function layoutSortBinsTray(
 
 /**
  * The side of a thing lying in its group (`width` x `height`, the room for
- * the group's things). It stays close to a tray tile — shrinking it made the
- * finished half of the game look like a discard pile — but `most`, the most
- * things one group ends with, must all fit.
+ * the group's things). It fills that room: `most`, the most things one group
+ * ends with, are as big as they can all be in it, so the first thing sorted
+ * already has its place's size and none shrinks as the group fills. Kept to
+ * the tray's tile it was too small on a phone on its side: a group had the
+ * room for things twice that size and showed them as icons. Before the room
+ * is measured, a thing is as big as a tile (`tile`).
  */
 export function sortBinsSortedSide(width: number, height: number, most: number, tile: number, gap = 4): number {
   if (width <= 0 || height <= 0) {
-    return Math.floor(tile * SORT_BINS_SORTED_SHARE);
+    return Math.max(0, Math.floor(tile));
   }
 
-  return Math.max(0, Math.min(Math.floor(tile * SORT_BINS_SORTED_SHARE), fitSquares(width, height, most, gap).side));
+  return Math.max(0, Math.min(SORT_BINS_TILE_MAX, fitSquares(width, height, most, gap).side));
+}
+
+// --- Image Order ------------------------------------------------------------
+
+/** No tile of the order game is longer than this on a side: a big screen makes no giants. */
+export const IMAGE_ORDER_TILE_MAX = 220;
+
+export type ImageOrderLayout = {
+  /** The side of one tile: a slot and a picture to place are the same square. */
+  tile: number;
+  /** How many stand in a line, in the slots' panel and in the pictures' alike. */
+  columns: number;
+  slotRows: number;
+  /** None when there is nothing to place (every step shown as an example). */
+  bankRows: number;
+  /** Between two tiles, both ways. */
+  gap: number;
+  /** A panel's room around its tiles. */
+  padding: number;
+  /** Between the slots' panel and the pictures'. */
+  sectionGap: number;
+  /** Both panels are this wide, one over the other. */
+  panelWidth: number;
+  slotPanelHeight: number;
+  bankPanelHeight: number;
+  /** Where the panels begin in the room. */
+  left: number;
+  top: number;
+};
+
+/**
+ * The order game's board in the room it has (`width` x `height`): the
+ * numbered slots in one panel, the pictures to place under them in another.
+ *
+ * Every slot and every picture is one square, as big as the room lets them be
+ * — the line count chosen for that, the fewer lines when two give the same —
+ * so four steps stand in one line of slots and one of pictures on a phone on
+ * its side, not three and one. `bankCount` is the pictures the game starts
+ * with: their panel keeps its size as it empties. The panels hug the tiles
+ * and stand in the middle of the whole room, and move right only as far as
+ * `reserveLeft`, the strip the speaker's corner takes, makes them.
+ */
+export function layoutImageOrder(
+  width: number,
+  height: number,
+  count: number,
+  bankCount: number,
+  reserveLeft = 0,
+): ImageOrderLayout {
+  const total = Math.max(1, Math.floor(count));
+  const bank = Math.max(0, Math.min(total, Math.floor(bankCount)));
+  const empty: ImageOrderLayout = {
+    tile: 0,
+    columns: total,
+    slotRows: 1,
+    bankRows: bank > 0 ? 1 : 0,
+    gap: 0,
+    padding: 0,
+    sectionGap: 0,
+    panelWidth: 0,
+    slotPanelHeight: 0,
+    bankPanelHeight: 0,
+    left: 0,
+    top: 0,
+  };
+
+  if (width <= 0 || height <= 0) {
+    return empty;
+  }
+
+  const reserve = clampNumber(reserveLeft, 0, width);
+  const gap = Math.round(clampNumber(Math.min(width, height) * 0.03, 6, 14));
+  const padding = gap;
+  const sectionGap = bank > 0 ? gap : 0;
+  const panels = bank > 0 ? 2 : 1;
+  let best = { tile: 0, columns: total, slotRows: 1, bankRows: bank > 0 ? 1 : 0 };
+
+  for (let columns = 1; columns <= total; columns += 1) {
+    const slotRows = Math.ceil(total / columns);
+    const bankRows = bank > 0 ? Math.ceil(bank / columns) : 0;
+    const across = (width - reserve - padding * 2 - gap * (columns - 1)) / columns;
+    const down =
+      (height - panels * padding * 2 - sectionGap - gap * (slotRows - 1) - gap * Math.max(0, bankRows - 1)) /
+      (slotRows + bankRows);
+    const tile = Math.max(0, Math.floor(Math.min(across, down, IMAGE_ORDER_TILE_MAX)));
+    const rows = slotRows + bankRows;
+
+    if (tile > best.tile || (tile === best.tile && tile > 0 && rows < best.slotRows + best.bankRows)) {
+      best = { tile, columns, slotRows, bankRows };
+    }
+  }
+
+  if (best.tile <= 0) {
+    return { ...empty, gap, padding, sectionGap };
+  }
+
+  const panelWidth = best.columns * best.tile + gap * (best.columns - 1) + padding * 2;
+  const slotPanelHeight = best.slotRows * best.tile + gap * (best.slotRows - 1) + padding * 2;
+  const bankPanelHeight =
+    best.bankRows > 0 ? best.bankRows * best.tile + gap * (best.bankRows - 1) + padding * 2 : 0;
+
+  return {
+    ...best,
+    gap,
+    padding,
+    sectionGap,
+    panelWidth,
+    slotPanelHeight,
+    bankPanelHeight,
+    left: Math.round(Math.max(reserve, (width - panelWidth) / 2)),
+    top: Math.round(Math.max(0, (height - slotPanelHeight - sectionGap - bankPanelHeight) / 2)),
+  };
 }
 
 // --- Memory Cards -----------------------------------------------------------

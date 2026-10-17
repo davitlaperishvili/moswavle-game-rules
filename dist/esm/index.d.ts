@@ -885,8 +885,6 @@ export type SquaresFit = {
 export declare function fitSquares(width: number, height: number, count: number, gap?: number): SquaresFit;
 /** No tile of the tray is longer than this on a side: a big screen makes no giants. */
 export declare const SORT_BINS_TILE_MAX = 190;
-/** A thing already sorted is drawn this much of a tray tile, when its group has the room. */
-export declare const SORT_BINS_SORTED_SHARE = 0.86;
 export type SortBinsTrayLayout = {
     /** The side of one tile. */
     tile: number;
@@ -911,11 +909,51 @@ export type SortBinsTrayLayout = {
 export declare function layoutSortBinsTray(width: number, height: number, count: number, reserveLeft?: number): SortBinsTrayLayout;
 /**
  * The side of a thing lying in its group (`width` x `height`, the room for
- * the group's things). It stays close to a tray tile — shrinking it made the
- * finished half of the game look like a discard pile — but `most`, the most
- * things one group ends with, must all fit.
+ * the group's things). It fills that room: `most`, the most things one group
+ * ends with, are as big as they can all be in it, so the first thing sorted
+ * already has its place's size and none shrinks as the group fills. Kept to
+ * the tray's tile it was too small on a phone on its side: a group had the
+ * room for things twice that size and showed them as icons. Before the room
+ * is measured, a thing is as big as a tile (`tile`).
  */
 export declare function sortBinsSortedSide(width: number, height: number, most: number, tile: number, gap?: number): number;
+/** No tile of the order game is longer than this on a side: a big screen makes no giants. */
+export declare const IMAGE_ORDER_TILE_MAX = 220;
+export type ImageOrderLayout = {
+    /** The side of one tile: a slot and a picture to place are the same square. */
+    tile: number;
+    /** How many stand in a line, in the slots' panel and in the pictures' alike. */
+    columns: number;
+    slotRows: number;
+    /** None when there is nothing to place (every step shown as an example). */
+    bankRows: number;
+    /** Between two tiles, both ways. */
+    gap: number;
+    /** A panel's room around its tiles. */
+    padding: number;
+    /** Between the slots' panel and the pictures'. */
+    sectionGap: number;
+    /** Both panels are this wide, one over the other. */
+    panelWidth: number;
+    slotPanelHeight: number;
+    bankPanelHeight: number;
+    /** Where the panels begin in the room. */
+    left: number;
+    top: number;
+};
+/**
+ * The order game's board in the room it has (`width` x `height`): the
+ * numbered slots in one panel, the pictures to place under them in another.
+ *
+ * Every slot and every picture is one square, as big as the room lets them be
+ * — the line count chosen for that, the fewer lines when two give the same —
+ * so four steps stand in one line of slots and one of pictures on a phone on
+ * its side, not three and one. `bankCount` is the pictures the game starts
+ * with: their panel keeps its size as it empties. The panels hug the tiles
+ * and stand in the middle of the whole room, and move right only as far as
+ * `reserveLeft`, the strip the speaker's corner takes, makes them.
+ */
+export declare function layoutImageOrder(width: number, height: number, count: number, bankCount: number, reserveLeft?: number): ImageOrderLayout;
 export type MemoryCardsLayout = {
     columns: number;
     rows: number;
