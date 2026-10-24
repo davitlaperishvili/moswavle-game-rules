@@ -26,7 +26,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -152,6 +152,9 @@ exports.layoutSentenceBuild = layoutSentenceBuild;
 exports.normalizeWordSortConfig = normalizeWordSortConfig;
 exports.resolveWordSortTap = resolveWordSortTap;
 exports.layoutWordSort = layoutWordSort;
+exports.normalizeNumberLineConfig = normalizeNumberLineConfig;
+exports.resolveNumberLineTap = resolveNumberLineTap;
+exports.layoutNumberLine = layoutNumberLine;
 exports.gestureHintTapStops = gestureHintTapStops;
 exports.gestureHintDragEnd = gestureHintDragEnd;
 const letters_js_1 = require("./letters.js");
@@ -941,6 +944,16 @@ function resolveGameKind(type, config) {
         "word_groups",
     ].includes(normalizedType)) {
         return "word-sort";
+    }
+    if ([
+        "number_line",
+        "numberline",
+        "number_ray",
+        "place_on_line",
+        "line_jump",
+        "number_jump",
+    ].includes(normalizedType)) {
+        return "number-line";
     }
     if ([
         "memory_cards",
@@ -3223,6 +3236,11 @@ exports.GAME_TIMINGS = {
      * the baskets are seen `successSettleMs`.
      */
     wordSort: { wrongFeedbackMs: 520, flyMs: 380, successSettleMs: 900, livesOutDelayMs: 320 },
+    /**
+     * The marker slides to the tick tapped over `moveMs`; a wrong tick shakes for
+     * `wrongFeedbackMs`. The right one is seen `successSettleMs`.
+     */
+    numberLine: { wrongFeedbackMs: 560, moveMs: 300, successSettleMs: 800, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -6664,6 +6682,158 @@ function layoutWordSort(stageWidth, stageHeight, config, insets = {}) {
     }
     return low > 1 ? place(low) : null;
 }
+// --- number_line: a number placed on a line, or a jump landed --------------------
+//
+// A number line drawn in code: from its start to its end, a tick every step,
+// some of them numbered. Place: a number is written on a card and the child
+// taps the tick where it lies. Jump: the line shows where a hop starts and the
+// card says how far it goes ("+30", "−4"), and the child taps where it lands.
+// The number asked is never written under its own tick. A wrong tick costs a
+// life; the right one takes the marker and wins.
+/** A line has at most this many ticks: more are too close for a finger. */
+exports.NUMBER_LINE_TICKS_MAX = 21;
+/**
+ * The game as the players draw it. `start`, `end` and `step` make the line
+ * (0, 10 and 1 by default); `label_every` numbers every so many ticks (the
+ * start and the end always). The number asked is `target`, or `from` and
+ * `jump` together — then the line marks `from` and the card says the jump. A
+ * line of more than `NUMBER_LINE_TICKS_MAX` ticks, or a number asked that is
+ * not one of them, is no game.
+ */
+function normalizeNumberLineConfig(config) {
+    const bg = normalizeBackground(config);
+    const whole = (value, fallback) => {
+        const number = extractNumber(value);
+        return number !== null && Number.isFinite(number) ? Math.round(number) : fallback;
+    };
+    const start = whole(config.start, 0);
+    const end = whole(config.end, 10);
+    const step = Math.max(1, whole(config.step, 1));
+    const labelEvery = Math.max(1, whole(config.label_every, 5));
+    const count = end > start && (end - start) % step === 0 ? (end - start) / step + 1 : 0;
+    const values = count >= 3 && count <= exports.NUMBER_LINE_TICKS_MAX ? Array.from({ length: count }, (_unused, index) => start + index * step) : [];
+    const fromValue = extractNumber(config.from);
+    const jumpValue = extractNumber(config.jump);
+    const isJump = fromValue !== null && jumpValue !== null && jumpValue !== 0;
+    // A number asked is a whole one: 2.5 is between two ticks, not on one.
+    const targetValue = extractNumber(config.target);
+    const asked = isJump ? Math.round(fromValue) + Math.round(jumpValue) : targetValue !== null && Number.isInteger(targetValue) ? targetValue : Number.NaN;
+    const target = values.includes(asked) && !(isJump && !values.includes(Math.round(fromValue))) ? asked : -1;
+    return {
+        start,
+        end,
+        step,
+        ticks: values.map((value, index) => ({
+            value,
+            labelled: value !== target && (index === 0 || index === values.length - 1 || index % labelEvery === 0),
+        })),
+        target: values.length > 0 ? target : -1,
+        from: isJump && target >= 0 ? Math.round(fromValue) : null,
+        jump: isJump && target >= 0 ? Math.round(jumpValue) : null,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: bg ? [bg] : [],
+    };
+}
+/** What a tap on a tick does: the whole play rule. */
+function resolveNumberLineTap(config, value) {
+    if (config.target < 0 || !config.ticks.some((tick) => tick.value === value)) {
+        return { type: "ignored" };
+    }
+    return value === config.target ? { type: "right" } : { type: "wrong" };
+}
+/** Proportions of the number line. */
+exports.NUMBER_LINE_LAYOUT = {
+    /** A tick's number: this tall within these, in px; the card's number twice as tall. */
+    minNumber: 18,
+    maxNumber: 36,
+    card: 2,
+    /** A tick, as a share of the number's height, and the line's thickness. */
+    tick: 0.9,
+    majorTick: 1.3,
+    thickness: 0.22,
+    /** A tick's place to tap: as wide as the room between ticks, this many numbers high. */
+    zoneHeight: 3.2,
+    /** The jump's arc rises this many numbers over the line. */
+    arc: 2.2,
+};
+/** How wide a number is written at a height of 1: its digits and its minus. */
+function numberLineUnits(value) {
+    return (String(Math.abs(value)).length + (value < 0 ? 0.8 : 0)) * exports.MATH_EQUATION_LAYOUT.digit;
+}
+/**
+ * Where everything of the number line goes. The background covers the
+ * stage; the card stands at the top, the line across the stage under it with
+ * its ticks, their numbers under them and a place to tap round each — as big
+ * as the widest number between two ticks lets them be.
+ */
+function layoutNumberLine(stageWidth, stageHeight, config, insets = {}) {
+    const L = exports.NUMBER_LINE_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    if (usableWidth <= 0 || usableHeight <= 0 || config.ticks.length < 3 || config.target < 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const area = {
+        left: originX + edge,
+        top: originY + edge,
+        width: Math.max(usableWidth - edge * 2, 1),
+        height: Math.max(usableHeight - edge * 2, 1),
+    };
+    const count = config.ticks.length;
+    const widest = Math.max(...config.ticks.map((tick) => numberLineUnits(tick.value)));
+    const cardText = config.jump !== null ? numberLineUnits(Math.abs(config.jump)) + exports.MATH_EQUATION_LAYOUT.sign : numberLineUnits(config.target);
+    const hasArc = config.from !== null;
+    // The number as tall as the height lets it be, and narrow enough that two numbers side by side
+    // never touch: the line runs between the middles of its end numbers.
+    const fitsHeight = (number) => number * L.card * 1.5 + gap + (hasArc ? number * L.arc : 0) + number * L.majorTick + number * 1.6 <= area.height;
+    // Only numbered ticks need the room: the closest two of them, so many ticks apart.
+    const labelled = config.ticks.map((tick, index) => (tick.labelled ? index : -1)).filter((index) => index >= 0);
+    const apart = Math.max(1, Math.min(...labelled.slice(1).map((index, at) => index - labelled[at])));
+    let number = Math.min(L.maxNumber, (apart * area.width) / (widest * (1.15 * (count - 1) + apart)));
+    while (number > 6 && !fitsHeight(number)) {
+        number *= 0.94;
+    }
+    const halfLabel = (widest * number) / 2;
+    const left = area.left + halfLabel;
+    const right = area.left + area.width - halfLabel;
+    const between = (right - left) / (count - 1);
+    // The block is the card, the arc's room, the line and the numbers under it, in the middle of the height.
+    const cardHeight = number * L.card * 1.5;
+    const block = cardHeight + gap + (hasArc ? number * L.arc : 0) + number * L.majorTick / 2 + number * 1.6;
+    const top = area.top + Math.max(0, (area.height - block) / 2);
+    const cardWidth = (cardText + 0.8) * number * L.card;
+    const card = { left: area.left + (area.width - cardWidth) / 2, top, width: cardWidth, height: cardHeight };
+    const y = card.top + cardHeight + gap + (hasArc ? number * L.arc : 0) + (number * L.majorTick) / 2;
+    const zoneFloor = card.top + cardHeight + gap / 2;
+    const ticks = config.ticks.map((tick, index) => {
+        const x = left + index * between;
+        const tickHeight = number * (tick.labelled ? L.majorTick : L.tick);
+        const labelWidth = numberLineUnits(tick.value) * number;
+        const zoneHeight = number * L.zoneHeight;
+        return {
+            value: tick.value,
+            x,
+            tickHeight,
+            label: tick.labelled ? { left: x - labelWidth / 2, top: y + (number * L.majorTick) / 2 + number * 0.25, width: labelWidth, height: number } : null,
+            // Round its tick, but never up into the card.
+            zone: { left: x - between / 2, top: Math.max(y - zoneHeight / 2, zoneFloor), width: between, height: y + zoneHeight / 2 - Math.max(y - zoneHeight / 2, zoneFloor) },
+        };
+    });
+    const fromIndex = config.from !== null ? config.ticks.findIndex((tick) => tick.value === config.from) : -1;
+    return {
+        card,
+        line: { left: left - number * 0.4, right: right + number * 0.4, y, thickness: Math.max(2, number * L.thickness) },
+        ticks,
+        number,
+        arc: fromIndex >= 0 ? { fromX: ticks[fromIndex].x, height: number * L.arc } : null,
+    };
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -6690,6 +6860,7 @@ exports.GAME_KIND_KEYS = {
     "fraction-pick": "fractionPick",
     "sentence-build": "sentenceBuild",
     "word-sort": "wordSort",
+    "number-line": "numberLine",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -6719,6 +6890,7 @@ exports.GAME_TIMINGS_BY_KIND = {
     "fraction-pick": exports.GAME_TIMINGS.fractionPick,
     "sentence-build": exports.GAME_TIMINGS.sentenceBuild,
     "word-sort": exports.GAME_TIMINGS.wordSort,
+    "number-line": exports.GAME_TIMINGS.numberLine,
     "memory-cards": exports.GAME_TIMINGS.memoryCards,
     "pattern-next": exports.GAME_TIMINGS.patternNext,
     "select-option": exports.GAME_TIMINGS.selectOption,
@@ -6754,6 +6926,7 @@ exports.GAME_GESTURES = {
     "fraction-pick": "tap",
     "sentence-build": "tap",
     "word-sort": "tap",
+    "number-line": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",

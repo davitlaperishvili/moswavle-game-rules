@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1333,6 +1333,16 @@ export declare const GAME_TIMINGS: {
         readonly wrongFeedbackMs: 520;
         readonly flyMs: 380;
         readonly successSettleMs: 900;
+        readonly livesOutDelayMs: 320;
+    };
+    /**
+     * The marker slides to the tick tapped over `moveMs`; a wrong tick shakes for
+     * `wrongFeedbackMs`. The right one is seen `successSettleMs`.
+     */
+    readonly numberLine: {
+        readonly wrongFeedbackMs: 560;
+        readonly moveMs: 300;
+        readonly successSettleMs: 800;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -2818,6 +2828,97 @@ export type WordSortLayout = {
  * get. Inside the stage less `insets`.
  */
 export declare function layoutWordSort(stageWidth: number, stageHeight: number, config: Pick<WordSortConfig, "bins" | "words">, insets?: SceneInsets): WordSortLayout | null;
+/** A line has at most this many ticks: more are too close for a finger. */
+export declare const NUMBER_LINE_TICKS_MAX = 21;
+export type NumberLineTick = {
+    value: number;
+    /** Whether its number is written under it: never the number asked. */
+    labelled: boolean;
+};
+export type NumberLineConfig = {
+    /** Where the line starts and ends, and how far apart its ticks are. */
+    start: number;
+    end: number;
+    step: number;
+    /** Every tick of the line, from the start. */
+    ticks: NumberLineTick[];
+    /** The number to find; -1 when it is none of the ticks, and the game is not played. */
+    target: number;
+    /** Jump mode: where the hop starts, and how far it goes (negative: back). Null to place a number. */
+    from: number | null;
+    jump: number | null;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `start`, `end` and `step` make the line
+ * (0, 10 and 1 by default); `label_every` numbers every so many ticks (the
+ * start and the end always). The number asked is `target`, or `from` and
+ * `jump` together — then the line marks `from` and the card says the jump. A
+ * line of more than `NUMBER_LINE_TICKS_MAX` ticks, or a number asked that is
+ * not one of them, is no game.
+ */
+export declare function normalizeNumberLineConfig(config: Record<string, unknown>): NumberLineConfig;
+export type NumberLineTapResult = {
+    type: "ignored";
+} | {
+    type: "right";
+} | {
+    type: "wrong";
+};
+/** What a tap on a tick does: the whole play rule. */
+export declare function resolveNumberLineTap(config: Pick<NumberLineConfig, "ticks" | "target">, value: number): NumberLineTapResult;
+/** Proportions of the number line. */
+export declare const NUMBER_LINE_LAYOUT: {
+    /** A tick's number: this tall within these, in px; the card's number twice as tall. */
+    readonly minNumber: 18;
+    readonly maxNumber: 36;
+    readonly card: 2;
+    /** A tick, as a share of the number's height, and the line's thickness. */
+    readonly tick: 0.9;
+    readonly majorTick: 1.3;
+    readonly thickness: 0.22;
+    /** A tick's place to tap: as wide as the room between ticks, this many numbers high. */
+    readonly zoneHeight: 3.2;
+    /** The jump's arc rises this many numbers over the line. */
+    readonly arc: 2.2;
+};
+export type NumberLineLayout = {
+    /** The card with the number asked, or the jump. */
+    card: BoardRect;
+    /** The line's ends and its height on the stage. */
+    line: {
+        left: number;
+        right: number;
+        y: number;
+        thickness: number;
+    };
+    /** In `ticks` order: where each stands, its number's box (or null), and its place to tap. */
+    ticks: Array<{
+        value: number;
+        x: number;
+        tickHeight: number;
+        label: BoardRect | null;
+        zone: BoardRect;
+    }>;
+    /** A tick's number's height. */
+    number: number;
+    /** Jump mode: where the arc starts and how high it rises; null when placing a number. */
+    arc: {
+        fromX: number;
+        height: number;
+    } | null;
+};
+/**
+ * Where everything of the number line goes. The background covers the
+ * stage; the card stands at the top, the line across the stage under it with
+ * its ticks, their numbers under them and a place to tap round each — as big
+ * as the widest number between two ticks lets them be.
+ */
+export declare function layoutNumberLine(stageWidth: number, stageHeight: number, config: Pick<NumberLineConfig, "ticks" | "target" | "from" | "jump">, insets?: SceneInsets): NumberLineLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -2931,6 +3032,11 @@ export type WordSortMetrics = BaseGameMetrics & {
     sorted: number;
     livesRemaining: number;
 };
+export type NumberLineMetrics = BaseGameMetrics & {
+    /** How many ticks were tapped before the right one, and with it. */
+    attempts: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -3001,6 +3107,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "fraction-pick": "fractionPick";
     readonly "sentence-build": "sentenceBuild";
     readonly "word-sort": "wordSort";
+    readonly "number-line": "numberLine";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -3042,6 +3149,7 @@ export declare const GAME_GESTURES: {
     readonly "fraction-pick": "tap";
     readonly "sentence-build": "tap";
     readonly "word-sort": "tap";
+    readonly "number-line": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -3109,6 +3217,7 @@ export type GameMetricsByKind = {
     "fraction-pick": FractionPickMetrics;
     "sentence-build": SentenceBuildMetrics;
     "word-sort": WordSortMetrics;
+    "number-line": NumberLineMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

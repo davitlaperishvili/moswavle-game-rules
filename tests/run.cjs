@@ -2297,5 +2297,55 @@ section('word_sort: words sorted into baskets');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.wordSort.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-sort'] === rules.GAME_TIMINGS.wordSort && rules.GAME_GESTURES['word-sort'] === 'tap');
 }
 
+section('number_line: a number placed on a line, or a jump landed');
+
+{
+  ['number_line', 'number_ray', 'line_jump', 'Number Line'].forEach((type) => {
+    check(`${type} resolves to number-line`, rules.resolveGameKind(type, {}) === 'number-line');
+  });
+
+  const place = rules.normalizeNumberLineConfig({ start: 0, end: 20, step: 1, label_every: 5, target: 13, bg_image: 'https://x/bg.webp', time_limit: 60 });
+  check('the line: a tick every step from the start to the end', place.ticks.length === 21 && place.ticks[0].value === 0 && place.ticks[20].value === 20 && place.target === 13 && place.from === null);
+  check('numbered: the start, the end and every fifth — never the number asked', place.ticks.filter((tick) => tick.labelled).map((tick) => tick.value).join() === '0,5,10,15,20'
+    && rules.normalizeNumberLineConfig({ start: 0, end: 20, label_every: 5, target: 15 }).ticks.find((tick) => tick.value === 15).labelled === false);
+  check('defaults: 0 to 10 by 1, lives 3, the background to preload', rules.normalizeNumberLineConfig({ target: 4 }).ticks.length === 11 && place.lives === 3 && place.time_limit === 60 && place.imageUris.join() === 'https://x/bg.webp');
+  const jump = rules.normalizeNumberLineConfig({ start: 0, end: 100, step: 10, label_every: 2, from: 30, jump: 40 });
+  check('a jump: from where, how far, and where it lands', jump.target === 70 && jump.from === 30 && jump.jump === 40 && rules.normalizeNumberLineConfig({ start: 0, end: 10, from: 8, jump: -3 }).target === 5);
+  check('no game: a number off the line, a jump that leaves it, a line too long or not cut evenly',
+    rules.normalizeNumberLineConfig({ target: 11 }).target === -1
+      && rules.normalizeNumberLineConfig({ from: 8, jump: 5 }).target === -1
+      && rules.normalizeNumberLineConfig({ start: 0, end: 30, target: 5 }).target === -1
+      && rules.normalizeNumberLineConfig({ start: 0, end: 10, step: 3, target: 3 }).target === -1
+      && rules.normalizeNumberLineConfig({ start: 0, end: 10, target: 2.5 }).target === -1);
+
+  check('the tick of the number asked is right, another is a mistake, no tick nothing',
+    rules.resolveNumberLineTap(place, 13).type === 'right' && rules.resolveNumberLineTap(place, 12).type === 'wrong' && rules.resolveNumberLineTap(place, 13.5).type === 'ignored' && rules.resolveNumberLineTap(place, 40).type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const hundreds = rules.normalizeNumberLineConfig({ start: 100, end: 1000, step: 100, label_every: 2, target: 700 });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [place, jump, hundreds].forEach((config, index) => {
+    const layout = rules.layoutNumberLine(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const labels = layout ? layout.ticks.map((tick) => tick.label).filter(Boolean) : [];
+    const ok = layout && inside(layout.card, stage) && layout.number >= rules.NUMBER_LINE_LAYOUT.minNumber
+      && layout.line.left >= stage.left - 1e-6 && layout.line.right <= stage.left + stage.width + 1e-6 && layout.line.y > layout.card.top + layout.card.height
+      && layout.ticks.length === config.ticks.length && layout.ticks.every((tick, i) => tick.value === config.ticks[i].value && (tick.label !== null) === config.ticks[i].labelled)
+      && labels.every((label) => inside(label, stage) && !overlap(label, layout.card)) && labels.every((a, i) => labels.every((b, j) => i === j || !overlap(a, b)))
+      && layout.ticks.every((tick) => tick.zone.width >= 28 && tick.zone.height >= 40 && !overlap(tick.zone, layout.card))
+      && layout.ticks.every((a, i) => layout.ticks.every((b, j) => i === j || !overlap(a.zone, b.zone)))
+      && (config.from !== null ? layout.arc !== null && layout.line.y - layout.arc.height >= layout.card.top + layout.card.height - 1e-6 : layout.arc === null);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the card, the line, its numbers and the places to tap are whole, apart, inside the safe area and big enough', whole, detail);
+  check('no number asked, no layout', rules.layoutNumberLine(852, 393, { ticks: place.ticks, target: -1, from: null, jump: null }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.numberLine.moveMs > 0 && rules.GAME_TIMINGS_BY_KIND['number-line'] === rules.GAME_TIMINGS.numberLine && rules.GAME_GESTURES['number-line'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
