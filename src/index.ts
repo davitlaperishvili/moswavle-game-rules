@@ -71,6 +71,7 @@ export type RuntimeGameKind =
   | "word-build"
   | "label-diagram"
   | "reading-text"
+  | "word-problem"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -1393,6 +1394,17 @@ export function resolveGameKind(
     "story_questions",
   ].includes(normalizedType)) {
     return "reading-text";
+  }
+
+  if ([
+    "word_problem",
+    "wordproblem",
+    "story_problem",
+    "text_problem",
+    "math_word_problem",
+    "problem_in_words",
+  ].includes(normalizedType)) {
+    return "word-problem";
   }
 
   if ([
@@ -4485,6 +4497,7 @@ export const GAME_TIMINGS = {
    * game waits `successSettleMs`.
    */
   readingText: { wrongFeedbackMs: 560, nextQuestionMs: 700, successSettleMs: 700, livesOutDelayMs: 320 },
+  wordProblem: { wrongFeedbackMs: 620, successSettleMs: 700, livesOutDelayMs: 320 },
   mathEquation: {
     wrongFeedbackMs: 560,
     flyMs: 620,
@@ -7099,6 +7112,279 @@ export function layoutReadingText(
   return (best as Candidate | null)?.layout ?? null;
 }
 
+// --- Word problem -----------------------------------------------------------
+//
+// A problem told in words — "Nino had 12 apples and gave 5 to Gio. How many
+// are left?" — and its answer typed on the pad of digits: the math of a child
+// who reads. The problem stays on its sheet the whole game; the child types
+// the number, which stands in the answer's place as it is typed, and presses
+// the tick. A right number stays; a wrong one shakes, is wiped and costs a
+// life. Nothing is offered to choose from, so nothing can be guessed. The
+// words arrive in the language the game is played in: the server has chosen
+// them, the unit after the answer ("apples", "lari") too.
+
+export type WordProblemConfig = {
+  /** The problem as the child reads it, in the game's language. */
+  text: string;
+  /** The number that answers it. */
+  answer: number;
+  /** A word written after the answer's place ("apples"), or "". */
+  unit: string;
+  /** How many digits can be typed: the answer's, and never fewer than two, so the place does not tell its width. */
+  maxDigits: number;
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+  /** The background: preload before the clock. */
+  imageUris: string[];
+};
+
+/**
+ * The game as the players draw it. The answer is a whole number from 0 to
+ * `MATH_EQUATION_NUMBER_MAX`, the most a math example holds; a problem with
+ * no words or no such answer has none and is not played.
+ */
+export function normalizeWordProblemConfig(config: Record<string, unknown>): WordProblemConfig {
+  const raw = extractNumber(config.answer);
+  const answer = raw !== null && Number.isFinite(raw) ? Math.round(raw) : NaN;
+  const valid = Number.isFinite(answer) && answer >= 0 && answer <= MATH_EQUATION_NUMBER_MAX;
+  const bg = normalizeBackground(config);
+
+  return {
+    text: (extractText(config.text) ?? extractText(config.problem) ?? "").replace(/\s+/g, " ").trim(),
+    answer: valid ? answer : -1,
+    unit: (extractText(config.unit) ?? "").replace(/\s+/g, " ").trim(),
+    maxDigits: Math.max(MATH_INPUT_DIGITS_MIN, valid ? String(answer).length : MATH_INPUT_DIGITS_MIN),
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    imageUris: bg ? [bg] : [],
+  };
+}
+
+export type WordProblemEntryResult =
+  /** Nothing is typed yet: the tick does nothing. */
+  | { type: "ignored" }
+  /** The number typed is the answer. */
+  | { type: "right"; value: number }
+  /** It is not: a mistake. */
+  | { type: "wrong"; value: number };
+
+/**
+ * What the tick does with what is typed: the whole play rule, so both players
+ * follow it tap for tap. What a key types is `pressMathInputKey`, as in the
+ * typed math example.
+ */
+export function resolveWordProblemEntry(
+  config: Pick<WordProblemConfig, "answer">,
+  entry: string,
+): WordProblemEntryResult {
+  if (!/^[0-9]+$/.test(entry) || config.answer < 0) {
+    return { type: "ignored" };
+  }
+
+  const value = Number(entry);
+  return value === config.answer ? { type: "right", value } : { type: "wrong", value };
+}
+
+/** Proportions of a word problem. The pad's keys are the typed example's (`MATH_INPUT_LAYOUT`). */
+export const WORD_PROBLEM_LAYOUT = {
+  /** The problem's share of the width when the answer and the pad stand beside it, tried in turn. */
+  sideShares: [0.48, 0.54, 0.6, 0.66],
+  /** Its share of the height when they stand under it. */
+  stackShares: [0.34, 0.42, 0.5],
+  /** The answer's place: as tall as a key, within these, in px. */
+  minAnswer: 40,
+  maxAnswer: 84,
+  /** The unit after the answer, as a share of the answer's height. */
+  unitShare: 0.6,
+  /** In px: between the answer's place and the unit, and between the answer's row and the pad. */
+  unitGap: 10,
+  rowGap: 14,
+} as const;
+
+export type WordProblemLayout = {
+  /** The sheet the problem is written on, and its lines. */
+  sheet: BoardRect;
+  lines: TextLineBox[];
+  /** Whether the answer and the pad stand beside the problem or under it. */
+  arrangement: "side" | "stack";
+  /** The answer's place, where what is typed stands. */
+  answer: BoardRect;
+  /** The unit after it, or null when the problem has none. */
+  unit: TextLineBox | null;
+  /** The pad, and its keys in `MATH_INPUT_KEYS` order. */
+  pad: BoardRect;
+  keys: Array<BoardRect & { key: MathInputKey }>;
+};
+
+/** The pad's keys, as big as `width` × `height` lets them be, in the grid that makes them biggest. */
+function fitMathInputKeys(width: number, height: number): { columns: number; rows: number; keyWidth: number; keyHeight: number } {
+  const L = MATH_INPUT_LAYOUT;
+  let best: { columns: number; rows: number; keyWidth: number; keyHeight: number } | null = null;
+
+  for (const [columns, rows] of L.grids) {
+    const tall = Math.min((height - L.keyGap * (rows - 1)) / rows, L.maxKey);
+    const keyWidth = Math.min((width - L.keyGap * (columns - 1)) / columns, tall * L.keyAspect);
+    const keyHeight = Math.min(tall, keyWidth) > 0 ? Math.min(tall, keyWidth) : 0;
+    if (
+      !best ||
+      keyHeight > best.keyHeight + 0.5 ||
+      (Math.abs(keyHeight - best.keyHeight) <= 0.5 && keyWidth > best.keyWidth)
+    ) {
+      best = { columns, rows, keyWidth: Math.max(keyWidth, 0), keyHeight };
+    }
+  }
+
+  return best ?? { columns: 6, rows: 2, keyWidth: 0, keyHeight: 0 };
+}
+
+/**
+ * Where everything of a word problem goes on its stage. The background covers
+ * the whole stage; the problem is written on a sheet at the left — or at the
+ * top, where the stage is tall — and beside it, a gap apart, the answer's
+ * place with its unit and the pad of keys under it: two safe areas inside the
+ * stage less `insets` and an edge margin. How much room the problem takes is
+ * chosen so that its writing and the keys are both as big as they can be,
+ * keys too small to hit a small finger's last.
+ */
+export function layoutWordProblem(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<WordProblemConfig, "text" | "unit" | "maxDigits">,
+  insets: SceneInsets = {},
+): WordProblemLayout | null {
+  const L = WORD_PROBLEM_LAYOUT;
+  const K = MATH_INPUT_LAYOUT;
+  const E = MATH_EQUATION_LAYOUT;
+  const originX = insets.left ?? 0;
+  const originY = insets.top ?? 0;
+  const usableWidth = stageWidth - originX - (insets.right ?? 0);
+  const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+
+  if (usableWidth <= 0 || usableHeight <= 0 || config.text === "") {
+    return null;
+  }
+
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const gap = sceneGap(stageWidth, stageHeight);
+  const areaLeft = originX + edge;
+  const areaTop = originY + edge;
+  const areaWidth = Math.max(usableWidth - edge * 2, 1);
+  const areaHeight = Math.max(usableHeight - edge * 2, 1);
+  const unitUnits = config.unit === "" ? 0 : textLineUnits(config.unit);
+  // The place's width for its height: the digits with a little room either side.
+  const answerUnits = config.maxDigits * E.digit + E.pad * 2;
+
+  type Candidate = { score: number; layout: WordProblemLayout };
+  let best: Candidate | null = null;
+
+  const tryArrangement = (arrangement: "side" | "stack", share: number) => {
+    const slot: BoardRect = arrangement === "side"
+      ? { left: areaLeft, top: areaTop, width: areaWidth * share - gap / 2, height: areaHeight }
+      : { left: areaLeft, top: areaTop, width: areaWidth, height: areaHeight * share - gap / 2 };
+    const column: BoardRect = arrangement === "side"
+      ? { left: slot.left + slot.width + gap, top: areaTop, width: areaWidth - slot.width - gap, height: areaHeight }
+      : { left: areaLeft, top: slot.top + slot.height + gap, width: areaWidth, height: areaHeight - slot.height - gap };
+
+    if (slot.width <= 0 || slot.height <= 0 || column.width <= 0 || column.height <= 0) {
+      return;
+    }
+
+    const passage = fitPassage(config.text, slot.width, slot.height);
+    if (passage.size <= 0) {
+      return;
+    }
+
+    // The answer's row as tall as the keys will be, within its bounds and the column's width.
+    const rowUnits = (height: number) => answerUnits * height + (unitUnits > 0 ? L.unitGap + unitUnits * height * L.unitShare : 0);
+    let answerHeight = Math.min(L.maxAnswer, Math.max(L.minAnswer, column.height * 0.22));
+    answerHeight = Math.min(
+      answerHeight,
+      (column.width - (unitUnits > 0 ? L.unitGap : 0)) / (answerUnits + unitUnits * L.unitShare),
+    );
+    let grid = fitMathInputKeys(column.width, column.height - answerHeight - L.rowGap);
+    answerHeight = Math.max(Math.min(answerHeight, Math.max(L.minAnswer, grid.keyHeight * 1.1)), 1);
+    while (rowUnits(answerHeight) > column.width && answerHeight > 12) {
+      answerHeight *= 0.92;
+    }
+    grid = fitMathInputKeys(column.width, column.height - answerHeight - L.rowGap);
+    if (grid.keyHeight <= 0) {
+      return;
+    }
+
+    const keyWidth = grid.keyWidth;
+    const keyHeight = grid.keyHeight;
+    const padWidth = grid.columns * keyWidth + K.keyGap * (grid.columns - 1);
+    const padHeight = grid.rows * keyHeight + K.keyGap * (grid.rows - 1);
+    const rowWidth = rowUnits(answerHeight);
+    const block = answerHeight + L.rowGap + padHeight;
+    // Beside the problem the block stands in the middle of its height; under it, at the top.
+    const blockTop = column.top + (arrangement === "side" ? Math.max(0, (column.height - block) / 2) : Math.max(0, (column.height - block) * 0.3));
+
+    const answer: BoardRect = {
+      left: column.left + (column.width - rowWidth) / 2,
+      top: blockTop,
+      width: answerUnits * answerHeight,
+      height: answerHeight,
+    };
+    const unitHeight = answerHeight * L.unitShare;
+    const unit: TextLineBox | null = unitUnits > 0
+      ? {
+          text: config.unit,
+          left: answer.left + answer.width + L.unitGap,
+          top: answer.top + (answerHeight - unitHeight) / 2,
+          width: unitUnits * unitHeight,
+          height: unitHeight,
+        }
+      : null;
+    const pad: BoardRect = {
+      left: column.left + (column.width - padWidth) / 2,
+      top: blockTop + answerHeight + L.rowGap,
+      width: padWidth,
+      height: padHeight,
+    };
+    const keys = MATH_INPUT_KEYS.map((key, index) => ({
+      key,
+      left: pad.left + (index % grid.columns) * (keyWidth + K.keyGap),
+      top: pad.top + Math.floor(index / grid.columns) * (keyHeight + K.keyGap),
+      width: keyWidth,
+      height: keyHeight,
+    }));
+
+    const textWidth = Math.max(...passage.lines.map((line) => textLineUnits(line))) * passage.size;
+    const sheetWidth = Math.min(slot.width, textWidth + READING_TEXT_LAYOUT.passagePadX * 2 * passage.size);
+    const sheetHeight = Math.min(slot.height, (passage.lines.length + READING_TEXT_LAYOUT.passagePadY * 2) * passage.size);
+    const sheet: BoardRect = {
+      left: slot.left + (slot.width - sheetWidth) / 2,
+      top: slot.top + (arrangement === "side" ? (slot.height - sheetHeight) / 2 : slot.height - sheetHeight),
+      width: sheetWidth,
+      height: sheetHeight,
+    };
+    const lines = passage.lines.map((text, index): TextLineBox => ({
+      text,
+      left: sheet.left + READING_TEXT_LAYOUT.passagePadX * passage.size,
+      top: sheet.top + READING_TEXT_LAYOUT.passagePadY * passage.size + index * passage.size,
+      width: Math.min(textLineUnits(text) * passage.size, sheet.width - READING_TEXT_LAYOUT.passagePadX * 2 * passage.size),
+      height: passage.size,
+    }));
+
+    // The writing and the keys both as big as they go; keys a small finger cannot hit lose first.
+    const score = Math.min(passage.size, keyHeight * 0.6)
+      + (keyHeight >= K.minKey ? 0 : -100 + keyHeight)
+      + (arrangement === "side" ? 0.25 : 0)
+      - passage.lines.length * 1e-3;
+    if (!best || score > best.score + 1e-9) {
+      best = { score, layout: { sheet, lines, arrangement, answer, unit, pad, keys } };
+    }
+  };
+
+  L.sideShares.forEach((share) => tryArrangement("side", share));
+  L.stackShares.forEach((share) => tryArrangement("stack", share));
+
+  return (best as Candidate | null)?.layout ?? null;
+}
+
 // --- Attempt metrics --------------------------------------------------------
 
 /**
@@ -7189,6 +7475,12 @@ export type MathInputMetrics = BaseGameMetrics & {
   livesRemaining: number;
 };
 
+export type WordProblemMetrics = BaseGameMetrics & {
+  /** How many times the tick was pressed with a number typed. */
+  attempts: number;
+  livesRemaining: number;
+};
+
 export type TextChoiceMetrics = BaseGameMetrics & {
   /** Right answers the game has, and how many of them were found. */
   correct: number;
@@ -7265,6 +7557,7 @@ export const GAME_KIND_KEYS = {
   "word-build": "wordBuild",
   "label-diagram": "labelDiagram",
   "reading-text": "readingText",
+  "word-problem": "wordProblem",
   "memory-cards": "memoryCards",
   "pattern-next": "patternNext",
   "select-option": "selectOption",
@@ -7293,6 +7586,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "word-build": GAME_TIMINGS.wordBuild,
   "label-diagram": GAME_TIMINGS.labelDiagram,
   "reading-text": GAME_TIMINGS.readingText,
+  "word-problem": GAME_TIMINGS.wordProblem,
   "memory-cards": GAME_TIMINGS.memoryCards,
   "pattern-next": GAME_TIMINGS.patternNext,
   "select-option": GAME_TIMINGS.selectOption,
@@ -7328,6 +7622,7 @@ export const GAME_GESTURES = {
   "word-build": "tap",
   "label-diagram": "tap",
   "reading-text": "tap",
+  "word-problem": "tap",
   "memory-cards": "tap",
   "pattern-next": "tap",
   "select-option": "tap",
@@ -7407,6 +7702,7 @@ export type GameMetricsByKind = {
   "word-build": WordBuildMetrics;
   "label-diagram": LabelDiagramMetrics;
   "reading-text": ReadingTextMetrics;
+  "word-problem": WordProblemMetrics;
   "memory-cards": MemoryCardsMetrics;
   "pattern-next": PatternNextMetrics;
   "select-option": SelectOptionMetrics;

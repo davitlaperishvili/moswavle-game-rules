@@ -517,14 +517,14 @@ const tinyHotspot = rules.layoutSelectOptionItems({ width: 1600, height: 900 }, 
 check('a tiny hotspot is grown to a tappable size', tinyHotspot.width >= 900 * 0.08 - 0.001);
 check('no hotspots before the stage is measured', rules.layoutSelectOptionItems({ width: 0, height: 0 }, { items: [{ id: 'a', x: 1, y: 1, width: 1, height: 1 }], board_width: 1, board_height: 1 }).length === 0);
 
-check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === 20);
+check('timings are published for every game', Object.keys(rules.GAME_TIMINGS).length === Object.keys(rules.GAME_KIND_KEYS).length && Object.values(rules.GAME_KIND_KEYS).every((key) => rules.GAME_TIMINGS[key]));
 check('failure reasons are named', rules.FAILURE_REASON.wrongCatch === 'wrong_catch' && rules.FAILURE_REASON.livesOut === 'lives_out');
 
 
 section('every playable kind is registered');
 
 const playableKinds = Object.keys(rules.GAME_KIND_KEYS);
-check('twenty kinds, generic excluded', playableKinds.length === 20 && !playableKinds.includes('generic'));
+check('every kind but generic, each once', playableKinds.length === new Set(playableKinds).size && playableKinds.length >= 21 && !playableKinds.includes('generic'));
 check('each kind resolves to itself', playableKinds.every((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) === kind), playableKinds.filter((kind) => rules.resolveGameKind(kind.replace(/-/g, '_'), {}) !== kind).join());
 check('each kind has timings', playableKinds.every((kind) => rules.GAME_TIMINGS_BY_KIND[kind] === rules.GAME_TIMINGS[rules.GAME_KIND_KEYS[kind]]));
 check('no timing key is orphaned', Object.keys(rules.GAME_TIMINGS).every((key) => Object.values(rules.GAME_KIND_KEYS).includes(key)));
@@ -1928,6 +1928,64 @@ section('reading_text: a text to read and questions about it');
   check('no text or no question, no game', rules.layoutReadingText(852, 393, { text: '', questions: game.questions }, {}) === null
     && rules.layoutReadingText(852, 393, { text: story, questions: [] }, {}) === null);
   check('the timings and the gesture are there', rules.GAME_TIMINGS.readingText.nextQuestionMs > 0 && rules.GAME_TIMINGS_BY_KIND['reading-text'] === rules.GAME_TIMINGS.readingText && rules.GAME_GESTURES['reading-text'] === 'tap');
+}
+
+section('word_problem: a problem in words, its answer typed');
+
+{
+  ['word_problem', 'story_problem', 'math_word_problem', 'Word Problem'].forEach((type) => {
+    check(`${type} resolves to word-problem`, rules.resolveGameKind(type, {}) === 'word-problem');
+  });
+  check('a typed example is still its own game', rules.resolveGameKind('math_input', {}) === 'math-input');
+
+  const text = 'ნინოს ჰქონდა 12 ვაშლი. 5 ვაშლი გიოს აჩუქა. რამდენი ვაშლი დარჩა ნინოს?';
+  const game = rules.normalizeWordProblemConfig({ text, answer: 7, unit: 'ვაშლი', bg_image: 'https://x/bg-garden.webp', time_limit: 90 });
+  check('the problem, its answer and its unit', game.text === text && game.answer === 7 && game.unit === 'ვაშლი');
+  check('room for two digits at least', game.maxDigits === 2);
+  check('as many as the answer has', rules.normalizeWordProblemConfig({ text, answer: 1250 }).maxDigits === 4);
+  check('defaults: lives 3, the background to preload', game.lives === 3 && game.time_limit === 90 && game.imageUris.join() === 'https://x/bg-garden.webp');
+  check('the problem may come as problem, its line breaks as spaces', rules.normalizeWordProblemConfig({ problem: ' a\nb  c ', answer: '3' }).text === 'a b c' && rules.normalizeWordProblemConfig({ problem: 'a', answer: '3' }).answer === 3);
+  check('an answer past 9999, negative or missing is none', [10000, -2, undefined, 'x'].every((answer) => rules.normalizeWordProblemConfig({ text, answer }).answer === -1));
+
+  const enter = rules.resolveWordProblemEntry;
+  check('the answer is right', JSON.stringify(enter(game, '7')) === '{"type":"right","value":7}');
+  check('another number is a mistake', enter(game, '8').type === 'wrong' && enter(game, '70').type === 'wrong');
+  check('nothing typed, nothing happens', enter(game, '').type === 'ignored');
+  check('a game with no answer takes nothing', enter({ answer: -1 }, '0').type === 'ignored');
+  check('zero can be the answer', enter({ answer: 0 }, '0').type === 'right');
+  check('a key types as in the typed example', rules.pressMathInputKey('1', '2', game.maxDigits) === '12' && rules.pressMathInputKey('12', '3', game.maxDigits) === '12');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const russian = rules.normalizeWordProblemConfig({ text: 'В корзине было 25 груш. Мама положила ещё 18 груш, а потом 9 груш съели дети. Сколько груш осталось в корзине?', answer: 34, unit: 'груш' });
+  const english = rules.normalizeWordProblemConfig({ text: 'Tom has 3 boxes with 6 pencils in each. How many pencils does he have?', answer: 18 });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [game, russian, english].forEach((config, index) => {
+    const layout = rules.layoutWordProblem(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const answers = [layout && layout.answer, layout && layout.unit, layout && layout.pad].filter(Boolean);
+    const ok = layout && inside(layout.sheet, stage)
+      && layout.lines.length > 0 && layout.lines.every((line) => inside(line, layout.sheet))
+      && layout.lines.map((line) => line.text).join(' ') === config.text
+      && answers.every((rect) => inside(rect, stage) && !overlap(rect, layout.sheet))
+      && (config.unit === '' ? layout.unit === null : layout.unit.text === config.unit && !overlap(layout.unit, layout.answer))
+      && !overlap(layout.answer, layout.pad)
+      && layout.keys.length === 12 && layout.keys.every((key) => inside(key, layout.pad) && key.height >= 40);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the problem, the answer and the keys are whole, apart, inside the safe area and big enough to hit', whole, detail);
+
+  const phone = rules.layoutWordProblem(852, 393, russian, { top: 56, left: 59, right: 59, bottom: 21 });
+  check('on a phone on its side the pad stands beside the problem', phone.arrangement === 'side' && phone.pad.left > phone.sheet.left + phone.sheet.width, phone.arrangement);
+  check('and the problem is written big enough to read', phone.lines[0].height >= 18, String(phone.lines[0].height));
+  const upright = rules.layoutWordProblem(390, 700, russian, { top: 60 });
+  check('an upright stage has them under it', upright.arrangement === 'stack' && upright.answer.top > upright.sheet.top + upright.sheet.height);
+  check('no words, no game', rules.layoutWordProblem(852, 393, { text: '', unit: '', maxDigits: 2 }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.wordProblem.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-problem'] === rules.GAME_TIMINGS.wordProblem && rules.GAME_GESTURES['word-problem'] === 'tap');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

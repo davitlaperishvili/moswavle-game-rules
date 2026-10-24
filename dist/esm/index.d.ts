@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1277,6 +1277,11 @@ export declare const GAME_TIMINGS: {
         readonly successSettleMs: 700;
         readonly livesOutDelayMs: 320;
     };
+    readonly wordProblem: {
+        readonly wrongFeedbackMs: 620;
+        readonly successSettleMs: 700;
+        readonly livesOutDelayMs: 320;
+    };
     readonly mathEquation: {
         readonly wrongFeedbackMs: 560;
         readonly flyMs: 620;
@@ -2086,6 +2091,89 @@ export type ReadingTextLayout = {
  * every question of the game: the text never moves when the next one is asked.
  */
 export declare function layoutReadingText(stageWidth: number, stageHeight: number, config: Pick<ReadingTextConfig, "text" | "questions">, insets?: SceneInsets): ReadingTextLayout | null;
+export type WordProblemConfig = {
+    /** The problem as the child reads it, in the game's language. */
+    text: string;
+    /** The number that answers it. */
+    answer: number;
+    /** A word written after the answer's place ("apples"), or "". */
+    unit: string;
+    /** How many digits can be typed: the answer's, and never fewer than two, so the place does not tell its width. */
+    maxDigits: number;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. The answer is a whole number from 0 to
+ * `MATH_EQUATION_NUMBER_MAX`, the most a math example holds; a problem with
+ * no words or no such answer has none and is not played.
+ */
+export declare function normalizeWordProblemConfig(config: Record<string, unknown>): WordProblemConfig;
+export type WordProblemEntryResult = 
+/** Nothing is typed yet: the tick does nothing. */
+{
+    type: "ignored";
+}
+/** The number typed is the answer. */
+ | {
+    type: "right";
+    value: number;
+}
+/** It is not: a mistake. */
+ | {
+    type: "wrong";
+    value: number;
+};
+/**
+ * What the tick does with what is typed: the whole play rule, so both players
+ * follow it tap for tap. What a key types is `pressMathInputKey`, as in the
+ * typed math example.
+ */
+export declare function resolveWordProblemEntry(config: Pick<WordProblemConfig, "answer">, entry: string): WordProblemEntryResult;
+/** Proportions of a word problem. The pad's keys are the typed example's (`MATH_INPUT_LAYOUT`). */
+export declare const WORD_PROBLEM_LAYOUT: {
+    /** The problem's share of the width when the answer and the pad stand beside it, tried in turn. */
+    readonly sideShares: readonly [0.48, 0.54, 0.6, 0.66];
+    /** Its share of the height when they stand under it. */
+    readonly stackShares: readonly [0.34, 0.42, 0.5];
+    /** The answer's place: as tall as a key, within these, in px. */
+    readonly minAnswer: 40;
+    readonly maxAnswer: 84;
+    /** The unit after the answer, as a share of the answer's height. */
+    readonly unitShare: 0.6;
+    /** In px: between the answer's place and the unit, and between the answer's row and the pad. */
+    readonly unitGap: 10;
+    readonly rowGap: 14;
+};
+export type WordProblemLayout = {
+    /** The sheet the problem is written on, and its lines. */
+    sheet: BoardRect;
+    lines: TextLineBox[];
+    /** Whether the answer and the pad stand beside the problem or under it. */
+    arrangement: "side" | "stack";
+    /** The answer's place, where what is typed stands. */
+    answer: BoardRect;
+    /** The unit after it, or null when the problem has none. */
+    unit: TextLineBox | null;
+    /** The pad, and its keys in `MATH_INPUT_KEYS` order. */
+    pad: BoardRect;
+    keys: Array<BoardRect & {
+        key: MathInputKey;
+    }>;
+};
+/**
+ * Where everything of a word problem goes on its stage. The background covers
+ * the whole stage; the problem is written on a sheet at the left — or at the
+ * top, where the stage is tall — and beside it, a gap apart, the answer's
+ * place with its unit and the pad of keys under it: two safe areas inside the
+ * stage less `insets` and an edge margin. How much room the problem takes is
+ * chosen so that its writing and the keys are both as big as they can be,
+ * keys too small to hit a small finger's last.
+ */
+export declare function layoutWordProblem(stageWidth: number, stageHeight: number, config: Pick<WordProblemConfig, "text" | "unit" | "maxDigits">, insets?: SceneInsets): WordProblemLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -2162,6 +2250,11 @@ export type MathInputMetrics = BaseGameMetrics & {
     attempts: number;
     livesRemaining: number;
 };
+export type WordProblemMetrics = BaseGameMetrics & {
+    /** How many times the tick was pressed with a number typed. */
+    attempts: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -2226,6 +2319,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "word-build": "wordBuild";
     readonly "label-diagram": "labelDiagram";
     readonly "reading-text": "readingText";
+    readonly "word-problem": "wordProblem";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -2261,6 +2355,7 @@ export declare const GAME_GESTURES: {
     readonly "word-build": "tap";
     readonly "label-diagram": "tap";
     readonly "reading-text": "tap";
+    readonly "word-problem": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -2322,6 +2417,7 @@ export type GameMetricsByKind = {
     "word-build": WordBuildMetrics;
     "label-diagram": LabelDiagramMetrics;
     "reading-text": ReadingTextMetrics;
+    "word-problem": WordProblemMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;
