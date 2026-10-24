@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1376,6 +1376,12 @@ export declare const GAME_TIMINGS: {
         readonly wrongFeedbackMs: 560;
         readonly nextQuestionMs: 700;
         readonly successSettleMs: 700;
+        readonly livesOutDelayMs: 320;
+    };
+    /** A miss rings the tap red for `wrongFeedbackMs`; once the last is found the game waits `successSettleMs`. */
+    readonly findInScene: {
+        readonly wrongFeedbackMs: 600;
+        readonly successSettleMs: 900;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -3301,6 +3307,111 @@ export type ChartReadLayout = {
  * room are the same for every question, so nothing moves as they change.
  */
 export declare function layoutChartRead(stageWidth: number, stageHeight: number, config: Pick<ChartReadConfig, "style" | "bars" | "scaleMax" | "scaleStep" | "questions" | "language">, index: number, insets?: SceneInsets): ChartReadLayout | null;
+export declare const FIND_IN_SCENE_TARGETS: {
+    readonly min: 2;
+    readonly max: 8;
+};
+/** One thing on the picture, in percent of it. */
+export type FindInSceneThing = {
+    id: string;
+    /** A picture standing on the sheet; null for a point of the sheet's own picture. */
+    image: string | null;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    /** Whether it is one of those to find. */
+    target: boolean;
+};
+export type FindInSceneConfig = {
+    /** Everything on the sheet, in the order it is drawn; only pictures and the points to find. */
+    things: FindInSceneThing[];
+    /** The ids of those to find. Empty when the game is none. */
+    targets: string[];
+    /** What to find, shown on the card: the author's picture, else the first one to find that is a picture. */
+    icon: string | null;
+    /** The picture's size; its aspect ratio is the sheet's. */
+    board: {
+        width: number;
+        height: number;
+    } | null;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `placements` are what the author put on
+ * the picture, in percent of it, each with `target` when it is one to find;
+ * one with no `image` is a point of the picture and is kept only as a target.
+ * Two to eight targets; past eight the rest only stand there.
+ */
+export declare function normalizeFindInSceneConfig(config: Record<string, unknown>): FindInSceneConfig;
+export type FindInSceneTapResult = 
+/** Every one is found already, or the tap is on one found before: nothing happens. */
+{
+    type: "ignored";
+}
+/** One more found; `complete` when it was the last. */
+ | {
+    type: "found";
+    id: string;
+    complete: boolean;
+}
+/** Nothing to find there: a mistake. */
+ | {
+    type: "miss";
+};
+/**
+ * What a tap at `point` — in percent of the picture — does, `found` the ids
+ * found so far. A thing is hit inside its box grown by `slop` (percent of the
+ * picture each way, so a small point takes a finger); of two, the nearer
+ * middle wins.
+ */
+export declare function resolveFindInSceneTap(config: Pick<FindInSceneConfig, "things" | "targets">, found: readonly string[], point: {
+    x: number;
+    y: number;
+}, slop?: {
+    x: number;
+    y: number;
+}): FindInSceneTapResult;
+/** Proportions of the find game. */
+export declare const FIND_IN_SCENE_LAYOUT: {
+    /** The card with what to find: of the free width (a column) or height (a row), within these in px. */
+    readonly cardShare: 0.17;
+    readonly minCard: 84;
+    readonly maxCard: 150;
+    /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+    readonly sheetRim: 6;
+    /** A thing is hit this far round its middle at least, in px. */
+    readonly minHit: 44;
+};
+export type FindInSceneLayout = {
+    /** The picture, whole and never cropped. */
+    sheet: BoardRect;
+    /** Everything on the sheet in stage pixels, in `things` order. */
+    things: BoardRect[];
+    /** The card, the picture of what to find on it, and a dot for each one there is. */
+    card: BoardRect;
+    icon: BoardRect;
+    dots: BoardRect[];
+    /** What `resolveFindInSceneTap` grows a thing by, in percent of the picture. */
+    slop: {
+        x: number;
+        y: number;
+    };
+};
+/**
+ * Where everything of the find game goes: the card at the right of the sheet
+ * on a wide stage, over it on a tall one, and the sheet as big as the rest
+ * lets it be, its picture whole. Inside the stage less `insets`.
+ */
+export declare function layoutFindInScene(stageWidth: number, stageHeight: number, config: Pick<FindInSceneConfig, "things" | "targets" | "board">, insets?: SceneInsets): FindInSceneLayout | null;
+/** Where a point of the stage lies on the picture, in percent of it. */
+export declare function findInScenePoint(layout: Pick<FindInSceneLayout, "sheet">, stageX: number, stageY: number): {
+    x: number;
+    y: number;
+};
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -3439,6 +3550,13 @@ export type ChartReadMetrics = BaseGameMetrics & {
     firstTry: number;
     livesRemaining: number;
 };
+export type FindInSceneMetrics = BaseGameMetrics & {
+    /** How many there were to find, how many were found, and the taps on nothing. */
+    targets: number;
+    found: number;
+    misses: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -3513,6 +3631,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "true-false": "trueFalse";
     readonly "grid-route": "gridRoute";
     readonly "chart-read": "chartRead";
+    readonly "find-in-scene": "findInScene";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -3558,6 +3677,7 @@ export declare const GAME_GESTURES: {
     readonly "true-false": "tap";
     readonly "grid-route": "tap";
     readonly "chart-read": "tap";
+    readonly "find-in-scene": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -3629,6 +3749,7 @@ export type GameMetricsByKind = {
     "true-false": TrueFalseMetrics;
     "grid-route": GridRouteMetrics;
     "chart-read": ChartReadMetrics;
+    "find-in-scene": FindInSceneMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

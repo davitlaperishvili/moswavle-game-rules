@@ -2526,5 +2526,59 @@ section('chart_read: a chart read, and questions about it');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.chartRead.nextQuestionMs > 0 && rules.GAME_TIMINGS_BY_KIND['chart-read'] === rules.GAME_TIMINGS.chartRead && rules.GAME_GESTURES['chart-read'] === 'tap');
 }
 
+section('find_in_scene: every one of a kind found on a big picture');
+
+{
+  ['find_in_scene', 'hidden_objects', 'Find In Scene'].forEach((type) => {
+    check(`${type} resolves to find-in-scene`, rules.resolveGameKind(type, {}) === 'find-in-scene');
+  });
+
+  const tower = (x, y, extra = {}) => ({ x, y, width: 4, height: 10, target: true, ...extra });
+  const config = rules.normalizeFindInSceneConfig({
+    bg_image: 'https://x/svaneti.webp',
+    board_width: 1600,
+    board_height: 900,
+    placements: [tower(10, 30), tower(40, 25, { image: 'https://x/tower.webp' }), tower(70, 40), { image: 'https://x/cow.webp', x: 50, y: 70, width: 10, height: 12 }, { x: 5, y: 5, width: 3, height: 3 }],
+  });
+  check('the things to find, the pictures that only stand there; a point that is not to find is nothing', config.targets.length === 3 && config.things.length === 4
+    && config.icon === 'https://x/tower.webp' && config.board.width === 1600 && config.imageUris.length === 3);
+  check('an icon the author picked comes first', rules.normalizeFindInSceneConfig({ bg_image: 'b', board_width: 10, board_height: 10, icon: 'https://x/icon.webp', placements: [tower(1, 1), tower(50, 50)] }).icon === 'https://x/icon.webp');
+  check('no game: one thing to find, no picture or no size', rules.normalizeFindInSceneConfig({ bg_image: 'b', board_width: 10, board_height: 10, placements: [tower(1, 1)] }).targets.length === 0
+    && rules.normalizeFindInSceneConfig({ board_width: 10, board_height: 10, placements: [tower(1, 1), tower(50, 50)] }).targets.length === 0
+    && rules.normalizeFindInSceneConfig({ bg_image: 'b', placements: [tower(1, 1), tower(50, 50)] }).targets.length === 0);
+  check('eight to find at most', rules.normalizeFindInSceneConfig({ bg_image: 'b', board_width: 10, board_height: 10, placements: Array.from({ length: 10 }, (_v, i) => tower(i * 9, 10)) }).targets.length === 8);
+
+  const tap = rules.resolveFindInSceneTap;
+  const [first, second, third] = config.targets;
+  check('a tap on one found it; on it again nothing; on nothing a miss', tap(config, [], { x: 12, y: 35 }).type === 'found' && tap(config, [], { x: 12, y: 35 }).id === first
+    && tap(config, [first], { x: 12, y: 35 }).type === 'ignored' && tap(config, [], { x: 90, y: 90 }).type === 'miss' && tap(config, [], { x: 55, y: 75 }).type === 'miss');
+  check('the last one found completes', tap(config, [first, second], { x: 72, y: 45 }).complete === true && tap(config, [first, second, third], { x: 12, y: 35 }).type === 'ignored');
+  check('a small thing takes a finger: the box is grown by the slop', tap(config, [], { x: 8.5, y: 35 }).type === 'miss' && tap(config, [], { x: 8.5, y: 35 }, { x: 4, y: 4 }).type === 'found');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const eight = rules.normalizeFindInSceneConfig({ bg_image: 'b', board_width: 1000, board_height: 1000, placements: Array.from({ length: 8 }, (_v, i) => tower(i * 11, 20)) });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [1024, 768, {}], [667, 300, { top: 60 }], [600, 800, {}]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [config, eight].forEach((game, which) => {
+    const layout = rules.layoutFindInScene(w, h, game, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout && inside(layout.sheet, stage) && inside(layout.card, stage) && !overlap(layout.sheet, layout.card)
+      && Math.abs(layout.sheet.width / layout.sheet.height - game.board.width / game.board.height) < 1e-6
+      && inside(layout.icon, layout.card) && layout.dots.length === game.targets.length && layout.dots.every((dot) => inside(dot, layout.card) && dot.width >= 16)
+      && layout.dots.every((a, i) => layout.dots.every((b, j) => i === j || !overlap(a, b)))
+      && layout.things.every((thing) => inside(thing, layout.sheet)) && layout.icon.width >= 60;
+    if (!ok && whole) { whole = false; detail = `${w}x${h} game ${which}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the picture is whole and the card beside it, both inside the safe area', whole, detail);
+  const layout = rules.layoutFindInScene(852, 393, config, {});
+  const point = rules.findInScenePoint(layout, layout.things[0].left + 2, layout.things[0].top + 2);
+  check('a point of the stage is read in percent of the picture', Math.abs(point.x - (10 + (2 / layout.sheet.width) * 100)) < 1e-6 && tap(config, [], point, layout.slop).type === 'found');
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.findInScene.successSettleMs > 0 && rules.GAME_TIMINGS_BY_KIND['find-in-scene'] === rules.GAME_TIMINGS.findInScene && rules.GAME_GESTURES['find-in-scene'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

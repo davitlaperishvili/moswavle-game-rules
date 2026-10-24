@@ -838,6 +838,15 @@ export function resolveGameKind(type, config) {
         return "chart-read";
     }
     if ([
+        "find_in_scene",
+        "findinscene",
+        "find_all",
+        "hidden_objects",
+        "seek_and_find",
+    ].includes(normalizedType)) {
+        return "find-in-scene";
+    }
+    if ([
         "memory_cards",
         "memory",
         "memorycards",
@@ -3141,6 +3150,8 @@ export const GAME_TIMINGS = {
      * `successSettleMs`.
      */
     chartRead: { wrongFeedbackMs: 560, nextQuestionMs: 700, successSettleMs: 700, livesOutDelayMs: 320 },
+    /** A miss rings the tap red for `wrongFeedbackMs`; once the last is found the game waits `successSettleMs`. */
+    findInScene: { wrongFeedbackMs: 600, successSettleMs: 900, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -7423,6 +7434,192 @@ export function layoutChartRead(stageWidth, stageHeight, config, index, insets =
     });
     return { chart, plot, scale, bars, card, pieces: placed, options };
 }
+// --- find_in_scene: every one of a kind found on a big picture -----------------
+//
+// A big picture or a photo, shown whole like label_diagram's sheet — never
+// cropped, nothing on it moved — and a card beside it with what to find (its
+// picture) and a dot for each one there is: three towers, five bunches of
+// grapes. The child taps them on the picture; one found is ringed and its dot
+// fills. A tap on nothing is a miss and costs a life, so tapping everywhere
+// does not win. The things are points of the picture itself or pictures the
+// author stood on it, ticked in the Scene Composer; the rest only stand there.
+export const FIND_IN_SCENE_TARGETS = { min: 2, max: 8 };
+/**
+ * The game as the players draw it. `placements` are what the author put on
+ * the picture, in percent of it, each with `target` when it is one to find;
+ * one with no `image` is a point of the picture and is kept only as a target.
+ * Two to eight targets; past eight the rest only stand there.
+ */
+export function normalizeFindInSceneConfig(config) {
+    const clampPercent = (value) => Math.max(0, Math.min(100, value ?? 0));
+    let targets = 0;
+    const things = (Array.isArray(config.placements) ? config.placements : [])
+        .map((raw) => asRecord(raw))
+        .map((record) => {
+        if (!record)
+            return null;
+        const image = extractMediaUrl(record.image);
+        const x = clampPercent(extractNumber(record.x));
+        const y = clampPercent(extractNumber(record.y));
+        const width = Math.min(100 - x, clampPercent(extractNumber(record.width)));
+        const height = Math.min(100 - y, clampPercent(extractNumber(record.height)));
+        const wanted = Boolean(record.target) && targets < FIND_IN_SCENE_TARGETS.max;
+        if (width <= 0 || height <= 0 || (!image && !wanted))
+            return null;
+        if (wanted)
+            targets += 1;
+        return { image, x, y, width, height, target: wanted };
+    })
+        .filter((thing) => Boolean(thing))
+        .map((thing, index) => ({ id: `thing_${index + 1}`, ...thing }));
+    const boardWidth = extractNumber(config.board_width);
+    const boardHeight = extractNumber(config.board_height);
+    const bg = extractMediaUrl(config.bg_image);
+    const wanted = things.filter((thing) => thing.target);
+    const playable = Boolean(bg) && wanted.length >= FIND_IN_SCENE_TARGETS.min && boardWidth !== null && boardHeight !== null && boardWidth > 0 && boardHeight > 0;
+    const icon = extractMediaUrl(config.icon) ?? wanted.find((thing) => thing.image)?.image ?? null;
+    return {
+        things: playable ? things : [],
+        targets: playable ? wanted.map((thing) => thing.id) : [],
+        icon: playable ? icon : null,
+        board: playable ? { width: boardWidth, height: boardHeight } : null,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [...new Set([bg, icon, ...things.map((thing) => thing.image)].filter((uri) => Boolean(uri)))],
+    };
+}
+/**
+ * What a tap at `point` — in percent of the picture — does, `found` the ids
+ * found so far. A thing is hit inside its box grown by `slop` (percent of the
+ * picture each way, so a small point takes a finger); of two, the nearer
+ * middle wins.
+ */
+export function resolveFindInSceneTap(config, found, point, slop = { x: 0, y: 0 }) {
+    if (config.targets.length === 0 || found.length >= config.targets.length) {
+        return { type: "ignored" };
+    }
+    const hits = config.things
+        .filter((thing) => thing.target)
+        .filter((thing) => {
+        const grow = (size, pad) => Math.max(0, pad - size / 2);
+        const dx = grow(thing.width, slop.x);
+        const dy = grow(thing.height, slop.y);
+        return point.x >= thing.x - dx && point.x <= thing.x + thing.width + dx && point.y >= thing.y - dy && point.y <= thing.y + thing.height + dy;
+    })
+        .sort((a, b) => {
+        const distance = (thing) => Math.hypot(thing.x + thing.width / 2 - point.x, thing.y + thing.height / 2 - point.y);
+        return distance(a) - distance(b);
+    });
+    if (hits.length === 0) {
+        return { type: "miss" };
+    }
+    const fresh = hits.find((thing) => !found.includes(thing.id));
+    if (!fresh) {
+        return { type: "ignored" };
+    }
+    return { type: "found", id: fresh.id, complete: found.length + 1 === config.targets.length };
+}
+/** Proportions of the find game. */
+export const FIND_IN_SCENE_LAYOUT = {
+    /** The card with what to find: of the free width (a column) or height (a row), within these in px. */
+    cardShare: 0.17,
+    minCard: 84,
+    maxCard: 150,
+    /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+    sheetRim: 6,
+    /** A thing is hit this far round its middle at least, in px. */
+    minHit: 44,
+};
+/**
+ * Where everything of the find game goes: the card at the right of the sheet
+ * on a wide stage, over it on a tall one, and the sheet as big as the rest
+ * lets it be, its picture whole. Inside the stage less `insets`.
+ */
+export function layoutFindInScene(stageWidth, stageHeight, config, insets = {}) {
+    const L = FIND_IN_SCENE_LAYOUT;
+    const board = config.board;
+    const count = config.targets.length;
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const area = {
+        left: (insets.left ?? 0) + edge,
+        top: (insets.top ?? 0) + edge,
+        width: stageWidth - (insets.left ?? 0) - (insets.right ?? 0) - edge * 2,
+        height: stageHeight - (insets.top ?? 0) - (insets.bottom ?? 0) - edge * 2,
+    };
+    if (!board || count === 0 || area.width <= 0 || area.height <= 0) {
+        return null;
+    }
+    const tall = area.height > area.width;
+    const cardSize = Math.max(L.minCard, Math.min(L.maxCard, (tall ? area.height : area.width) * L.cardShare));
+    // Wide: a column at the right — the picture on top, the dots two abreast under it.
+    // Tall: a row over the sheet — the picture at the left, the dots in a row beside it.
+    const room = tall
+        ? { left: area.left, top: area.top + cardSize + gap, width: area.width, height: area.height - cardSize - gap }
+        : { left: area.left, top: area.top, width: area.width - cardSize - gap, height: area.height };
+    const fit = Math.min((room.width - L.sheetRim * 2) / board.width, (room.height - L.sheetRim * 2) / board.height);
+    const sheet = {
+        left: room.left + (room.width - board.width * fit) / 2,
+        top: room.top + (room.height - board.height * fit) / 2,
+        width: board.width * fit,
+        height: board.height * fit,
+    };
+    let card;
+    let icon;
+    const dots = [];
+    const pad = cardSize * 0.1;
+    if (tall) {
+        card = { left: area.left, top: area.top, width: area.width, height: cardSize };
+        icon = { left: card.left + pad, top: card.top + pad, width: cardSize - pad * 2, height: cardSize - pad * 2 };
+        const left = icon.left + icon.width + pad;
+        const dot = Math.min((card.left + card.width - pad - left) / count, cardSize * 0.42);
+        for (let at = 0; at < count; at += 1) {
+            dots.push({ left: left + at * dot + dot * 0.08, top: card.top + (cardSize - dot) / 2 + dot * 0.08, width: dot * 0.84, height: dot * 0.84 });
+        }
+    }
+    else {
+        // Two, three or four dots a row, whichever leaves the picture and the dots biggest.
+        let pick = { score: -Infinity, across: 2, dot: 0, iconSize: 0 };
+        for (const across of [2, 3, 4]) {
+            const rows = Math.ceil(count / across);
+            const dot = Math.min((cardSize - pad * 2) / across, cardSize * 0.42);
+            const iconSize = Math.min(cardSize - pad * 2, area.height - pad * 3 - rows * dot);
+            const score = Math.min(iconSize, dot * 2.5);
+            if (score > pick.score + 1e-9)
+                pick = { score, across, dot, iconSize };
+        }
+        const { across, dot, iconSize } = pick;
+        const rows = Math.ceil(count / across);
+        const height = pad * 3 + iconSize + rows * dot;
+        card = { left: room.left + room.width + gap, top: area.top + (area.height - height) / 2, width: cardSize, height };
+        icon = { left: card.left + (cardSize - iconSize) / 2, top: card.top + pad, width: iconSize, height: iconSize };
+        const dotsLeft = card.left + (cardSize - dot * Math.min(across, count)) / 2;
+        for (let at = 0; at < count; at += 1) {
+            dots.push({ left: dotsLeft + (at % across) * dot + dot * 0.08, top: icon.top + icon.height + pad + Math.floor(at / across) * dot + dot * 0.08, width: dot * 0.84, height: dot * 0.84 });
+        }
+    }
+    return {
+        sheet,
+        things: config.things.map((thing) => ({
+            left: sheet.left + (thing.x / 100) * sheet.width,
+            top: sheet.top + (thing.y / 100) * sheet.height,
+            width: (thing.width / 100) * sheet.width,
+            height: (thing.height / 100) * sheet.height,
+        })),
+        card,
+        icon,
+        dots,
+        slop: { x: (L.minHit / 2 / sheet.width) * 100, y: (L.minHit / 2 / sheet.height) * 100 },
+    };
+}
+/** Where a point of the stage lies on the picture, in percent of it. */
+export function findInScenePoint(layout, stageX, stageY) {
+    return {
+        x: ((stageX - layout.sheet.left) / layout.sheet.width) * 100,
+        y: ((stageY - layout.sheet.top) / layout.sheet.height) * 100,
+    };
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -7453,6 +7650,7 @@ export const GAME_KIND_KEYS = {
     "true-false": "trueFalse",
     "grid-route": "gridRoute",
     "chart-read": "chartRead",
+    "find-in-scene": "findInScene",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -7486,6 +7684,7 @@ export const GAME_TIMINGS_BY_KIND = {
     "true-false": GAME_TIMINGS.trueFalse,
     "grid-route": GAME_TIMINGS.gridRoute,
     "chart-read": GAME_TIMINGS.chartRead,
+    "find-in-scene": GAME_TIMINGS.findInScene,
     "memory-cards": GAME_TIMINGS.memoryCards,
     "pattern-next": GAME_TIMINGS.patternNext,
     "select-option": GAME_TIMINGS.selectOption,
@@ -7525,6 +7724,7 @@ export const GAME_GESTURES = {
     "true-false": "tap",
     "grid-route": "tap",
     "chart-read": "tap",
+    "find-in-scene": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",
