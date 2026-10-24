@@ -747,6 +747,16 @@ export function resolveGameKind(type, config) {
         return "word-problem";
     }
     if ([
+        "money_pay",
+        "moneypay",
+        "money",
+        "pay_money",
+        "shop_pay",
+        "give_change",
+    ].includes(normalizedType)) {
+        return "money-pay";
+    }
+    if ([
         "memory_cards",
         "memory",
         "memorycards",
@@ -2999,6 +3009,12 @@ export const GAME_TIMINGS = {
      */
     readingText: { wrongFeedbackMs: 560, nextQuestionMs: 700, successSettleMs: 700, livesOutDelayMs: 320 },
     wordProblem: { wrongFeedbackMs: 620, successSettleMs: 700, livesOutDelayMs: 320 },
+    /**
+     * A piece flies between the purse and the counter over `flyMs`; one that
+     * would take the counter past the sum shakes for `wrongFeedbackMs` and stays.
+     * The counter is seen whole `successSettleMs` before the win.
+     */
+    moneyPay: { wrongFeedbackMs: 560, flyMs: 360, successSettleMs: 800, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -5097,6 +5113,357 @@ export function layoutWordProblem(stageWidth, stageHeight, config, insets = {}) 
     L.stackShares.forEach((share) => tryArrangement("stack", share));
     return best?.layout ?? null;
 }
+// --- money_pay: pay a price, or give the change, with lari ------------------
+//
+// Real money of Georgia: coins of 1 to 50 tetri, 1 and 2 lari, and notes of
+// 5 to 100 lari, from the library's photographs — or drawn in code where a
+// picture is missing. Something to buy stands with its price tag; the child
+// taps money out of the purse onto the counter until it holds the price
+// exactly. In change mode the buyer has paid already — the piece lies by the
+// tag — and what goes on the counter is the change. A piece that takes the
+// counter past the sum is a mistake and goes back; one tapped on the counter
+// comes back to the purse for nothing. The running total is never shown:
+// adding the pieces up is the game.
+/** Every piece of money, in tetri: 100 tetri are a lari. */
+export const MONEY_DENOMINATIONS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+/** At most this many pieces lie in the purse: more do not fit a phone at a size a finger hits. */
+export const MONEY_PAY_PIECES_MAX = 12;
+/** The two words of the price, in the three languages: none of them changes with the number. */
+export const MONEY_WORDS = {
+    ka: { lari: "ლარი", tetri: "თეთრი" },
+    ru: { lari: "лари", tetri: "тетри" },
+    en: { lari: "lari", tetri: "tetri" },
+};
+/** A coin up to 2 lari, a note from 5. */
+export function moneyPieceKind(value) {
+    return value <= 200 ? "coin" : "note";
+}
+/**
+ * A sum as it is said: "3 ლარი 50 თეთრი", "50 тетри", "3 lari", one line a
+ * part. The words are the game's language's, Georgian where it has none.
+ */
+export function formatMoneyLines(tetri, language) {
+    const words = MONEY_WORDS[(language in MONEY_WORDS ? language : "ka")];
+    const lari = Math.floor(Math.max(0, tetri) / 100);
+    const rest = Math.max(0, tetri) % 100;
+    const lines = [];
+    if (lari > 0) {
+        lines.push(`${lari} ${words.lari}`);
+    }
+    if (rest > 0 || lari === 0) {
+        lines.push(`${rest} ${words.tetri}`);
+    }
+    return lines;
+}
+/** Whether some of `values` add up to `target` exactly. */
+export function moneyPayReachable(values, target) {
+    if (!Number.isInteger(target) || target <= 0) {
+        return false;
+    }
+    const sums = new Uint8Array(target + 1);
+    sums[0] = 1;
+    for (const value of values) {
+        for (let sum = target; sum >= value; sum--) {
+            if (sums[sum - value]) {
+                sums[sum] = 1;
+            }
+        }
+    }
+    return sums[target] === 1;
+}
+function moneyValue(value) {
+    const number = extractNumber(value);
+    return number !== null && MONEY_DENOMINATIONS.includes(Math.round(number)) ? Math.round(number) : null;
+}
+/**
+ * The game as the players draw it. The purse comes as rows of a piece and
+ * how many of it (`pieces: [{ value, count, image }]`, `value` in tetri),
+ * and is laid out one entry a piece, at most `MONEY_PAY_PIECES_MAX`. A price
+ * the purse cannot make exactly — or change that is none — is no game.
+ */
+export function normalizeMoneyPayConfig(config) {
+    const bg = normalizeBackground(config);
+    const price = Math.round(extractNumber(config.price) ?? 0);
+    const paidValue = moneyValue(asRecord(config.paid)?.value ?? config.paid);
+    const paidImage = extractMediaUrl(asRecord(config.paid)?.image ?? config.paid_image);
+    const paid = paidValue !== null
+        ? { id: "paid", value: paidValue, kind: moneyPieceKind(paidValue), image: paidImage }
+        : null;
+    const mode = paid ? "change" : "pay";
+    const pieces = [];
+    const rows = Array.isArray(config.pieces) ? config.pieces : [];
+    rows
+        .map((row) => asRecord(row))
+        .filter((row) => row !== null)
+        .map((row) => ({
+        value: moneyValue(row.value),
+        count: Math.max(1, Math.floor(extractNumber(row.count) ?? 1)),
+        image: extractMediaUrl(row.image),
+    }))
+        .filter((row) => row.value !== null)
+        .sort((a, b) => b.value - a.value)
+        .forEach((row) => {
+        for (let copy = 0; copy < row.count && pieces.length < MONEY_PAY_PIECES_MAX; copy++) {
+            pieces.push({ id: `piece-${row.value}-${copy + 1}`, value: row.value, kind: moneyPieceKind(row.value), image: row.image });
+        }
+    });
+    const wanted = mode === "change" && paid ? paid.value - price : price;
+    const target = price > 0 && moneyPayReachable(pieces.map((piece) => piece.value), wanted) ? wanted : -1;
+    const itemImage = extractMediaUrl(config.item_image);
+    const language = extractText(config.language) ?? "ka";
+    const uris = [bg, itemImage, paid?.image ?? null, ...pieces.map((piece) => piece.image)]
+        .filter((uri) => typeof uri === "string" && uri !== "");
+    return {
+        mode,
+        price,
+        paid,
+        target,
+        item_image: itemImage,
+        pieces,
+        language,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [...new Set(uris)],
+    };
+}
+/**
+ * What a tap on a piece does, given what lies on the counter (`onCounter`,
+ * in the order it was put there): the whole play rule, so both players follow
+ * it tap for tap.
+ */
+export function resolveMoneyPayTap(config, onCounter, pieceId) {
+    const piece = config.pieces.find((candidate) => candidate.id === pieceId);
+    if (!piece || config.target <= 0) {
+        return { type: "ignored" };
+    }
+    const values = new Map(config.pieces.map((candidate) => [candidate.id, candidate.value]));
+    const total = onCounter.reduce((sum, id) => sum + (values.get(id) ?? 0), 0);
+    if (onCounter.includes(pieceId)) {
+        return { type: "returned", total: total - piece.value };
+    }
+    const next = total + piece.value;
+    if (next > config.target) {
+        return { type: "over", total };
+    }
+    return next === config.target ? { type: "right", total: next } : { type: "placed", total: next };
+}
+/** Proportions of the money game. */
+export const MONEY_PAY_LAYOUT = {
+    /** The shop's share of the width, at the left, when the counter and the purse stand beside it, tried in turn. */
+    sideShares: [0.26, 0.3, 0.36, 0.42],
+    /** Its share of the height, at the top, when they stand under it. */
+    stackShares: [0.3, 0.38],
+    /** The counter's share of the room beside the shop, tried in turn; the purse has the rest. */
+    counterShares: [0.36, 0.44, 0.52],
+    /** A note is this many times as wide as a coin, and as tall. */
+    noteAspect: 2,
+    /** Between pieces, as a share of a coin. */
+    pieceGap: 0.16,
+    /** A coin is never bigger than this, in px, nor smaller than a finger hits. */
+    maxCoin: 96,
+    minCoin: 40,
+    /** The thing bought, as a share of the shop's height, and the tag's lines under it. */
+    itemShare: 0.56,
+    tagLine: 0.15,
+    maxTagLine: 44,
+    /** A price smaller than this, in px, is not read at a glance. */
+    minTagLine: 20,
+    /** Inside the counter, as a share of a coin, around its pieces. */
+    counterPad: 0.2,
+};
+function moneyPieceSize(kind, coin) {
+    return kind === "note" ? { width: coin * MONEY_PAY_LAYOUT.noteAspect, height: coin } : { width: coin, height: coin };
+}
+/**
+ * Pieces in rows inside `box`, left to right, each row in the middle of the
+ * box's width and the rows in the middle of its height; null when they do not
+ * all fit.
+ */
+function flowMoneyPieces(pieces, box, coin) {
+    const gap = coin * MONEY_PAY_LAYOUT.pieceGap;
+    const rows = [];
+    for (const piece of pieces) {
+        const size = moneyPieceSize(piece.kind, coin);
+        if (size.width > box.width) {
+            return null;
+        }
+        const row = rows[rows.length - 1];
+        if (row && row.width + gap + size.width <= box.width + 1e-6) {
+            row.items.push({ id: piece.id, ...size });
+            row.width += gap + size.width;
+        }
+        else {
+            rows.push({ items: [{ id: piece.id, ...size }], width: size.width });
+        }
+    }
+    const height = rows.length * coin + Math.max(0, rows.length - 1) * gap;
+    if (height > box.height + 1e-6) {
+        return null;
+    }
+    const places = {};
+    rows.forEach((row, index) => {
+        let left = box.left + (box.width - row.width) / 2;
+        const top = box.top + (box.height - height) / 2 + index * (coin + gap);
+        row.items.forEach((item) => {
+            places[item.id] = { left, top, width: item.width, height: item.height };
+            left += item.width + gap;
+        });
+    });
+    return places;
+}
+/**
+ * Where the pieces on the counter lie, in the order they were put there: in
+ * rows, as in the purse, at the purse's size — the layout chose a size at
+ * which every piece fits there, in any order.
+ */
+export function moneyPayCounterPlaces(layout, pieces) {
+    const inner = insetRect(layout.counter, layout.coin * MONEY_PAY_LAYOUT.counterPad);
+    return flowMoneyPieces(pieces, inner, layout.coin) ?? flowMoneyPieces(pieces, layout.counter, layout.coin * 0.8) ?? {};
+}
+/**
+ * The fullest the counter can get: for every number of notes on it, those
+ * notes and as many coins as still keep it within `target` (the cheapest
+ * first, so the most pieces), each in the three orders that need the most
+ * rows. With nothing to make, the whole purse.
+ */
+function moneyPayCounterWorstCases(pieces, target) {
+    const notes = pieces.filter((piece) => piece.kind === "note").sort((a, b) => a.value - b.value);
+    const coins = pieces.filter((piece) => piece.kind === "coin").sort((a, b) => a.value - b.value);
+    const sets = [];
+    for (let noteCount = 0; noteCount <= notes.length; noteCount++) {
+        const chosen = notes.slice(0, noteCount);
+        let sum = chosen.reduce((total, piece) => total + piece.value, 0);
+        if (target > 0 && sum > target) {
+            break;
+        }
+        for (const coin of coins) {
+            if (target > 0 && sum + coin.value > target) {
+                break;
+            }
+            chosen.push(coin);
+            sum += coin.value;
+        }
+        sets.push(chosen);
+    }
+    return sets.flatMap((set) => {
+        const setNotes = set.filter((piece) => piece.kind === "note");
+        const setCoins = set.filter((piece) => piece.kind === "coin");
+        const turns = [];
+        for (let index = 0; index < Math.max(setNotes.length, setCoins.length); index++) {
+            if (setNotes[index])
+                turns.push(setNotes[index]);
+            if (setCoins[index])
+                turns.push(setCoins[index]);
+        }
+        return [[...setNotes, ...setCoins], [...setCoins, ...setNotes], turns];
+    });
+}
+function insetRect(rect, by) {
+    return { left: rect.left + by, top: rect.top + by, width: Math.max(rect.width - by * 2, 1), height: Math.max(rect.height - by * 2, 1) };
+}
+/**
+ * Where everything of the money game goes. The background covers the stage;
+ * the shop — what is bought, its tag, and in change mode what was paid —
+ * stands at the left (at the top, where the stage is tall), and beside it the
+ * counter over the purse. One size of coin for the whole game, the biggest at
+ * which the purse holds every piece and the counter would too, whatever the
+ * order they are put on it.
+ */
+export function layoutMoneyPay(stageWidth, stageHeight, config, insets = {}) {
+    const L = MONEY_PAY_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    if (usableWidth <= 0 || usableHeight <= 0 || config.pieces.length === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const area = {
+        left: originX + edge,
+        top: originY + edge,
+        width: Math.max(usableWidth - edge * 2, 1),
+        height: Math.max(usableHeight - edge * 2, 1),
+    };
+    const lines = formatMoneyLines(config.price, config.language);
+    const lineUnits = Math.max(...lines.map((line) => textLineUnits(line)));
+    // The counter only ever holds pieces worth no more than the sum: the most
+    // of them there can be, with as many notes as fit in it, in the orders
+    // that need the most rows — notes first, coins first, and taking turns.
+    const orders = moneyPayCounterWorstCases(config.pieces, config.target);
+    let best = null;
+    const tryArrangement = (arrangement, share, counterShare) => {
+        const shop = arrangement === "side"
+            ? { left: area.left, top: area.top, width: area.width * share - gap / 2, height: area.height }
+            : { left: area.left, top: area.top, width: area.width, height: area.height * share - gap / 2 };
+        const rest = arrangement === "side"
+            ? { left: shop.left + shop.width + gap, top: area.top, width: area.width - shop.width - gap, height: area.height }
+            : { left: area.left, top: shop.top + shop.height + gap, width: area.width, height: area.height - shop.height - gap };
+        if (shop.width <= 0 || shop.height <= 0 || rest.width <= 0 || rest.height <= 0) {
+            return;
+        }
+        const counter = { left: rest.left, top: rest.top, width: rest.width, height: rest.height * counterShare - gap / 2 };
+        const purse = { left: rest.left, top: counter.top + counter.height + gap, width: rest.width, height: rest.height - counter.height - gap };
+        // The biggest coin at which everything fits, found by halving.
+        const fits = (coin) => flowMoneyPieces(config.pieces, purse, coin) !== null
+            && orders.every((order) => flowMoneyPieces(order, insetRect(counter, coin * L.counterPad), coin) !== null);
+        let low = 0;
+        let high = L.maxCoin;
+        for (let step = 0; step < 18; step++) {
+            const middle = (low + high) / 2;
+            if (fits(middle))
+                low = middle;
+            else
+                high = middle;
+        }
+        const coin = low;
+        if (coin <= 1) {
+            return;
+        }
+        // The shop: the thing bought over its tag, and the paid piece under the tag.
+        const paidSize = config.paid ? moneyPieceSize(config.paid.kind, Math.min(coin, shop.height * 0.22)) : null;
+        const tagLine = Math.min(L.maxTagLine, shop.height * L.tagLine, (shop.width * 0.9) / (lineUnits + 0.6));
+        const tag = { left: 0, top: 0, width: lineUnits * tagLine + tagLine * 0.6, height: lines.length * tagLine + tagLine * 0.5 };
+        const room = shop.height - tag.height - (paidSize ? paidSize.height + gap * 0.6 : 0) - gap * 0.6;
+        const itemSize = config.item_image ? Math.max(0, Math.min(shop.width * 0.9, shop.height * L.itemShare, room)) : 0;
+        const column = itemSize + (itemSize > 0 ? gap * 0.6 : 0) + tag.height + (paidSize ? gap * 0.6 + paidSize.height : 0);
+        let top = shop.top + Math.max(0, (shop.height - column) / 2);
+        const item = itemSize > 0
+            ? { left: shop.left + (shop.width - itemSize) / 2, top, width: itemSize, height: itemSize }
+            : null;
+        top += itemSize > 0 ? itemSize + gap * 0.6 : 0;
+        tag.left = shop.left + (shop.width - tag.width) / 2;
+        tag.top = top;
+        const tagLines = lines.map((text, index) => ({
+            text,
+            left: tag.left + tagLine * 0.3,
+            top: tag.top + tagLine * 0.25 + index * tagLine,
+            width: textLineUnits(text) * tagLine,
+            height: tagLine,
+        }));
+        top += tag.height + gap * 0.6;
+        const paid = paidSize
+            ? { left: shop.left + (shop.width - paidSize.width) / 2, top, width: paidSize.width, height: paidSize.height }
+            : null;
+        const homes = flowMoneyPieces(config.pieces, purse, coin) ?? {};
+        // Coins as big as they go, and a price that can be read: a tag under
+        // `minTagLine` or a coin under `minCoin` loses to any layout without one.
+        const score = Math.min(coin, tagLine * 2)
+            + (tagLine >= L.minTagLine ? 0 : -200 + tagLine)
+            + (coin >= L.minCoin ? 0 : -100 + coin)
+            + coin * 1e-3;
+        if (!best || score > best.score + 1e-9) {
+            best = { score, layout: { arrangement, item, tag, tagLines, paid, counter, purse, coin, homes } };
+        }
+    };
+    L.counterShares.forEach((counterShare) => {
+        L.sideShares.forEach((share) => tryArrangement("side", share, counterShare));
+        L.stackShares.forEach((share) => tryArrangement("stack", share, counterShare));
+    });
+    return best?.layout ?? null;
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -5118,6 +5485,7 @@ export const GAME_KIND_KEYS = {
     "label-diagram": "labelDiagram",
     "reading-text": "readingText",
     "word-problem": "wordProblem",
+    "money-pay": "moneyPay",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -5142,6 +5510,7 @@ export const GAME_TIMINGS_BY_KIND = {
     "label-diagram": GAME_TIMINGS.labelDiagram,
     "reading-text": GAME_TIMINGS.readingText,
     "word-problem": GAME_TIMINGS.wordProblem,
+    "money-pay": GAME_TIMINGS.moneyPay,
     "memory-cards": GAME_TIMINGS.memoryCards,
     "pattern-next": GAME_TIMINGS.patternNext,
     "select-option": GAME_TIMINGS.selectOption,
@@ -5172,6 +5541,7 @@ export const GAME_GESTURES = {
     "label-diagram": "tap",
     "reading-text": "tap",
     "word-problem": "tap",
+    "money-pay": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",

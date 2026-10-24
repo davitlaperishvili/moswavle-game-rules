@@ -1988,5 +1988,80 @@ section('word_problem: a problem in words, its answer typed');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.wordProblem.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-problem'] === rules.GAME_TIMINGS.wordProblem && rules.GAME_GESTURES['word-problem'] === 'tap');
 }
 
+section('money_pay: pay a price, or give the change, with lari');
+
+{
+  ['money_pay', 'give_change', 'shop_pay', 'Money Pay'].forEach((type) => {
+    check(`${type} resolves to money-pay`, rules.resolveGameKind(type, {}) === 'money-pay');
+  });
+
+  check('a coin up to 2 lari, a note from 5', rules.moneyPieceKind(200) === 'coin' && rules.moneyPieceKind(500) === 'note');
+  check('a price is said in lari and tetri, in the game\'s language',
+    JSON.stringify(rules.formatMoneyLines(350, 'ka')) === '["3 ლარი","50 თეთრი"]'
+      && JSON.stringify(rules.formatMoneyLines(300, 'ru')) === '["3 лари"]'
+      && JSON.stringify(rules.formatMoneyLines(50, 'en')) === '["50 tetri"]'
+      && JSON.stringify(rules.formatMoneyLines(120, 'xx')) === '["1 ლარი","20 თეთრი"]');
+  check('whether some pieces make a sum exactly',
+    rules.moneyPayReachable([200, 100, 50], 350) && !rules.moneyPayReachable([200, 100, 50], 40) && !rules.moneyPayReachable([100], 0));
+
+  const purse = [{ value: 100, count: 3 }, { value: 500, count: 1, image: 'https://x/banknote-5-lari.webp' }, { value: 50, count: 2 }, { value: 20, count: 3 }, { value: 7, count: 2 }];
+  const game = rules.normalizeMoneyPayConfig({ price: 350, pieces: purse, item_image: 'https://x/ball.webp', bg_image: 'https://x/bg-shop.webp', language: 'ru', time_limit: 90 });
+  check('the purse one piece an entry, the biggest first, a value that is no money left out',
+    game.pieces.map((piece) => piece.value).join() === '500,100,100,100,50,50,20,20,20'
+      && game.pieces[0].kind === 'note' && game.pieces[0].image === 'https://x/banknote-5-lari.webp' && game.pieces[1].image === null
+      && new Set(game.pieces.map((piece) => piece.id)).size === game.pieces.length);
+  check('pay mode: the counter must hold the price', game.mode === 'pay' && game.price === 350 && game.target === 350 && game.paid === null && game.language === 'ru');
+  check('the pictures to preload', game.imageUris.join() === 'https://x/bg-shop.webp,https://x/ball.webp,https://x/banknote-5-lari.webp' && game.lives === 3 && game.time_limit === 90);
+  check('no more than twelve pieces', rules.normalizeMoneyPayConfig({ price: 10, pieces: [{ value: 10, count: 30 }] }).pieces.length === rules.MONEY_PAY_PIECES_MAX);
+
+  const change = rules.normalizeMoneyPayConfig({ price: 350, paid: { value: 500, image: 'https://x/banknote-5-lari.webp' }, pieces: [{ value: 100, count: 2 }, { value: 50, count: 1 }] });
+  check('change mode: the buyer paid, the counter takes the change', change.mode === 'change' && change.paid.value === 500 && change.paid.kind === 'note' && change.target === 150);
+  check('a price the purse cannot make, or no change, is no game',
+    rules.normalizeMoneyPayConfig({ price: 40, pieces: [{ value: 50, count: 2 }] }).target === -1
+      && rules.normalizeMoneyPayConfig({ price: 500, paid: 500, pieces: [{ value: 50, count: 2 }] }).target === -1
+      && rules.normalizeMoneyPayConfig({ price: 0, pieces: [{ value: 50, count: 2 }] }).target === -1);
+
+  const tap = rules.resolveMoneyPayTap;
+  check('a piece goes on the counter while there is still some to make', JSON.stringify(tap(game, [], 'piece-100-1')) === '{"type":"placed","total":100}');
+  check('the piece that makes the sum wins', JSON.stringify(tap(game, ['piece-100-1', 'piece-100-2', 'piece-100-3'], 'piece-50-1')) === '{"type":"right","total":350}');
+  check('one that would go past it is a mistake and stays', JSON.stringify(tap(game, ['piece-100-1'], 'piece-500-1')) === '{"type":"over","total":100}');
+  check('a piece on the counter comes back for nothing', JSON.stringify(tap(game, ['piece-100-1', 'piece-50-1'], 'piece-100-1')) === '{"type":"returned","total":50}');
+  check('nothing else is taken', tap(game, [], 'nope').type === 'ignored' && tap({ pieces: game.pieces, target: -1 }, [], 'piece-100-1').type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const full = rules.normalizeMoneyPayConfig({ price: 1290, pieces: [{ value: 1000, count: 1 }, { value: 500, count: 1 }, { value: 200, count: 2 }, { value: 100, count: 2 }, { value: 50, count: 2 }, { value: 20, count: 2 }, { value: 10, count: 2 }], item_image: 'https://x/bag.webp' });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [game, change, full].forEach((config, index) => {
+    const layout = rules.layoutMoneyPay(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const homes = config.pieces.map((piece) => layout && layout.homes[piece.id]);
+    // The fullest counter there can be: the cheapest pieces that still keep within the sum.
+    const cheapest = [...config.pieces].sort((a, b) => a.value - b.value);
+    const most = [];
+    let sum = 0;
+    for (const piece of cheapest) { if (sum + piece.value > config.target) break; most.push(piece); sum += piece.value; }
+    const placed = layout ? Object.values(rules.moneyPayCounterPlaces(layout, most)) : [];
+    const shop = [layout && layout.item, layout && layout.tag, layout && layout.paid].filter(Boolean);
+    const ok = layout && homes.every((rect) => rect && inside(rect, layout.purse))
+      && homes.every((a, i) => homes.every((b, j) => i === j || !overlap(a, b)))
+      && placed.length === most.length && placed.every((rect) => inside(rect, layout.counter))
+      && [layout.counter, layout.purse, ...shop].every((rect) => inside(rect, stage))
+      && !overlap(layout.counter, layout.purse) && shop.every((rect) => !overlap(rect, layout.counter) && !overlap(rect, layout.purse))
+      && layout.tagLines.every((line) => inside(line, layout.tag)) && layout.tagLines[0].height >= rules.MONEY_PAY_LAYOUT.minTagLine
+      && layout.coin >= rules.MONEY_PAY_LAYOUT.minCoin
+      && (config.paid ? layout.paid !== null : layout.paid === null);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the shop, the counter and the purse are whole, apart, inside the safe area, the price readable and the coins big enough to hit', whole, detail);
+  check('a note is twice a coin wide', (() => { const layout = rules.layoutMoneyPay(852, 393, game, {}); return Math.abs(layout.homes['piece-500-1'].width - layout.coin * 2) < 1e-6 && Math.abs(layout.homes['piece-100-1'].width - layout.coin) < 1e-6; })());
+  check('no money, no game', rules.layoutMoneyPay(852, 393, { pieces: [], paid: null, price: 100, target: 100, language: 'ka', item_image: null }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.moneyPay.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['money-pay'] === rules.GAME_TIMINGS.moneyPay && rules.GAME_GESTURES['money-pay'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

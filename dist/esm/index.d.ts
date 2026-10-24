@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1282,6 +1282,17 @@ export declare const GAME_TIMINGS: {
         readonly successSettleMs: 700;
         readonly livesOutDelayMs: 320;
     };
+    /**
+     * A piece flies between the purse and the counter over `flyMs`; one that
+     * would take the counter past the sum shakes for `wrongFeedbackMs` and stays.
+     * The counter is seen whole `successSettleMs` before the win.
+     */
+    readonly moneyPay: {
+        readonly wrongFeedbackMs: 560;
+        readonly flyMs: 360;
+        readonly successSettleMs: 800;
+        readonly livesOutDelayMs: 320;
+    };
     readonly mathEquation: {
         readonly wrongFeedbackMs: 560;
         readonly flyMs: 620;
@@ -2174,6 +2185,159 @@ export type WordProblemLayout = {
  * keys too small to hit a small finger's last.
  */
 export declare function layoutWordProblem(stageWidth: number, stageHeight: number, config: Pick<WordProblemConfig, "text" | "unit" | "maxDigits">, insets?: SceneInsets): WordProblemLayout | null;
+/** Every piece of money, in tetri: 100 tetri are a lari. */
+export declare const MONEY_DENOMINATIONS: readonly [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
+export type MoneyDenomination = (typeof MONEY_DENOMINATIONS)[number];
+/** At most this many pieces lie in the purse: more do not fit a phone at a size a finger hits. */
+export declare const MONEY_PAY_PIECES_MAX = 12;
+/** The two words of the price, in the three languages: none of them changes with the number. */
+export declare const MONEY_WORDS: {
+    readonly ka: {
+        readonly lari: "ლარი";
+        readonly tetri: "თეთრი";
+    };
+    readonly ru: {
+        readonly lari: "лари";
+        readonly tetri: "тетри";
+    };
+    readonly en: {
+        readonly lari: "lari";
+        readonly tetri: "tetri";
+    };
+};
+export type MoneyLanguage = keyof typeof MONEY_WORDS;
+/** A coin up to 2 lari, a note from 5. */
+export declare function moneyPieceKind(value: number): "coin" | "note";
+/**
+ * A sum as it is said: "3 ლარი 50 თეთრი", "50 тетри", "3 lari", one line a
+ * part. The words are the game's language's, Georgian where it has none.
+ */
+export declare function formatMoneyLines(tetri: number, language: string): string[];
+/** Whether some of `values` add up to `target` exactly. */
+export declare function moneyPayReachable(values: readonly number[], target: number): boolean;
+export type MoneyPayPiece = {
+    id: string;
+    /** In tetri. */
+    value: number;
+    kind: "coin" | "note";
+    /** The library's picture of it, or null: then the players draw it. */
+    image: string | null;
+};
+export type MoneyPayConfig = {
+    /** Pay the price, or give the change for what was paid. */
+    mode: "pay" | "change";
+    /** In tetri. */
+    price: number;
+    /** What the buyer paid with, in change mode; null when the child pays. */
+    paid: MoneyPayPiece | null;
+    /** What the counter must hold: the price, or the change. -1 when nothing can make it, and the game is not played. */
+    target: number;
+    /** What is bought, or null: the tag stands alone. */
+    item_image: string | null;
+    /** The purse, one entry a piece, the biggest first. */
+    pieces: MoneyPayPiece[];
+    /** The language the price is written in. */
+    language: string;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background, the thing bought and every picture of money: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. The purse comes as rows of a piece and
+ * how many of it (`pieces: [{ value, count, image }]`, `value` in tetri),
+ * and is laid out one entry a piece, at most `MONEY_PAY_PIECES_MAX`. A price
+ * the purse cannot make exactly — or change that is none — is no game.
+ */
+export declare function normalizeMoneyPayConfig(config: Record<string, unknown>): MoneyPayConfig;
+export type MoneyPayTapResult = 
+/** Not a piece of this purse, or a game with nothing to make. */
+{
+    type: "ignored";
+}
+/** A piece on the counter went back to the purse. */
+ | {
+    type: "returned";
+    total: number;
+}
+/** A piece went on the counter, and there is still some to make. */
+ | {
+    type: "placed";
+    total: number;
+}
+/** It made the sum exactly: the game is won. */
+ | {
+    type: "right";
+    total: number;
+}
+/** It would take the counter past the sum: a mistake, and it stays in the purse. */
+ | {
+    type: "over";
+    total: number;
+};
+/**
+ * What a tap on a piece does, given what lies on the counter (`onCounter`,
+ * in the order it was put there): the whole play rule, so both players follow
+ * it tap for tap.
+ */
+export declare function resolveMoneyPayTap(config: Pick<MoneyPayConfig, "pieces" | "target">, onCounter: readonly string[], pieceId: string): MoneyPayTapResult;
+/** Proportions of the money game. */
+export declare const MONEY_PAY_LAYOUT: {
+    /** The shop's share of the width, at the left, when the counter and the purse stand beside it, tried in turn. */
+    readonly sideShares: readonly [0.26, 0.3, 0.36, 0.42];
+    /** Its share of the height, at the top, when they stand under it. */
+    readonly stackShares: readonly [0.3, 0.38];
+    /** The counter's share of the room beside the shop, tried in turn; the purse has the rest. */
+    readonly counterShares: readonly [0.36, 0.44, 0.52];
+    /** A note is this many times as wide as a coin, and as tall. */
+    readonly noteAspect: 2;
+    /** Between pieces, as a share of a coin. */
+    readonly pieceGap: 0.16;
+    /** A coin is never bigger than this, in px, nor smaller than a finger hits. */
+    readonly maxCoin: 96;
+    readonly minCoin: 40;
+    /** The thing bought, as a share of the shop's height, and the tag's lines under it. */
+    readonly itemShare: 0.56;
+    readonly tagLine: 0.15;
+    readonly maxTagLine: 44;
+    /** A price smaller than this, in px, is not read at a glance. */
+    readonly minTagLine: 20;
+    /** Inside the counter, as a share of a coin, around its pieces. */
+    readonly counterPad: 0.2;
+};
+export type MoneyPayLayout = {
+    arrangement: "side" | "stack";
+    /** What is bought, or null. */
+    item: BoardRect | null;
+    /** The price tag, and its lines ("3 ლარი", "50 თეთრი"). */
+    tag: BoardRect;
+    tagLines: TextLineBox[];
+    /** In change mode, where the piece the buyer paid with lies. */
+    paid: BoardRect | null;
+    /** The counter the money is put on, and the purse it comes from. */
+    counter: BoardRect;
+    purse: BoardRect;
+    /** A coin's size: a note is `noteAspect` of it wide. */
+    coin: number;
+    /** Where each piece lies in the purse, by id. */
+    homes: Record<string, BoardRect>;
+};
+/**
+ * Where the pieces on the counter lie, in the order they were put there: in
+ * rows, as in the purse, at the purse's size — the layout chose a size at
+ * which every piece fits there, in any order.
+ */
+export declare function moneyPayCounterPlaces(layout: Pick<MoneyPayLayout, "counter" | "coin">, pieces: readonly Pick<MoneyPayPiece, "id" | "kind">[]): Record<string, BoardRect>;
+/**
+ * Where everything of the money game goes. The background covers the stage;
+ * the shop — what is bought, its tag, and in change mode what was paid —
+ * stands at the left (at the top, where the stage is tall), and beside it the
+ * counter over the purse. One size of coin for the whole game, the biggest at
+ * which the purse holds every piece and the counter would too, whatever the
+ * order they are put on it.
+ */
+export declare function layoutMoneyPay(stageWidth: number, stageHeight: number, config: Pick<MoneyPayConfig, "pieces" | "paid" | "price" | "target" | "language" | "item_image">, insets?: SceneInsets): MoneyPayLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -2255,6 +2419,14 @@ export type WordProblemMetrics = BaseGameMetrics & {
     attempts: number;
     livesRemaining: number;
 };
+export type MoneyPayMetrics = BaseGameMetrics & {
+    /** The sum to make, in tetri, and how many pieces made it. */
+    target: number;
+    piecesUsed: number;
+    /** Pieces that would have taken the counter past the sum. */
+    overs: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -2320,6 +2492,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "label-diagram": "labelDiagram";
     readonly "reading-text": "readingText";
     readonly "word-problem": "wordProblem";
+    readonly "money-pay": "moneyPay";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -2356,6 +2529,7 @@ export declare const GAME_GESTURES: {
     readonly "label-diagram": "tap";
     readonly "reading-text": "tap";
     readonly "word-problem": "tap";
+    readonly "money-pay": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -2418,6 +2592,7 @@ export type GameMetricsByKind = {
     "label-diagram": LabelDiagramMetrics;
     "reading-text": ReadingTextMetrics;
     "word-problem": WordProblemMetrics;
+    "money-pay": MoneyPayMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;
