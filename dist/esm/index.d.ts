@@ -2885,6 +2885,8 @@ export declare const NUMBER_LINE_LAYOUT: {
     readonly zoneHeight: 3.2;
     /** The jump's arc rises this many numbers over the line. */
     readonly arc: 2.2;
+    /** Over the line, under the card: room for the marker, this many numbers high. */
+    readonly markerRoom: 2.2;
 };
 export type NumberLineLayout = {
     /** The card with the number asked, or the jump. */

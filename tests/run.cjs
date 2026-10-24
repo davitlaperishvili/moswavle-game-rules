@@ -2334,7 +2334,7 @@ section('number_line: a number placed on a line, or a jump landed');
     const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
     const labels = layout ? layout.ticks.map((tick) => tick.label).filter(Boolean) : [];
     const ok = layout && inside(layout.card, stage) && layout.number >= rules.NUMBER_LINE_LAYOUT.minNumber
-      && layout.line.left >= stage.left - 1e-6 && layout.line.right <= stage.left + stage.width + 1e-6 && layout.line.y > layout.card.top + layout.card.height
+      && layout.line.left >= stage.left - 1e-6 && layout.line.right <= stage.left + stage.width + 1e-6 && layout.line.y - (layout.card.top + layout.card.height) >= layout.number * rules.NUMBER_LINE_LAYOUT.markerRoom - 1e-6
       && layout.ticks.length === config.ticks.length && layout.ticks.every((tick, i) => tick.value === config.ticks[i].value && (tick.label !== null) === config.ticks[i].labelled)
       && labels.every((label) => inside(label, stage) && !overlap(label, layout.card)) && labels.every((a, i) => labels.every((b, j) => i === j || !overlap(a, b)))
       && layout.ticks.every((tick) => tick.zone.width >= 28 && tick.zone.height >= 40 && !overlap(tick.zone, layout.card))

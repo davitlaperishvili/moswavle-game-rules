@@ -6758,6 +6758,8 @@ exports.NUMBER_LINE_LAYOUT = {
     zoneHeight: 3.2,
     /** The jump's arc rises this many numbers over the line. */
     arc: 2.2,
+    /** Over the line, under the card: room for the marker, this many numbers high. */
+    markerRoom: 2.2,
 };
 /** How wide a number is written at a height of 1: its digits and its minus. */
 function numberLineUnits(value) {
@@ -6792,7 +6794,9 @@ function layoutNumberLine(stageWidth, stageHeight, config, insets = {}) {
     const hasArc = config.from !== null;
     // The number as tall as the height lets it be, and narrow enough that two numbers side by side
     // never touch: the line runs between the middles of its end numbers.
-    const fitsHeight = (number) => number * L.card * 1.5 + gap + (hasArc ? number * L.arc : 0) + number * L.majorTick + number * 1.6 <= area.height;
+    // From the card to the line: the gap and the arc's room, and never less than the marker needs.
+    const rise = (number) => Math.max(gap + (hasArc ? number * L.arc : 0) + (number * L.majorTick) / 2, number * L.markerRoom);
+    const fitsHeight = (number) => number * L.card * 1.5 + rise(number) + number * L.majorTick / 2 + number * 1.6 <= area.height;
     // Only numbered ticks need the room: the closest two of them, so many ticks apart.
     const labelled = config.ticks.map((tick, index) => (tick.labelled ? index : -1)).filter((index) => index >= 0);
     const apart = Math.max(1, Math.min(...labelled.slice(1).map((index, at) => index - labelled[at])));
@@ -6806,11 +6810,11 @@ function layoutNumberLine(stageWidth, stageHeight, config, insets = {}) {
     const between = (right - left) / (count - 1);
     // The block is the card, the arc's room, the line and the numbers under it, in the middle of the height.
     const cardHeight = number * L.card * 1.5;
-    const block = cardHeight + gap + (hasArc ? number * L.arc : 0) + number * L.majorTick / 2 + number * 1.6;
+    const block = cardHeight + rise(number) + number * L.majorTick / 2 + number * 1.6;
     const top = area.top + Math.max(0, (area.height - block) / 2);
     const cardWidth = (cardText + 0.8) * number * L.card;
     const card = { left: area.left + (area.width - cardWidth) / 2, top, width: cardWidth, height: cardHeight };
-    const y = card.top + cardHeight + gap + (hasArc ? number * L.arc : 0) + (number * L.majorTick) / 2;
+    const y = card.top + cardHeight + rise(number);
     const zoneFloor = card.top + cardHeight + gap / 2;
     const ticks = config.ticks.map((tick, index) => {
         const x = left + index * between;
