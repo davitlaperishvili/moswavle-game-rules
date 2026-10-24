@@ -6694,8 +6694,8 @@ function layoutWordSort(stageWidth, stageHeight, config, insets = {}) {
 exports.NUMBER_LINE_TICKS_MAX = 21;
 /**
  * The game as the players draw it. `start`, `end` and `step` make the line
- * (0, 10 and 1 by default); `label_every` numbers every so many ticks (the
- * start and the end always). The number asked is `target`, or `from` and
+ * (0, 10 and 1 by default); `label_every` numbers every so many ticks from
+ * the start (the end too, where it falls in step). The number asked is `target`, or `from` and
  * `jump` together — then the line marks `from` and the card says the jump. A
  * line of more than `NUMBER_LINE_TICKS_MAX` ticks, or a number asked that is
  * not one of them, is no game.
@@ -6725,7 +6725,8 @@ function normalizeNumberLineConfig(config) {
         step,
         ticks: values.map((value, index) => ({
             value,
-            labelled: value !== target && (index === 0 || index === values.length - 1 || index % labelEvery === 0),
+            // The end too where it falls in step: a number squeezed in beside the last one is not read.
+            labelled: value !== target && (index === 0 || index % labelEvery === 0),
         })),
         target: values.length > 0 ? target : -1,
         from: isJump && target >= 0 ? Math.round(fromValue) : null,

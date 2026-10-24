@@ -2855,8 +2855,8 @@ export type NumberLineConfig = {
 };
 /**
  * The game as the players draw it. `start`, `end` and `step` make the line
- * (0, 10 and 1 by default); `label_every` numbers every so many ticks (the
- * start and the end always). The number asked is `target`, or `from` and
+ * (0, 10 and 1 by default); `label_every` numbers every so many ticks from
+ * the start (the end too, where it falls in step). The number asked is `target`, or `from` and
  * `jump` together — then the line marks `from` and the card says the jump. A
  * line of more than `NUMBER_LINE_TICKS_MAX` ticks, or a number asked that is
  * not one of them, is no game.
