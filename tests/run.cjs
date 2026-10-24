@@ -2402,5 +2402,57 @@ section('true_false: a series of statements, each true or not');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.trueFalse.nextMs > 0 && rules.GAME_TIMINGS_BY_KIND['true-false'] === rules.GAME_TIMINGS.trueFalse && rules.GAME_GESTURES['true-false'] === 'tap');
 }
 
+section('grid_route: a hero steered across a grid, or a route followed');
+
+{
+  ['grid_route', 'follow_route', 'map_route', 'Grid Route'].forEach((type) => {
+    check(`${type} resolves to grid-route`, rules.resolveGameKind(type, {}) === 'grid-route');
+  });
+
+  const steer = rules.normalizeGridRouteConfig({ columns: 6, rows: 4, start: { column: 0, row: 3 }, goal: '5,0', blocked: ['2,3', { column: 2, row: 2 }, '4,1', '9,9', '0,3'], plan_image: 'https://x/park.webp', bg_image: 'https://x/bg.webp' });
+  check('steer: the grid, the start, the treasure and the rocks on the grid — not the start', steer.mode === 'steer' && steer.columns === 6 && steer.goal.column === 5 && steer.goal.row === 0
+    && steer.blocked.length === 3 && steer.imageUris.join() === 'https://x/bg.webp,https://x/park.webp' && steer.lives === 3);
+  check('the fewest moves round the rocks', rules.gridRouteShortest(steer) === 8 && rules.gridRouteShortest({ columns: 3, rows: 1, start: { column: 0, row: 0 }, goal: { column: 2, row: 0 }, blocked: [{ column: 1, row: 0 }] }) === -1);
+  const follow = rules.normalizeGridRouteConfig({ mode: 'follow', columns: 5, rows: 4, start: '0,3', route: [{ direction: 'up', count: 2 }, { direction: '→', count: '3' }, { direction: 'sideways', count: 1 }] });
+  check('follow: the route as steps, ending where it takes the hero', follow.mode === 'follow' && follow.route.length === 2 && follow.route[1].direction === 'right' && follow.goal.column === 3 && follow.goal.row === 1);
+  check('no game: a route off the grid, a goal on a rock or at the start, a grid too big',
+    rules.normalizeGridRouteConfig({ mode: 'follow', columns: 3, rows: 3, start: '0,0', route: [{ direction: 'left', count: 1 }] }).goal === null
+      && rules.normalizeGridRouteConfig({ columns: 4, rows: 3, start: '0,0', goal: '2,2', blocked: ['2,2'] }).goal === null
+      && rules.normalizeGridRouteConfig({ columns: 4, rows: 3, start: '1,1', goal: '1,1' }).goal === null
+      && rules.normalizeGridRouteConfig({ columns: 12, rows: 3, start: '0,0', goal: '2,2' }).goal === null);
+  check('a step lands where it says', JSON.stringify(rules.moveGridCell({ column: 2, row: 2 }, 'up', 2)) === '{"column":2,"row":0}' && JSON.stringify(rules.moveGridCell({ column: 2, row: 2 }, 'left')) === '{"column":1,"row":2}');
+
+  const move = rules.resolveGridRouteMove;
+  check('an arrow steps the hero; onto the treasure it arrives', JSON.stringify(move(steer, { column: 0, row: 3 }, 'up')) === '{"type":"moved","at":{"column":0,"row":2},"arrived":false}'
+    && move(steer, { column: 5, row: 1 }, 'up').arrived === true);
+  check('a rock or the edge stops it: a mistake', move(steer, { column: 1, row: 3 }, 'right').type === 'blocked' && move(steer, { column: 0, row: 3 }, 'left').type === 'blocked' && move(steer, { column: 0, row: 3 }, 'down').type === 'blocked');
+  check('on the treasure nothing more', move(steer, { column: 5, row: 0 }, 'down').type === 'ignored');
+  check('follow: the square the route ends on is right, another wrong', rules.resolveGridRouteTap(follow, { column: 3, row: 1 }).type === 'right' && rules.resolveGridRouteTap(follow, { column: 2, row: 1 }).type === 'wrong' && rules.resolveGridRouteTap(follow, { column: 7, row: 1 }).type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const big = rules.normalizeGridRouteConfig({ mode: 'follow', columns: 8, rows: 5, start: '0,4', route: [{ direction: 'up', count: 3 }, { direction: 'right', count: 4 }, { direction: 'down', count: 1 }, { direction: 'right', count: 2 }] });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [steer, follow, big].forEach((config, index) => {
+    const layout = rules.layoutGridRoute(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const controls = layout ? [...layout.arrows, ...(layout.routeCard ? [layout.routeCard] : [])] : [];
+    const ok = layout && inside(layout.grid, stage) && Math.abs(layout.grid.width - layout.cell * config.columns) < 1e-6 && Math.abs(layout.grid.height - layout.cell * config.rows) < 1e-6
+      && controls.every((rect) => inside(rect, stage) && !overlap(rect, layout.grid))
+      && (config.mode === 'steer'
+        ? layout.arrows.length === 4 && layout.arrows.every((a) => a.width >= rules.GRID_ROUTE_LAYOUT.minButton) && layout.arrows.every((a, i) => layout.arrows.every((b, j) => i === j || !overlap(a, b)))
+        : layout.cell >= rules.GRID_ROUTE_LAYOUT.minCell && layout.steps.length === config.route.length && layout.steps.every((step) => inside(step, layout.routeCard) && step.height >= rules.GRID_ROUTE_LAYOUT.minStep))
+      && JSON.stringify(rules.gridRouteCellRect(layout, { column: 1, row: 1 })) === JSON.stringify({ left: layout.grid.left + layout.cell, top: layout.grid.top + layout.cell, width: layout.cell, height: layout.cell });
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the grid and the arrows or the route are whole, apart, inside the safe area and big enough', whole, detail);
+  check('no goal, no layout', rules.layoutGridRoute(852, 393, { mode: 'steer', columns: 4, rows: 3, goal: null, route: [] }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.gridRoute.stepMs > 0 && rules.GAME_TIMINGS_BY_KIND['grid-route'] === rules.GAME_TIMINGS.gridRoute && rules.GAME_GESTURES['grid-route'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

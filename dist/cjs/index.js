@@ -26,7 +26,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -158,6 +158,13 @@ exports.layoutNumberLine = layoutNumberLine;
 exports.normalizeTrueFalseConfig = normalizeTrueFalseConfig;
 exports.resolveTrueFalseTap = resolveTrueFalseTap;
 exports.layoutTrueFalse = layoutTrueFalse;
+exports.moveGridCell = moveGridCell;
+exports.normalizeGridRouteConfig = normalizeGridRouteConfig;
+exports.resolveGridRouteMove = resolveGridRouteMove;
+exports.resolveGridRouteTap = resolveGridRouteTap;
+exports.gridRouteShortest = gridRouteShortest;
+exports.gridRouteCellRect = gridRouteCellRect;
+exports.layoutGridRoute = layoutGridRoute;
 exports.gestureHintTapStops = gestureHintTapStops;
 exports.gestureHintDragEnd = gestureHintDragEnd;
 const letters_js_1 = require("./letters.js");
@@ -967,6 +974,16 @@ function resolveGameKind(type, config) {
         "fact_check",
     ].includes(normalizedType)) {
         return "true-false";
+    }
+    if ([
+        "grid_route",
+        "gridroute",
+        "grid_path",
+        "route",
+        "map_route",
+        "follow_route",
+    ].includes(normalizedType)) {
+        return "grid-route";
     }
     if ([
         "memory_cards",
@@ -3260,6 +3277,12 @@ exports.GAME_TIMINGS = {
      * last the game waits `successSettleMs`.
      */
     trueFalse: { wrongFeedbackMs: 1100, nextMs: 450, successSettleMs: 600, livesOutDelayMs: 320 },
+    /**
+     * The hero steps a square over `stepMs`; a move into a rock or off the grid
+     * shakes it for `wrongFeedbackMs`. On the treasure, or on the right square
+     * in follow mode, the game waits `successSettleMs`.
+     */
+    gridRoute: { wrongFeedbackMs: 520, stepMs: 220, successSettleMs: 800, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -6997,6 +7020,237 @@ function layoutTrueFalse(stageWidth, stageHeight, config, index, insets = {}) {
         no: { left: middle + gap / 2, top: buttonsTop, width: buttonWidth, height: button },
     };
 }
+// --- grid_route: a hero steered across a grid, or a route followed ---------------
+//
+// A grid drawn in code, over a plan where there is one (a park, a room seen
+// from above). Steer: the hero stands at the start and a treasure at the goal,
+// rocks in the way; the child moves the hero a square at a time with four
+// arrows, and reaches the treasure. A move into a rock or off the grid is a
+// mistake. Follow: the route is written as steps — "2 ↑, 3 →" — and the child
+// taps the square where it ends.
+/** A grid has at most this many columns and rows. */
+exports.GRID_ROUTE_SIZE = { maxColumns: 8, maxRows: 5, minCells: 3 };
+exports.GRID_DIRECTIONS = ["up", "left", "right", "down"];
+function readGridCell(value) {
+    const record = asRecord(value);
+    if (record) {
+        const column = extractNumber(record.column ?? record.col ?? record.x);
+        const row = extractNumber(record.row ?? record.y);
+        return column !== null && row !== null && Number.isInteger(column) && Number.isInteger(row) ? { column, row } : null;
+    }
+    const text = extractText(value);
+    const match = text?.match(/^\s*(\d+)\s*[,:x ]\s*(\d+)\s*$/);
+    return match ? { column: Number(match[1]), row: Number(match[2]) } : null;
+}
+function readGridDirection(value) {
+    const text = (extractText(value) ?? "").toLowerCase();
+    if (["up", "u", "↑", "north", "ზევით", "вверх"].includes(text))
+        return "up";
+    if (["down", "d", "↓", "south", "ქვევით", "вниз"].includes(text))
+        return "down";
+    if (["left", "l", "←", "west", "მარცხნივ", "влево"].includes(text))
+        return "left";
+    if (["right", "r", "→", "east", "მარჯვნივ", "вправо"].includes(text))
+        return "right";
+    return null;
+}
+/** Where a step of `count` squares in `direction` from `cell` lands. */
+function moveGridCell(cell, direction, count = 1) {
+    return {
+        column: cell.column + (direction === "right" ? count : direction === "left" ? -count : 0),
+        row: cell.row + (direction === "down" ? count : direction === "up" ? -count : 0),
+    };
+}
+function sameGridCell(a, b) {
+    return a.column === b.column && a.row === b.row;
+}
+/**
+ * The game as the players draw it. Squares are counted from 0: column from
+ * the left, row from the top. `start` and `goal` are { column, row } or
+ * "2,3"; `route` is [{ direction, count }]; `blocked` the rocks. A follow
+ * game ends where its route does; a start or goal off the grid, on a rock, a
+ * route that leaves the grid, or a goal at the start, is no game.
+ */
+function normalizeGridRouteConfig(config) {
+    const bg = normalizeBackground(config);
+    const plan = extractMediaUrl(config.plan_image);
+    const columns = Math.round(extractNumber(config.columns) ?? 5);
+    const rows = Math.round(extractNumber(config.rows) ?? 4);
+    const sized = columns >= 2 && rows >= 2 && columns <= exports.GRID_ROUTE_SIZE.maxColumns && rows <= exports.GRID_ROUTE_SIZE.maxRows && columns * rows >= exports.GRID_ROUTE_SIZE.minCells;
+    const inside = (cell) => cell.column >= 0 && cell.row >= 0 && cell.column < columns && cell.row < rows;
+    const mode = extractText(config.mode) === "follow" ? "follow" : "steer";
+    const start = readGridCell(config.start) ?? { column: 0, row: 0 };
+    const blocked = (Array.isArray(config.blocked) ? config.blocked : [])
+        .map((cell) => readGridCell(cell))
+        .filter((cell) => cell !== null && inside(cell) && !sameGridCell(cell, start));
+    const route = mode === "follow"
+        ? (Array.isArray(config.route) ? config.route : [])
+            .map((row) => asRecord(row))
+            .map((row) => ({ direction: readGridDirection(row?.direction), count: Math.round(extractNumber(row?.count) ?? 1) }))
+            .filter((step) => step.direction !== null && step.count >= 1)
+        : [];
+    let goal = null;
+    if (mode === "follow") {
+        let at = start;
+        let fine = route.length > 0;
+        for (const step of route) {
+            at = moveGridCell(at, step.direction, step.count);
+            fine = fine && inside(at);
+        }
+        goal = fine ? at : null;
+    }
+    else {
+        goal = readGridCell(config.goal);
+    }
+    const blockedAt = (cell) => blocked.some((rock) => sameGridCell(rock, cell));
+    const playable = sized && inside(start) && goal !== null && inside(goal) && !sameGridCell(start, goal) && !blockedAt(goal);
+    return {
+        mode,
+        columns: sized ? columns : 0,
+        rows: sized ? rows : 0,
+        start,
+        goal: playable ? goal : null,
+        route: playable ? route : [],
+        blocked: playable ? blocked : [],
+        plan_image: plan,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [bg, plan].filter((uri) => Boolean(uri)),
+    };
+}
+/** Steer mode: what an arrow does with the hero at `at`. */
+function resolveGridRouteMove(config, at, direction) {
+    if (!config.goal || sameGridCell(at, config.goal)) {
+        return { type: "ignored" };
+    }
+    const next = moveGridCell(at, direction);
+    const off = next.column < 0 || next.row < 0 || next.column >= config.columns || next.row >= config.rows;
+    if (off || config.blocked.some((rock) => sameGridCell(rock, next))) {
+        return { type: "blocked", at };
+    }
+    return { type: "moved", at: next, arrived: sameGridCell(next, config.goal) };
+}
+/** Follow mode: what a tap on a square does. */
+function resolveGridRouteTap(config, cell) {
+    if (!config.goal || cell.column < 0 || cell.row < 0 || cell.column >= config.columns || cell.row >= config.rows) {
+        return { type: "ignored" };
+    }
+    return sameGridCell(cell, config.goal) ? { type: "right" } : { type: "wrong" };
+}
+/** The fewest moves from the start to the goal round the rocks; -1 when there is no way. */
+function gridRouteShortest(config) {
+    if (!config.goal)
+        return -1;
+    const key = (cell) => `${cell.column},${cell.row}`;
+    const seen = new Set([key(config.start)]);
+    let frontier = [config.start];
+    for (let steps = 1; frontier.length > 0; steps++) {
+        const next = [];
+        for (const cell of frontier) {
+            for (const direction of exports.GRID_DIRECTIONS) {
+                const to = moveGridCell(cell, direction);
+                if (to.column < 0 || to.row < 0 || to.column >= config.columns || to.row >= config.rows)
+                    continue;
+                if (config.blocked.some((rock) => sameGridCell(rock, to)) || seen.has(key(to)))
+                    continue;
+                if (sameGridCell(to, config.goal))
+                    return steps;
+                seen.add(key(to));
+                next.push(to);
+            }
+        }
+        frontier = next;
+    }
+    return -1;
+}
+/** Proportions of the grid game. */
+exports.GRID_ROUTE_LAYOUT = {
+    /** The grid's share of the width, the controls beside it, tried in turn. */
+    sideShares: [0.6, 0.66, 0.72],
+    /** An arrow button: as tall as this, within these, in px. */
+    minButton: 52,
+    maxButton: 96,
+    /** A step of the route: a line this tall within these. */
+    minStep: 28,
+    maxStep: 56,
+    /** A square to tap in follow mode is never smaller than this, in px. */
+    minCell: 40,
+};
+/** Where a square stands on the stage. */
+function gridRouteCellRect(layout, cell) {
+    return { left: layout.grid.left + cell.column * layout.cell, top: layout.grid.top + cell.row * layout.cell, width: layout.cell, height: layout.cell };
+}
+/**
+ * Where everything of the grid game goes. The background covers the stage;
+ * the grid stands as big as it can at the left, its squares square, and
+ * beside it the four arrows in a cross (steer) or the route's steps one under
+ * the other (follow). Inside the stage less `insets`.
+ */
+function layoutGridRoute(stageWidth, stageHeight, config, insets = {}) {
+    const L = exports.GRID_ROUTE_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    if (usableWidth <= 0 || usableHeight <= 0 || !config.goal || config.columns === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const area = {
+        left: originX + edge,
+        top: originY + edge,
+        width: Math.max(usableWidth - edge * 2, 1),
+        height: Math.max(usableHeight - edge * 2, 1),
+    };
+    let best = null;
+    L.sideShares.forEach((share) => {
+        const slot = { left: area.left, top: area.top, width: area.width * share - gap / 2, height: area.height };
+        const rest = { left: slot.left + slot.width + gap, top: area.top, width: area.width - slot.width - gap, height: area.height };
+        const cell = Math.min(slot.width / config.columns, slot.height / config.rows);
+        const grid = {
+            left: slot.left + (slot.width - cell * config.columns) / 2,
+            top: slot.top + (slot.height - cell * config.rows) / 2,
+            width: cell * config.columns,
+            height: cell * config.rows,
+        };
+        let arrows = [];
+        let routeCard = null;
+        let steps = [];
+        let control = 0;
+        if (config.mode === "steer") {
+            // A cross three buttons wide and three high.
+            const button = Math.min(L.maxButton, (rest.width - gap) / 3, (rest.height - gap) / 3);
+            control = button;
+            const middle = { x: rest.left + rest.width / 2, y: rest.top + rest.height / 2 };
+            const at = (dx, dy, direction) => ({
+                direction,
+                left: middle.x - button / 2 + dx * (button + gap / 3),
+                top: middle.y - button / 2 + dy * (button + gap / 3),
+                width: button,
+                height: button,
+            });
+            arrows = [at(0, -1, "up"), at(-1, 0, "left"), at(1, 0, "right"), at(0, 1, "down")];
+        }
+        else {
+            // The steps one under the other on a card: an arrow and its count.
+            const count = Math.max(config.route.length, 1);
+            const line = Math.min(L.maxStep, (rest.height * 0.9) / (count * 1.3 + 0.4), (rest.width * 0.8) / 3);
+            control = line;
+            const cardHeight = line * (count * 1.3 + 0.4);
+            const cardWidth = line * 3.4;
+            routeCard = { left: rest.left + (rest.width - cardWidth) / 2, top: rest.top + (rest.height - cardHeight) / 2, width: cardWidth, height: cardHeight };
+            steps = config.route.map((_step, index) => ({ left: routeCard.left + line * 0.4, top: routeCard.top + line * 0.3 + index * line * 1.3, width: line * 2.6, height: line }));
+        }
+        const enough = config.mode === "steer" ? control >= L.minButton : control >= L.minStep && cell >= L.minCell;
+        const score = Math.min(cell, control * 1.5) + (enough ? 0 : -100) + cell * 1e-3;
+        if (!best || score > best.score + 1e-9) {
+            best = { score, layout: { grid, cell, arrows, routeCard, steps } };
+        }
+    });
+    return best?.layout ?? null;
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -7025,6 +7279,7 @@ exports.GAME_KIND_KEYS = {
     "word-sort": "wordSort",
     "number-line": "numberLine",
     "true-false": "trueFalse",
+    "grid-route": "gridRoute",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -7056,6 +7311,7 @@ exports.GAME_TIMINGS_BY_KIND = {
     "word-sort": exports.GAME_TIMINGS.wordSort,
     "number-line": exports.GAME_TIMINGS.numberLine,
     "true-false": exports.GAME_TIMINGS.trueFalse,
+    "grid-route": exports.GAME_TIMINGS.gridRoute,
     "memory-cards": exports.GAME_TIMINGS.memoryCards,
     "pattern-next": exports.GAME_TIMINGS.patternNext,
     "select-option": exports.GAME_TIMINGS.selectOption,
@@ -7093,6 +7349,7 @@ exports.GAME_GESTURES = {
     "word-sort": "tap",
     "number-line": "tap",
     "true-false": "tap",
+    "grid-route": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",

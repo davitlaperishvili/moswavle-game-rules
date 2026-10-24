@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1354,6 +1354,17 @@ export declare const GAME_TIMINGS: {
         readonly wrongFeedbackMs: 1100;
         readonly nextMs: 450;
         readonly successSettleMs: 600;
+        readonly livesOutDelayMs: 320;
+    };
+    /**
+     * The hero steps a square over `stepMs`; a move into a rock or off the grid
+     * shakes it for `wrongFeedbackMs`. On the treasure, or on the right square
+     * in follow mode, the game waits `successSettleMs`.
+     */
+    readonly gridRoute: {
+        readonly wrongFeedbackMs: 520;
+        readonly stepMs: 220;
+        readonly successSettleMs: 800;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -3007,6 +3018,112 @@ export type TrueFalseLayout = {
  * statement lets it be.
  */
 export declare function layoutTrueFalse(stageWidth: number, stageHeight: number, config: Pick<TrueFalseConfig, "statements">, index: number, insets?: SceneInsets): TrueFalseLayout | null;
+/** A grid has at most this many columns and rows. */
+export declare const GRID_ROUTE_SIZE: {
+    readonly maxColumns: 8;
+    readonly maxRows: 5;
+    readonly minCells: 3;
+};
+export type GridDirection = "up" | "down" | "left" | "right";
+export type GridCell = {
+    column: number;
+    row: number;
+};
+export type GridRouteStep = {
+    direction: GridDirection;
+    count: number;
+};
+export declare const GRID_DIRECTIONS: readonly GridDirection[];
+export type GridRouteConfig = {
+    mode: "steer" | "follow";
+    columns: number;
+    rows: number;
+    start: GridCell;
+    /** Steer: where the treasure is. Follow: where the route ends. Null when the game is none. */
+    goal: GridCell | null;
+    /** Follow: the route, a step a row. Empty in steer mode. */
+    route: GridRouteStep[];
+    /** Squares with a rock: the hero cannot stand there. */
+    blocked: GridCell[];
+    /** A plan drawn under the grid, or null. */
+    plan_image: string | null;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    imageUris: string[];
+};
+/** Where a step of `count` squares in `direction` from `cell` lands. */
+export declare function moveGridCell(cell: GridCell, direction: GridDirection, count?: number): GridCell;
+/**
+ * The game as the players draw it. Squares are counted from 0: column from
+ * the left, row from the top. `start` and `goal` are { column, row } or
+ * "2,3"; `route` is [{ direction, count }]; `blocked` the rocks. A follow
+ * game ends where its route does; a start or goal off the grid, on a rock, a
+ * route that leaves the grid, or a goal at the start, is no game.
+ */
+export declare function normalizeGridRouteConfig(config: Record<string, unknown>): GridRouteConfig;
+export type GridRouteMoveResult = 
+/** No game, or the treasure is reached already. */
+{
+    type: "ignored";
+}
+/** The hero stepped; `arrived` when it stands on the treasure. */
+ | {
+    type: "moved";
+    at: GridCell;
+    arrived: boolean;
+}
+/** A rock or the edge: the hero stays, and it is a mistake. */
+ | {
+    type: "blocked";
+    at: GridCell;
+};
+/** Steer mode: what an arrow does with the hero at `at`. */
+export declare function resolveGridRouteMove(config: Pick<GridRouteConfig, "columns" | "rows" | "goal" | "blocked">, at: GridCell, direction: GridDirection): GridRouteMoveResult;
+/** Follow mode: what a tap on a square does. */
+export declare function resolveGridRouteTap(config: Pick<GridRouteConfig, "columns" | "rows" | "goal">, cell: GridCell): {
+    type: "ignored";
+} | {
+    type: "right";
+} | {
+    type: "wrong";
+};
+/** The fewest moves from the start to the goal round the rocks; -1 when there is no way. */
+export declare function gridRouteShortest(config: Pick<GridRouteConfig, "columns" | "rows" | "start" | "goal" | "blocked">): number;
+/** Proportions of the grid game. */
+export declare const GRID_ROUTE_LAYOUT: {
+    /** The grid's share of the width, the controls beside it, tried in turn. */
+    readonly sideShares: readonly [0.6, 0.66, 0.72];
+    /** An arrow button: as tall as this, within these, in px. */
+    readonly minButton: 52;
+    readonly maxButton: 96;
+    /** A step of the route: a line this tall within these. */
+    readonly minStep: 28;
+    readonly maxStep: 56;
+    /** A square to tap in follow mode is never smaller than this, in px. */
+    readonly minCell: 40;
+};
+export type GridRouteLayout = {
+    /** The grid, and one square's size. */
+    grid: BoardRect;
+    cell: number;
+    /** Steer: the four arrows in a cross. */
+    arrows: Array<BoardRect & {
+        direction: GridDirection;
+    }>;
+    /** Follow: the route's card and a box a step. */
+    routeCard: BoardRect | null;
+    steps: BoardRect[];
+};
+/** Where a square stands on the stage. */
+export declare function gridRouteCellRect(layout: Pick<GridRouteLayout, "grid" | "cell">, cell: GridCell): BoardRect;
+/**
+ * Where everything of the grid game goes. The background covers the stage;
+ * the grid stands as big as it can at the left, its squares square, and
+ * beside it the four arrows in a cross (steer) or the route's steps one under
+ * the other (follow). Inside the stage less `insets`.
+ */
+export declare function layoutGridRoute(stageWidth: number, stageHeight: number, config: Pick<GridRouteConfig, "mode" | "columns" | "rows" | "goal" | "route">, insets?: SceneInsets): GridRouteLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -3131,6 +3248,13 @@ export type TrueFalseMetrics = BaseGameMetrics & {
     right: number;
     livesRemaining: number;
 };
+export type GridRouteMetrics = BaseGameMetrics & {
+    mode: "steer" | "follow";
+    /** Steer: the moves made, and the fewest there could be. Follow: the squares tapped. */
+    moves: number;
+    shortest: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -3203,6 +3327,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "word-sort": "wordSort";
     readonly "number-line": "numberLine";
     readonly "true-false": "trueFalse";
+    readonly "grid-route": "gridRoute";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -3246,6 +3371,7 @@ export declare const GAME_GESTURES: {
     readonly "word-sort": "tap";
     readonly "number-line": "tap";
     readonly "true-false": "tap";
+    readonly "grid-route": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -3315,6 +3441,7 @@ export type GameMetricsByKind = {
     "word-sort": WordSortMetrics;
     "number-line": NumberLineMetrics;
     "true-false": TrueFalseMetrics;
+    "grid-route": GridRouteMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;
