@@ -2347,5 +2347,60 @@ section('number_line: a number placed on a line, or a jump landed');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.numberLine.moveMs > 0 && rules.GAME_TIMINGS_BY_KIND['number-line'] === rules.GAME_TIMINGS.numberLine && rules.GAME_GESTURES['number-line'] === 'tap');
 }
 
+section('true_false: a series of statements, each true or not');
+
+{
+  ['true_false', 'yes_no', 'fact_check', 'True False'].forEach((type) => {
+    check(`${type} resolves to true-false`, rules.resolveGameKind(type, {}) === 'true-false');
+  });
+
+  const game = rules.normalizeTrueFalseConfig({
+    statements: [
+      { text: ' The whale is  a fish. ', answer: false, image: 'https://x/whale.webp' },
+      { text: 'Bears sleep in winter.', answer: 'true' },
+      { text: 'The Sun is a star.', answer: 1 },
+      { text: 'Maybe.', answer: 'maybe' },
+      { text: '', answer: true },
+      { text: 'Fish breathe air.', answer: 'нет' },
+    ],
+    bg_image: 'https://x/bg.webp',
+    time_limit: 60,
+  });
+  check('the statements as written, the ones with no answer or no text left out', game.statements.map((s) => s.text).join('|') === 'The whale is a fish.|Bears sleep in winter.|The Sun is a star.|Fish breathe air.'
+    && game.statements.map((s) => s.answer).join() === 'false,true,true,false' && game.statements[0].image === 'https://x/whale.webp' && game.statements[1].image === null);
+  check('defaults: lives 3; the background and the pictures to preload', game.lives === 3 && game.time_limit === 60 && game.imageUris.join() === 'https://x/bg.webp,https://x/whale.webp');
+  check('three statements at least, eight at most', rules.normalizeTrueFalseConfig({ statements: [{ text: 'a', answer: true }, { text: 'b', answer: false }] }).statements.length === 0
+    && rules.normalizeTrueFalseConfig({ statements: Array.from({ length: 12 }, (_u, i) => ({ text: 's' + i, answer: i % 2 === 0 })) }).statements.length === 8);
+
+  const tap = rules.resolveTrueFalseTap;
+  check('the right answer, and the next comes', JSON.stringify(tap(game, 0, false)) === '{"type":"right","complete":false}' && JSON.stringify(tap(game, 1, false)) === '{"type":"wrong","complete":false}');
+  check('the last statement completes the series, right or not', JSON.stringify(tap(game, 3, false)) === '{"type":"right","complete":true}' && JSON.stringify(tap(game, 3, true)) === '{"type":"wrong","complete":true}' && tap(game, 4, true).type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const plain = rules.normalizeTrueFalseConfig({ statements: [{ text: 'Солнце — это звезда, которая светит днём и греет нашу Землю.', answer: true }, { text: 'Луна светит сама.', answer: false }, { text: 'კატა ცხოველია.', answer: true }] });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [game, plain].forEach((config, index) => config.statements.forEach((_s, at) => {
+    const layout = rules.layoutTrueFalse(w, h, config, at, insets);
+    const first = rules.layoutTrueFalse(w, h, config, 0, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout && inside(layout.card, stage) && inside(layout.yes, stage) && inside(layout.no, stage)
+      && !overlap(layout.yes, layout.no) && !overlap(layout.card, layout.yes) && !overlap(layout.card, layout.no)
+      && layout.yes.height >= rules.TRUE_FALSE_LAYOUT.minButton
+      && layout.lines.length > 0 && layout.lines.every((line) => inside(line, layout.card)) && layout.lines.map((line) => line.text).join(' ') === config.statements[at].text
+      && (config.statements.some((s) => s.image) ? inside(layout.picture, stage) && !overlap(layout.picture, layout.card) && !overlap(layout.picture, layout.yes) : layout.picture === null)
+      // Nothing moves as the statements change but the writing.
+      && JSON.stringify([layout.card, layout.yes, layout.no, layout.picture]) === JSON.stringify([first.card, first.yes, first.no, first.picture]);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index} statement ${at}: ${JSON.stringify(layout)}`; }
+  })));
+  check('on every stage the statement, its picture and the two buttons are whole, apart, inside the safe area; nothing moves but the writing', whole, detail);
+  check('no statements, no layout', rules.layoutTrueFalse(852, 393, { statements: [] }, 0, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.trueFalse.nextMs > 0 && rules.GAME_TIMINGS_BY_KIND['true-false'] === rules.GAME_TIMINGS.trueFalse && rules.GAME_GESTURES['true-false'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

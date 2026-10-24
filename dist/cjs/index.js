@@ -26,7 +26,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -155,6 +155,9 @@ exports.layoutWordSort = layoutWordSort;
 exports.normalizeNumberLineConfig = normalizeNumberLineConfig;
 exports.resolveNumberLineTap = resolveNumberLineTap;
 exports.layoutNumberLine = layoutNumberLine;
+exports.normalizeTrueFalseConfig = normalizeTrueFalseConfig;
+exports.resolveTrueFalseTap = resolveTrueFalseTap;
+exports.layoutTrueFalse = layoutTrueFalse;
 exports.gestureHintTapStops = gestureHintTapStops;
 exports.gestureHintDragEnd = gestureHintDragEnd;
 const letters_js_1 = require("./letters.js");
@@ -954,6 +957,16 @@ function resolveGameKind(type, config) {
         "number_jump",
     ].includes(normalizedType)) {
         return "number-line";
+    }
+    if ([
+        "true_false",
+        "truefalse",
+        "true_or_false",
+        "yes_no",
+        "right_or_wrong",
+        "fact_check",
+    ].includes(normalizedType)) {
+        return "true-false";
     }
     if ([
         "memory_cards",
@@ -3241,6 +3254,12 @@ exports.GAME_TIMINGS = {
      * `wrongFeedbackMs`. The right one is seen `successSettleMs`.
      */
     numberLine: { wrongFeedbackMs: 560, moveMs: 300, successSettleMs: 800, livesOutDelayMs: 320 },
+    /**
+     * A right answer lights for `nextMs` before the next statement; a wrong one
+     * shakes and the right button glows for `wrongFeedbackMs` first. After the
+     * last the game waits `successSettleMs`.
+     */
+    trueFalse: { wrongFeedbackMs: 1100, nextMs: 450, successSettleMs: 600, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -6839,6 +6858,145 @@ function layoutNumberLine(stageWidth, stageHeight, config, insets = {}) {
         arc: fromIndex >= 0 ? { fromX: ticks[fromIndex].x, height: number * L.arc } : null,
     };
 }
+// --- true_false: a series of statements, each true or not ----------------------
+//
+// Statements come one after another — three to eight — each read on a card,
+// with a picture where one helps ("The whale is a fish."). The child taps ✓
+// when it is true and ✗ when it is not. A right answer brings the next; a
+// wrong one shakes, costs a life and shows the right button for a moment
+// before the next comes, so the child learns it. The statements arrive in the
+// language the game is played in, drawn by DrawnText.
+/** A series has this many statements at least, and at most. */
+exports.TRUE_FALSE_STATEMENTS = { min: 3, max: 8 };
+function readTruth(value) {
+    if (typeof value === "boolean")
+        return value;
+    if (typeof value === "number")
+        return value === 1 ? true : value === 0 ? false : null;
+    const text = (extractText(value) ?? "").toLowerCase();
+    if (["1", "true", "yes", "y", "კი", "да", "верно", "right"].includes(text))
+        return true;
+    if (["0", "false", "no", "n", "არა", "нет", "неверно", "wrong"].includes(text))
+        return false;
+    return null;
+}
+/**
+ * The game as the players draw it. `statements` are { text, answer, image }
+ * — `answer` true or false (a boolean, 1/0, or the word). A statement with no
+ * text or no answer is left out, past the most too; fewer than three is no
+ * game. A series all true, or all false, is as the author wrote it: the
+ * server tells that off, the players play it.
+ */
+function normalizeTrueFalseConfig(config) {
+    const bg = normalizeBackground(config);
+    const statements = (Array.isArray(config.statements) ? config.statements : [])
+        .map((row) => asRecord(row))
+        .filter((row) => row !== null)
+        .map((row) => ({
+        text: (extractText(row.text) ?? "").replace(/\s+/g, " ").trim(),
+        image: extractMediaUrl(row.image),
+        answer: readTruth(row.answer),
+    }))
+        .filter((row) => row.text !== "" && row.answer !== null)
+        .slice(0, exports.TRUE_FALSE_STATEMENTS.max)
+        .map((row, index) => ({ id: `statement_${index + 1}`, ...row }));
+    const playable = statements.length >= exports.TRUE_FALSE_STATEMENTS.min ? statements : [];
+    return {
+        statements: playable,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [...new Set([bg, ...playable.map((statement) => statement.image)].filter((uri) => Boolean(uri)))],
+    };
+}
+/** What a tap on ✓ (`true`) or ✗ (`false`) does at the statement `index`: the whole play rule. */
+function resolveTrueFalseTap(config, index, answer) {
+    const statement = config.statements[index];
+    if (!statement) {
+        return { type: "ignored" };
+    }
+    const complete = index + 1 === config.statements.length;
+    return statement.answer === answer ? { type: "right", complete } : { type: "wrong", complete };
+}
+/** Proportions of the true-or-false game. */
+exports.TRUE_FALSE_LAYOUT = {
+    /** The picture's share of the width, beside the statement, when there is one. */
+    pictureShare: 0.36,
+    /** The two buttons: as tall as this, within these, in px; twice as wide as tall. */
+    buttonShare: 0.3,
+    minButton: 56,
+    maxButton: 110,
+    buttonAspect: 1.5,
+};
+/**
+ * Where everything of the statement `index` goes. The background covers the
+ * stage; the picture (when the series has any) at the left — over the rest on
+ * a tall stage — the statement on its card and the two buttons under it
+ * beside it, or all of it in the middle when there is no picture. The card's room is the same for every
+ * statement, so nothing moves as they change; the writing is as big as the
+ * statement lets it be.
+ */
+function layoutTrueFalse(stageWidth, stageHeight, config, index, insets = {}) {
+    const L = exports.TRUE_FALSE_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    const statement = config.statements[Math.min(index, config.statements.length - 1)];
+    if (usableWidth <= 0 || usableHeight <= 0 || !statement) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const area = {
+        left: originX + edge,
+        top: originY + edge,
+        width: Math.max(usableWidth - edge * 2, 1),
+        height: Math.max(usableHeight - edge * 2, 1),
+    };
+    const withPictures = config.statements.some((item) => item.image);
+    // Beside the statement on a wide stage, over it on a tall one.
+    const tall = area.height > area.width;
+    const pictureSize = withPictures
+        ? tall
+            ? Math.min(area.height * L.pictureShare - gap / 2, area.width)
+            : Math.min(area.width * L.pictureShare - gap / 2, area.height)
+        : 0;
+    const picture = withPictures
+        ? tall
+            ? { left: area.left + (area.width - pictureSize) / 2, top: area.top, width: pictureSize, height: pictureSize }
+            : { left: area.left, top: area.top + (area.height - pictureSize) / 2, width: pictureSize, height: pictureSize }
+        : null;
+    const column = !withPictures
+        ? area
+        : tall
+            ? { left: area.left, top: area.top + pictureSize + gap, width: area.width, height: area.height - pictureSize - gap }
+            : { left: area.left + pictureSize + gap, top: area.top, width: area.width - pictureSize - gap, height: area.height };
+    // Two buttons side by side, never wider than their half of the column.
+    const button = Math.max(L.minButton, Math.min(L.maxButton, column.height * L.buttonShare, (column.width - gap) / 2 / L.buttonAspect));
+    const buttonWidth = button * L.buttonAspect;
+    const card = { left: column.left, top: column.top, width: column.width, height: column.height - button - gap };
+    const passage = fitPassage(statement.text, card.width * 0.9, card.height * 0.86);
+    const lines = passage.lines.map((text, line) => {
+        const width = textLineUnits(text) * passage.size;
+        return {
+            text,
+            left: card.left + (card.width - width) / 2,
+            top: card.top + (card.height - passage.lines.length * passage.size) / 2 + line * passage.size,
+            width,
+            height: passage.size,
+        };
+    });
+    const buttonsTop = card.top + card.height + gap;
+    const middle = column.left + column.width / 2;
+    return {
+        picture,
+        card,
+        lines,
+        yes: { left: middle - gap / 2 - buttonWidth, top: buttonsTop, width: buttonWidth, height: button },
+        no: { left: middle + gap / 2, top: buttonsTop, width: buttonWidth, height: button },
+    };
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -6866,6 +7024,7 @@ exports.GAME_KIND_KEYS = {
     "sentence-build": "sentenceBuild",
     "word-sort": "wordSort",
     "number-line": "numberLine",
+    "true-false": "trueFalse",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -6896,6 +7055,7 @@ exports.GAME_TIMINGS_BY_KIND = {
     "sentence-build": exports.GAME_TIMINGS.sentenceBuild,
     "word-sort": exports.GAME_TIMINGS.wordSort,
     "number-line": exports.GAME_TIMINGS.numberLine,
+    "true-false": exports.GAME_TIMINGS.trueFalse,
     "memory-cards": exports.GAME_TIMINGS.memoryCards,
     "pattern-next": exports.GAME_TIMINGS.patternNext,
     "select-option": exports.GAME_TIMINGS.selectOption,
@@ -6932,6 +7092,7 @@ exports.GAME_GESTURES = {
     "sentence-build": "tap",
     "word-sort": "tap",
     "number-line": "tap",
+    "true-false": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",

@@ -78,6 +78,7 @@ export type RuntimeGameKind =
   | "sentence-build"
   | "word-sort"
   | "number-line"
+  | "true-false"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -1478,6 +1479,17 @@ export function resolveGameKind(
     "number_jump",
   ].includes(normalizedType)) {
     return "number-line";
+  }
+
+  if ([
+    "true_false",
+    "truefalse",
+    "true_or_false",
+    "yes_no",
+    "right_or_wrong",
+    "fact_check",
+  ].includes(normalizedType)) {
+    return "true-false";
   }
 
   if ([
@@ -4604,6 +4616,12 @@ export const GAME_TIMINGS = {
    * `wrongFeedbackMs`. The right one is seen `successSettleMs`.
    */
   numberLine: { wrongFeedbackMs: 560, moveMs: 300, successSettleMs: 800, livesOutDelayMs: 320 },
+  /**
+   * A right answer lights for `nextMs` before the next statement; a wrong one
+   * shakes and the right button glows for `wrongFeedbackMs` first. After the
+   * last the game waits `successSettleMs`.
+   */
+  trueFalse: { wrongFeedbackMs: 1100, nextMs: 450, successSettleMs: 600, livesOutDelayMs: 320 },
   mathEquation: {
     wrongFeedbackMs: 560,
     flyMs: 620,
@@ -9466,6 +9484,196 @@ export function layoutNumberLine(
   };
 }
 
+// --- true_false: a series of statements, each true or not ----------------------
+//
+// Statements come one after another — three to eight — each read on a card,
+// with a picture where one helps ("The whale is a fish."). The child taps ✓
+// when it is true and ✗ when it is not. A right answer brings the next; a
+// wrong one shakes, costs a life and shows the right button for a moment
+// before the next comes, so the child learns it. The statements arrive in the
+// language the game is played in, drawn by DrawnText.
+
+/** A series has this many statements at least, and at most. */
+export const TRUE_FALSE_STATEMENTS = { min: 3, max: 8 } as const;
+
+export type TrueFalseStatement = {
+  id: string;
+  text: string;
+  image: string | null;
+  /** Whether it is true. */
+  answer: boolean;
+};
+
+export type TrueFalseConfig = {
+  /** In the order they are asked, as written. Empty when the game is none. */
+  statements: TrueFalseStatement[];
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+  /** The background and the statements' pictures: preload before the clock. */
+  imageUris: string[];
+};
+
+function readTruth(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1 ? true : value === 0 ? false : null;
+  const text = (extractText(value) ?? "").toLowerCase();
+  if (["1", "true", "yes", "y", "კი", "да", "верно", "right"].includes(text)) return true;
+  if (["0", "false", "no", "n", "არა", "нет", "неверно", "wrong"].includes(text)) return false;
+  return null;
+}
+
+/**
+ * The game as the players draw it. `statements` are { text, answer, image }
+ * — `answer` true or false (a boolean, 1/0, or the word). A statement with no
+ * text or no answer is left out, past the most too; fewer than three is no
+ * game. A series all true, or all false, is as the author wrote it: the
+ * server tells that off, the players play it.
+ */
+export function normalizeTrueFalseConfig(config: Record<string, unknown>): TrueFalseConfig {
+  const bg = normalizeBackground(config);
+  const statements = (Array.isArray(config.statements) ? config.statements : [])
+    .map((row) => asRecord(row))
+    .filter((row): row is Record<string, unknown> => row !== null)
+    .map((row) => ({
+      text: (extractText(row.text) ?? "").replace(/\s+/g, " ").trim(),
+      image: extractMediaUrl(row.image),
+      answer: readTruth(row.answer),
+    }))
+    .filter((row): row is { text: string; image: string | null; answer: boolean } => row.text !== "" && row.answer !== null)
+    .slice(0, TRUE_FALSE_STATEMENTS.max)
+    .map((row, index) => ({ id: `statement_${index + 1}`, ...row }));
+  const playable = statements.length >= TRUE_FALSE_STATEMENTS.min ? statements : [];
+
+  return {
+    statements: playable,
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    imageUris: [...new Set([bg, ...playable.map((statement) => statement.image)].filter((uri): uri is string => Boolean(uri)))],
+  };
+}
+
+export type TrueFalseTapResult =
+  /** Every statement is answered already. */
+  | { type: "ignored" }
+  /** The answer is right; `complete` when the statement was the last. */
+  | { type: "right"; complete: boolean }
+  /** It is not: a mistake. The next statement still comes — `complete` when there is none. */
+  | { type: "wrong"; complete: boolean };
+
+/** What a tap on ✓ (`true`) or ✗ (`false`) does at the statement `index`: the whole play rule. */
+export function resolveTrueFalseTap(config: Pick<TrueFalseConfig, "statements">, index: number, answer: boolean): TrueFalseTapResult {
+  const statement = config.statements[index];
+  if (!statement) {
+    return { type: "ignored" };
+  }
+  const complete = index + 1 === config.statements.length;
+  return statement.answer === answer ? { type: "right", complete } : { type: "wrong", complete };
+}
+
+/** Proportions of the true-or-false game. */
+export const TRUE_FALSE_LAYOUT = {
+  /** The picture's share of the width, beside the statement, when there is one. */
+  pictureShare: 0.36,
+  /** The two buttons: as tall as this, within these, in px; twice as wide as tall. */
+  buttonShare: 0.3,
+  minButton: 56,
+  maxButton: 110,
+  buttonAspect: 1.5,
+} as const;
+
+export type TrueFalseLayout = {
+  /** Where the picture of the statement asked stands, when it has one; null for none in the series. */
+  picture: BoardRect | null;
+  /** The card the statement is written on, and its lines. */
+  card: BoardRect;
+  lines: TextLineBox[];
+  /** The ✓ and the ✗. */
+  yes: BoardRect;
+  no: BoardRect;
+};
+
+/**
+ * Where everything of the statement `index` goes. The background covers the
+ * stage; the picture (when the series has any) at the left — over the rest on
+ * a tall stage — the statement on its card and the two buttons under it
+ * beside it, or all of it in the middle when there is no picture. The card's room is the same for every
+ * statement, so nothing moves as they change; the writing is as big as the
+ * statement lets it be.
+ */
+export function layoutTrueFalse(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<TrueFalseConfig, "statements">,
+  index: number,
+  insets: SceneInsets = {},
+): TrueFalseLayout | null {
+  const L = TRUE_FALSE_LAYOUT;
+  const originX = insets.left ?? 0;
+  const originY = insets.top ?? 0;
+  const usableWidth = stageWidth - originX - (insets.right ?? 0);
+  const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+  const statement = config.statements[Math.min(index, config.statements.length - 1)];
+
+  if (usableWidth <= 0 || usableHeight <= 0 || !statement) {
+    return null;
+  }
+
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const gap = sceneGap(stageWidth, stageHeight);
+  const area: BoardRect = {
+    left: originX + edge,
+    top: originY + edge,
+    width: Math.max(usableWidth - edge * 2, 1),
+    height: Math.max(usableHeight - edge * 2, 1),
+  };
+  const withPictures = config.statements.some((item) => item.image);
+  // Beside the statement on a wide stage, over it on a tall one.
+  const tall = area.height > area.width;
+  const pictureSize = withPictures
+    ? tall
+      ? Math.min(area.height * L.pictureShare - gap / 2, area.width)
+      : Math.min(area.width * L.pictureShare - gap / 2, area.height)
+    : 0;
+  const picture: BoardRect | null = withPictures
+    ? tall
+      ? { left: area.left + (area.width - pictureSize) / 2, top: area.top, width: pictureSize, height: pictureSize }
+      : { left: area.left, top: area.top + (area.height - pictureSize) / 2, width: pictureSize, height: pictureSize }
+    : null;
+  const column: BoardRect = !withPictures
+    ? area
+    : tall
+      ? { left: area.left, top: area.top + pictureSize + gap, width: area.width, height: area.height - pictureSize - gap }
+      : { left: area.left + pictureSize + gap, top: area.top, width: area.width - pictureSize - gap, height: area.height };
+
+  // Two buttons side by side, never wider than their half of the column.
+  const button = Math.max(L.minButton, Math.min(L.maxButton, column.height * L.buttonShare, (column.width - gap) / 2 / L.buttonAspect));
+  const buttonWidth = button * L.buttonAspect;
+  const card: BoardRect = { left: column.left, top: column.top, width: column.width, height: column.height - button - gap };
+  const passage = fitPassage(statement.text, card.width * 0.9, card.height * 0.86);
+  const lines = passage.lines.map((text, line): TextLineBox => {
+    const width = textLineUnits(text) * passage.size;
+    return {
+      text,
+      left: card.left + (card.width - width) / 2,
+      top: card.top + (card.height - passage.lines.length * passage.size) / 2 + line * passage.size,
+      width,
+      height: passage.size,
+    };
+  });
+  const buttonsTop = card.top + card.height + gap;
+  const middle = column.left + column.width / 2;
+
+  return {
+    picture,
+    card,
+    lines,
+    yes: { left: middle - gap / 2 - buttonWidth, top: buttonsTop, width: buttonWidth, height: button },
+    no: { left: middle + gap / 2, top: buttonsTop, width: buttonWidth, height: button },
+  };
+}
+
 // --- Attempt metrics --------------------------------------------------------
 
 /**
@@ -9605,6 +9813,13 @@ export type NumberLineMetrics = BaseGameMetrics & {
   livesRemaining: number;
 };
 
+export type TrueFalseMetrics = BaseGameMetrics & {
+  /** Statements in the series, and how many were answered right. */
+  statements: number;
+  right: number;
+  livesRemaining: number;
+};
+
 export type TextChoiceMetrics = BaseGameMetrics & {
   /** Right answers the game has, and how many of them were found. */
   correct: number;
@@ -9688,6 +9903,7 @@ export const GAME_KIND_KEYS = {
   "sentence-build": "sentenceBuild",
   "word-sort": "wordSort",
   "number-line": "numberLine",
+  "true-false": "trueFalse",
   "memory-cards": "memoryCards",
   "pattern-next": "patternNext",
   "select-option": "selectOption",
@@ -9723,6 +9939,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "sentence-build": GAME_TIMINGS.sentenceBuild,
   "word-sort": GAME_TIMINGS.wordSort,
   "number-line": GAME_TIMINGS.numberLine,
+  "true-false": GAME_TIMINGS.trueFalse,
   "memory-cards": GAME_TIMINGS.memoryCards,
   "pattern-next": GAME_TIMINGS.patternNext,
   "select-option": GAME_TIMINGS.selectOption,
@@ -9765,6 +9982,7 @@ export const GAME_GESTURES = {
   "sentence-build": "tap",
   "word-sort": "tap",
   "number-line": "tap",
+  "true-false": "tap",
   "memory-cards": "tap",
   "pattern-next": "tap",
   "select-option": "tap",
@@ -9851,6 +10069,7 @@ export type GameMetricsByKind = {
   "sentence-build": SentenceBuildMetrics;
   "word-sort": WordSortMetrics;
   "number-line": NumberLineMetrics;
+  "true-false": TrueFalseMetrics;
   "memory-cards": MemoryCardsMetrics;
   "pattern-next": PatternNextMetrics;
   "select-option": SelectOptionMetrics;

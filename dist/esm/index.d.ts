@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1343,6 +1343,17 @@ export declare const GAME_TIMINGS: {
         readonly wrongFeedbackMs: 560;
         readonly moveMs: 300;
         readonly successSettleMs: 800;
+        readonly livesOutDelayMs: 320;
+    };
+    /**
+     * A right answer lights for `nextMs` before the next statement; a wrong one
+     * shakes and the right button glows for `wrongFeedbackMs` first. After the
+     * last the game waits `successSettleMs`.
+     */
+    readonly trueFalse: {
+        readonly wrongFeedbackMs: 1100;
+        readonly nextMs: 450;
+        readonly successSettleMs: 600;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -2921,6 +2932,81 @@ export type NumberLineLayout = {
  * as the widest number between two ticks lets them be.
  */
 export declare function layoutNumberLine(stageWidth: number, stageHeight: number, config: Pick<NumberLineConfig, "ticks" | "target" | "from" | "jump">, insets?: SceneInsets): NumberLineLayout | null;
+/** A series has this many statements at least, and at most. */
+export declare const TRUE_FALSE_STATEMENTS: {
+    readonly min: 3;
+    readonly max: 8;
+};
+export type TrueFalseStatement = {
+    id: string;
+    text: string;
+    image: string | null;
+    /** Whether it is true. */
+    answer: boolean;
+};
+export type TrueFalseConfig = {
+    /** In the order they are asked, as written. Empty when the game is none. */
+    statements: TrueFalseStatement[];
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background and the statements' pictures: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `statements` are { text, answer, image }
+ * — `answer` true or false (a boolean, 1/0, or the word). A statement with no
+ * text or no answer is left out, past the most too; fewer than three is no
+ * game. A series all true, or all false, is as the author wrote it: the
+ * server tells that off, the players play it.
+ */
+export declare function normalizeTrueFalseConfig(config: Record<string, unknown>): TrueFalseConfig;
+export type TrueFalseTapResult = 
+/** Every statement is answered already. */
+{
+    type: "ignored";
+}
+/** The answer is right; `complete` when the statement was the last. */
+ | {
+    type: "right";
+    complete: boolean;
+}
+/** It is not: a mistake. The next statement still comes — `complete` when there is none. */
+ | {
+    type: "wrong";
+    complete: boolean;
+};
+/** What a tap on ✓ (`true`) or ✗ (`false`) does at the statement `index`: the whole play rule. */
+export declare function resolveTrueFalseTap(config: Pick<TrueFalseConfig, "statements">, index: number, answer: boolean): TrueFalseTapResult;
+/** Proportions of the true-or-false game. */
+export declare const TRUE_FALSE_LAYOUT: {
+    /** The picture's share of the width, beside the statement, when there is one. */
+    readonly pictureShare: 0.36;
+    /** The two buttons: as tall as this, within these, in px; twice as wide as tall. */
+    readonly buttonShare: 0.3;
+    readonly minButton: 56;
+    readonly maxButton: 110;
+    readonly buttonAspect: 1.5;
+};
+export type TrueFalseLayout = {
+    /** Where the picture of the statement asked stands, when it has one; null for none in the series. */
+    picture: BoardRect | null;
+    /** The card the statement is written on, and its lines. */
+    card: BoardRect;
+    lines: TextLineBox[];
+    /** The ✓ and the ✗. */
+    yes: BoardRect;
+    no: BoardRect;
+};
+/**
+ * Where everything of the statement `index` goes. The background covers the
+ * stage; the picture (when the series has any) at the left — over the rest on
+ * a tall stage — the statement on its card and the two buttons under it
+ * beside it, or all of it in the middle when there is no picture. The card's room is the same for every
+ * statement, so nothing moves as they change; the writing is as big as the
+ * statement lets it be.
+ */
+export declare function layoutTrueFalse(stageWidth: number, stageHeight: number, config: Pick<TrueFalseConfig, "statements">, index: number, insets?: SceneInsets): TrueFalseLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -3039,6 +3125,12 @@ export type NumberLineMetrics = BaseGameMetrics & {
     attempts: number;
     livesRemaining: number;
 };
+export type TrueFalseMetrics = BaseGameMetrics & {
+    /** Statements in the series, and how many were answered right. */
+    statements: number;
+    right: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -3110,6 +3202,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "sentence-build": "sentenceBuild";
     readonly "word-sort": "wordSort";
     readonly "number-line": "numberLine";
+    readonly "true-false": "trueFalse";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -3152,6 +3245,7 @@ export declare const GAME_GESTURES: {
     readonly "sentence-build": "tap";
     readonly "word-sort": "tap";
     readonly "number-line": "tap";
+    readonly "true-false": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -3220,6 +3314,7 @@ export type GameMetricsByKind = {
     "sentence-build": SentenceBuildMetrics;
     "word-sort": WordSortMetrics;
     "number-line": NumberLineMetrics;
+    "true-false": TrueFalseMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;
