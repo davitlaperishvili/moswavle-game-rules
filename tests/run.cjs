@@ -2063,5 +2063,69 @@ section('money_pay: pay a price, or give the change, with lari');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.moneyPay.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['money-pay'] === rules.GAME_TIMINGS.moneyPay && rules.GAME_GESTURES['money-pay'] === 'tap');
 }
 
+section('clock_set: set the hands of a clock, or read one');
+
+{
+  ['clock_set', 'read_clock', 'what_time', 'Clock Set'].forEach((type) => {
+    check(`${type} resolves to clock-set`, rules.resolveGameKind(type, {}) === 'clock-set');
+  });
+
+  check('a time is written with two digits of minutes', rules.clockTimeLabel({ hour: 7, minute: 5 }) === '7:05' && rules.clockTimeLabel({ hour: 12, minute: 30 }) === '12:30');
+  const angles = rules.clockHandAngles({ hour: 7, minute: 30 });
+  check('the short hand moves on with the minutes', angles.hour === 225 && angles.minute === 180 && rules.clockHandAngles({ hour: 12, minute: 0 }).hour === 0);
+  check('the likeliest mistake comes first: the hands read the other way round',
+    rules.clockConfusions({ hour: 7, minute: 30 }).map(rules.clockTimeLabel).slice(0, 3).join() === '6:35,8:30,6:30'
+      && rules.clockConfusions({ hour: 3, minute: 0 }).every((time) => !(time.hour === 3 && time.minute === 0)));
+
+  const set = rules.normalizeClockSetConfig({ time: '19:30', bg_image: 'https://x/bg-room.webp', time_limit: 60 });
+  check('set mode by default, a 24-hour time read on the dial', set.mode === 'set' && set.time.hour === 7 && set.time.minute === 30 && set.options.length === 0);
+  check('the hour and the minute apart, and the defaults', rules.normalizeClockSetConfig({ hour: '3', minute: '15' }).time.minute === 15 && set.lives === 3 && set.imageUris.join() === 'https://x/bg-room.webp');
+  check('no time, or minutes off the dial, is no game', [{}, { time: '7:31' }, { hour: 30 }, { time: 'seven' }].every((config) => rules.normalizeClockSetConfig(config).time === null));
+
+  const read = rules.normalizeClockSetConfig({ mode: 'read', time: '7:30', wrong: ['8:30', { hour: 6, minute: 35 }, '7:30', 'nope'] });
+  const labels = read.options.map((option) => option.label).sort();
+  check('read mode: the right time among the wrong ones written, mixed', labels.join() === '6:35,7:30,8:30', labels.join());
+  check('three times at least: the wrong ones missing are made up', rules.normalizeClockSetConfig({ mode: 'read', time: '3:00' }).options.length === 3
+    && rules.normalizeClockSetConfig({ mode: 'read', time: '3:00', wrong: ['4:00', '2:00', '3:30', '9:15'] }).options.length === 4);
+
+  const hands = { hour: null, minute: null, active: 'hour' };
+  const first = rules.pressClockNumber(hands, 7);
+  const second = rules.pressClockNumber(first, 6);
+  check('a number moves the hand that glows: the short one first, then the long one', first.hour === 7 && first.active === 'minute' && second.minute === 30 && second.active === 'hour' && rules.pressClockNumber(second, 12).hour === 12 && rules.pressClockNumber({ ...second, active: 'minute' }, 12).minute === 0);
+  check('no such number, no move', rules.pressClockNumber(hands, 13) === hands);
+  check('the tick: nothing before both hands are set, then right or wrong',
+    rules.resolveClockSetCheck(set, { hour: 7, minute: null }).type === 'ignored'
+      && rules.resolveClockSetCheck(set, { hour: 7, minute: 30 }).type === 'right'
+      && rules.resolveClockSetCheck(set, { hour: 6, minute: 30 }).type === 'wrong');
+  const right = read.options.find((option) => option.label === '7:30');
+  const wrong = read.options.find((option) => option.label === '8:30');
+  check('a card: right, wrong, or none of them', rules.resolveClockReadTap(read, right.id).type === 'right' && rules.resolveClockReadTap(read, wrong.id).type === 'wrong' && rules.resolveClockReadTap(read, 'nope').type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const four = rules.normalizeClockSetConfig({ mode: 'read', time: '10:45', wrong: ['9:50', '11:45', '10:15'] });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [set, read, four].forEach((config, index) => {
+    const layout = rules.layoutClockSet(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const rest = [layout && layout.target, layout && layout.check, ...(layout ? layout.options : [])].filter(Boolean);
+    const ok = layout && inside(layout.clock, stage) && Math.abs(layout.clock.width - layout.clock.height) < 1e-6
+      && layout.numbers.length === 12 && layout.numbers.every((number) => inside(number.glyph, layout.clock) && number.zone.width >= 40)
+      && rest.every((rect) => inside(rect, stage) && !overlap(rect, layout.clock))
+      && (config.mode === 'set'
+        ? layout.target.text === '7:30' && layout.target.height >= rules.CLOCK_SET_LAYOUT.minLine && !overlap(layout.target, layout.check) && layout.check.height >= 40
+        : layout.options.length === config.options.length && layout.options.every((card, i) => card.id === config.options[i].id && inside(card.line, card) && card.line.height >= rules.CLOCK_SET_LAYOUT.minLine
+          && layout.options.every((other, j) => i === j || !overlap(card, other))));
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the clock is whole and square, its numbers big enough to tap, the time and the cards beside it, apart, readable', whole, detail);
+  check('no time, no game', rules.layoutClockSet(852, 393, { mode: 'set', time: null, options: [] }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.clockSet.turnMs > 0 && rules.GAME_TIMINGS_BY_KIND['clock-set'] === rules.GAME_TIMINGS.clockSet && rules.GAME_GESTURES['clock-set'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1293,6 +1293,16 @@ export declare const GAME_TIMINGS: {
         readonly successSettleMs: 800;
         readonly livesOutDelayMs: 320;
     };
+    /**
+     * A hand turns to its number over `turnMs`. A wrong time shakes the clock (or
+     * the card) for `wrongFeedbackMs`; the right one is seen `successSettleMs`.
+     */
+    readonly clockSet: {
+        readonly wrongFeedbackMs: 560;
+        readonly turnMs: 320;
+        readonly successSettleMs: 800;
+        readonly livesOutDelayMs: 320;
+    };
     readonly mathEquation: {
         readonly wrongFeedbackMs: 560;
         readonly flyMs: 620;
@@ -2338,6 +2348,136 @@ export declare function moneyPayCounterPlaces(layout: Pick<MoneyPayLayout, "coun
  * order they are put on it.
  */
 export declare function layoutMoneyPay(stageWidth: number, stageHeight: number, config: Pick<MoneyPayConfig, "pieces" | "paid" | "price" | "target" | "language" | "item_image">, insets?: SceneInsets): MoneyPayLayout | null;
+/** Minutes go by this much: one number of the dial. */
+export declare const CLOCK_MINUTE_STEP = 5;
+export type ClockTime = {
+    /** 1 to 12. */
+    hour: number;
+    /** 0 to 55, by `CLOCK_MINUTE_STEP`. */
+    minute: number;
+};
+/** A time as it is written: "7:30", "12:05". */
+export declare function clockTimeLabel(time: ClockTime): string;
+/**
+ * Where the hands point, in degrees clockwise from 12. The short hand moves
+ * on with the minutes, as a real one does: at 7:30 it is half way to 8.
+ */
+export declare function clockHandAngles(time: {
+    hour: number;
+    minute: number;
+}): {
+    hour: number;
+    minute: number;
+};
+/**
+ * Wrong times a child mistakes for `time`, the likeliest first: the hands
+ * read the other way round (7:30 → 6:35), the hour before and after, a
+ * quarter either side, and the half hour.
+ */
+export declare function clockConfusions(time: ClockTime): ClockTime[];
+export type ClockSetOption = {
+    id: string;
+    time: ClockTime;
+    label: string;
+};
+export type ClockSetConfig = {
+    /** Set the hands to a written time, or read the clock and pick the time. */
+    mode: "set" | "read";
+    /** The time asked; null when it is no time of the dial, and the game is not played. */
+    time: ClockTime | null;
+    /** Read mode: the right time among the wrong ones, mixed. Empty in set mode. */
+    options: ClockSetOption[];
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background: preload before the clock. */
+    imageUris: string[];
+};
+/** How many times a read game offers, the right one with them. */
+export declare const CLOCK_READ_OPTIONS: {
+    readonly min: 3;
+    readonly max: 4;
+};
+/**
+ * The game as the players draw it. The time is `time` ("7:30") or `hour` and
+ * `minute`, its minutes by five; read mode takes its wrong times from `wrong`
+ * ("6:35" or { hour, minute }) and makes up the ones missing from
+ * `clockConfusions`, three or four times in all, mixed.
+ */
+export declare function normalizeClockSetConfig(config: Record<string, unknown>): ClockSetConfig;
+export type ClockCheckResult = {
+    type: "ignored";
+} | {
+    type: "right";
+} | {
+    type: "wrong";
+};
+/** Set mode: what the tick does with the hands as they stand. Nothing until both are set. */
+export declare function resolveClockSetCheck(config: Pick<ClockSetConfig, "time">, hands: {
+    hour: number | null;
+    minute: number | null;
+}): ClockCheckResult;
+/** Read mode: what a tap on a written time does. */
+export declare function resolveClockReadTap(config: Pick<ClockSetConfig, "time" | "options">, optionId: string): ClockCheckResult;
+/**
+ * Set mode: the hand a tap on the dial's number `n` (1–12) moves, and what it
+ * then shows. The short hand takes the hour, the long one the minutes the
+ * number stands for (3 is :15, 12 is :00); the other hand glows next.
+ */
+export declare function pressClockNumber(hands: {
+    hour: number | null;
+    minute: number | null;
+    active: "hour" | "minute";
+}, n: number): {
+    hour: number | null;
+    minute: number | null;
+    active: "hour" | "minute";
+};
+/** Proportions of the clock game. */
+export declare const CLOCK_SET_LAYOUT: {
+    /** The clock's share of the width when the rest stands beside it, tried in turn. */
+    readonly sideShares: readonly [0.5, 0.56, 0.62];
+    /** Its share of the height when the rest stands under it. */
+    readonly stackShares: readonly [0.55, 0.62];
+    /** The dial's numbers: their middle at this share of the radius, this tall. */
+    readonly numberRadius: 0.74;
+    readonly numberHeight: 0.17;
+    /** A number's place to tap: a circle this share of the radius across, round its middle. */
+    readonly zoneShare: 0.4;
+    /** The written time and the cards of read mode: a line this tall, within these. */
+    readonly minLine: 26;
+    readonly maxLine: 64;
+    /** The tick under the written time, as tall as this share of the line, within the key sizes. */
+    readonly checkShare: 1.4;
+    /** Between the cards of read mode, as a share of a card. */
+    readonly cardGap: 0.18;
+};
+export type ClockSetLayout = {
+    arrangement: "side" | "stack";
+    /** The clock, a square. */
+    clock: BoardRect;
+    /** The dial's numbers: where each is written, and the place a tap on it takes (set mode). */
+    numbers: Array<{
+        n: number;
+        glyph: BoardRect;
+        zone: BoardRect;
+    }>;
+    /** Set mode: the time to set, written, and the tick under it; null in read mode. */
+    target: TextLineBox | null;
+    check: BoardRect | null;
+    /** Read mode: a card a time, in `options` order. */
+    options: Array<BoardRect & {
+        id: string;
+        line: TextLineBox;
+    }>;
+};
+/**
+ * Where everything of the clock game goes. The background covers the stage;
+ * the clock stands as big as it can at the left (at the top on a tall
+ * stage), and beside it the written time with its tick, or the cards to pick
+ * from — two safe areas, apart, inside the stage less `insets`.
+ */
+export declare function layoutClockSet(stageWidth: number, stageHeight: number, config: Pick<ClockSetConfig, "mode" | "time" | "options">, insets?: SceneInsets): ClockSetLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -2427,6 +2567,12 @@ export type MoneyPayMetrics = BaseGameMetrics & {
     overs: number;
     livesRemaining: number;
 };
+export type ClockSetMetrics = BaseGameMetrics & {
+    mode: "set" | "read";
+    /** How many times a time was given: the tick pressed, or a card tapped. */
+    attempts: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -2493,6 +2639,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "reading-text": "readingText";
     readonly "word-problem": "wordProblem";
     readonly "money-pay": "moneyPay";
+    readonly "clock-set": "clockSet";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -2530,6 +2677,7 @@ export declare const GAME_GESTURES: {
     readonly "reading-text": "tap";
     readonly "word-problem": "tap";
     readonly "money-pay": "tap";
+    readonly "clock-set": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -2593,6 +2741,7 @@ export type GameMetricsByKind = {
     "reading-text": ReadingTextMetrics;
     "word-problem": WordProblemMetrics;
     "money-pay": MoneyPayMetrics;
+    "clock-set": ClockSetMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

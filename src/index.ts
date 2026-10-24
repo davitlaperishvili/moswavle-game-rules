@@ -73,6 +73,7 @@ export type RuntimeGameKind =
   | "reading-text"
   | "word-problem"
   | "money-pay"
+  | "clock-set"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -1417,6 +1418,18 @@ export function resolveGameKind(
     "give_change",
   ].includes(normalizedType)) {
     return "money-pay";
+  }
+
+  if ([
+    "clock_set",
+    "clockset",
+    "clock",
+    "set_clock",
+    "read_clock",
+    "what_time",
+    "telling_time",
+  ].includes(normalizedType)) {
+    return "clock-set";
   }
 
   if ([
@@ -4516,6 +4529,11 @@ export const GAME_TIMINGS = {
    * The counter is seen whole `successSettleMs` before the win.
    */
   moneyPay: { wrongFeedbackMs: 560, flyMs: 360, successSettleMs: 800, livesOutDelayMs: 320 },
+  /**
+   * A hand turns to its number over `turnMs`. A wrong time shakes the clock (or
+   * the card) for `wrongFeedbackMs`; the right one is seen `successSettleMs`.
+   */
+  clockSet: { wrongFeedbackMs: 560, turnMs: 320, successSettleMs: 800, livesOutDelayMs: 320 },
   mathEquation: {
     wrongFeedbackMs: 560,
     flyMs: 620,
@@ -7873,6 +7891,376 @@ export function layoutMoneyPay(
   return (best as { score: number; layout: MoneyPayLayout } | null)?.layout ?? null;
 }
 
+// --- clock_set: set the hands of a clock, or read one ------------------------
+//
+// A clock face drawn in code, as the digits are. Set: a time is written
+// ("7:30") and the child sets the hands — a tap on a number of the dial moves
+// the hand that glows, the short one first and then the long one, by turns —
+// and presses the tick. Read: the clock shows a time and the child taps the
+// right one of three or four times written under it. Minutes go by five, as
+// the dial's numbers do.
+
+/** Minutes go by this much: one number of the dial. */
+export const CLOCK_MINUTE_STEP = 5;
+
+export type ClockTime = {
+  /** 1 to 12. */
+  hour: number;
+  /** 0 to 55, by `CLOCK_MINUTE_STEP`. */
+  minute: number;
+};
+
+/** A time as it is written: "7:30", "12:05". */
+export function clockTimeLabel(time: ClockTime): string {
+  return `${time.hour}:${String(time.minute).padStart(2, "0")}`;
+}
+
+/**
+ * Where the hands point, in degrees clockwise from 12. The short hand moves
+ * on with the minutes, as a real one does: at 7:30 it is half way to 8.
+ */
+export function clockHandAngles(time: { hour: number; minute: number }): { hour: number; minute: number } {
+  return {
+    hour: ((time.hour % 12) + time.minute / 60) * 30,
+    minute: (time.minute % 60) * 6,
+  };
+}
+
+/** A time from "7:30", { hour, minute } or the hour and minute apart; null when it is no time of the dial. */
+function readClockTime(value: unknown, minuteValue?: unknown): ClockTime | null {
+  let hour: number | null = null;
+  let minute: number | null = null;
+  const record = asRecord(value);
+
+  if (typeof value === "string" && /^\s*\d{1,2}\s*:\s*\d{1,2}\s*$/.test(value)) {
+    const [h, m] = value.split(":").map((part) => Number(part.trim()));
+    hour = h;
+    minute = m;
+  } else if (record) {
+    hour = extractNumber(record.hour);
+    minute = extractNumber(record.minute) ?? 0;
+  } else {
+    hour = extractNumber(value);
+    minute = extractNumber(minuteValue) ?? 0;
+  }
+
+  if (hour === null || minute === null || !Number.isInteger(hour) || !Number.isInteger(minute)) {
+    return null;
+  }
+
+  const twelve = hour % 12 === 0 ? 12 : hour % 12;
+  if (hour < 0 || hour > 24 || minute < 0 || minute > 59 || minute % CLOCK_MINUTE_STEP !== 0) {
+    return null;
+  }
+
+  return { hour: twelve, minute };
+}
+
+function sameClockTime(a: ClockTime, b: ClockTime): boolean {
+  return a.hour === b.hour && a.minute === b.minute;
+}
+
+/**
+ * Wrong times a child mistakes for `time`, the likeliest first: the hands
+ * read the other way round (7:30 → 6:35), the hour before and after, a
+ * quarter either side, and the half hour.
+ */
+export function clockConfusions(time: ClockTime): ClockTime[] {
+  const wrap = (hour: number) => ((hour - 1 + 120) % 12) + 1;
+  const swapped = readClockTime(time.minute === 0 ? 12 : time.minute / 5, ((time.hour % 12) * 5) % 60);
+  const candidates: Array<ClockTime | null> = [
+    swapped,
+    { hour: wrap(time.hour + 1), minute: time.minute },
+    { hour: wrap(time.hour - 1), minute: time.minute },
+    { hour: time.hour, minute: (time.minute + 15) % 60 },
+    { hour: time.hour, minute: (time.minute + 45) % 60 },
+    { hour: time.hour, minute: (time.minute + 30) % 60 },
+  ];
+  const seen: ClockTime[] = [];
+
+  for (const candidate of candidates) {
+    if (candidate && !sameClockTime(candidate, time) && !seen.some((other) => sameClockTime(other, candidate))) {
+      seen.push(candidate);
+    }
+  }
+
+  return seen;
+}
+
+export type ClockSetOption = { id: string; time: ClockTime; label: string };
+
+export type ClockSetConfig = {
+  /** Set the hands to a written time, or read the clock and pick the time. */
+  mode: "set" | "read";
+  /** The time asked; null when it is no time of the dial, and the game is not played. */
+  time: ClockTime | null;
+  /** Read mode: the right time among the wrong ones, mixed. Empty in set mode. */
+  options: ClockSetOption[];
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+  /** The background: preload before the clock. */
+  imageUris: string[];
+};
+
+/** How many times a read game offers, the right one with them. */
+export const CLOCK_READ_OPTIONS = { min: 3, max: 4 } as const;
+
+/**
+ * The game as the players draw it. The time is `time` ("7:30") or `hour` and
+ * `minute`, its minutes by five; read mode takes its wrong times from `wrong`
+ * ("6:35" or { hour, minute }) and makes up the ones missing from
+ * `clockConfusions`, three or four times in all, mixed.
+ */
+export function normalizeClockSetConfig(config: Record<string, unknown>): ClockSetConfig {
+  const bg = normalizeBackground(config);
+  const time = readClockTime(config.time ?? config.hour, config.minute);
+  const mode = extractText(config.mode) === "read" ? "read" : "set";
+  let options: ClockSetOption[] = [];
+
+  if (mode === "read" && time) {
+    const wrong: ClockTime[] = [];
+    const add = (entry: ClockTime | null) => {
+      if (entry && !sameClockTime(entry, time) && !wrong.some((other) => sameClockTime(other, entry))) {
+        wrong.push(entry);
+      }
+    };
+    (Array.isArray(config.wrong) ? config.wrong : []).forEach((item) => add(readClockTime(item)));
+    // As many as were written, within three and four in all; the ones missing are made up.
+    const count = Math.min(CLOCK_READ_OPTIONS.max, Math.max(CLOCK_READ_OPTIONS.min, wrong.length + 1));
+    clockConfusions(time).forEach(add);
+    options = shuffle(
+      [time, ...wrong.slice(0, count - 1)].map((entry) => ({
+        id: `time-${entry.hour}-${String(entry.minute).padStart(2, "0")}`,
+        time: entry,
+        label: clockTimeLabel(entry),
+      })),
+    );
+  }
+
+  return {
+    mode,
+    time,
+    options,
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    imageUris: bg ? [bg] : [],
+  };
+}
+
+export type ClockCheckResult = { type: "ignored" } | { type: "right" } | { type: "wrong" };
+
+/** Set mode: what the tick does with the hands as they stand. Nothing until both are set. */
+export function resolveClockSetCheck(
+  config: Pick<ClockSetConfig, "time">,
+  hands: { hour: number | null; minute: number | null },
+): ClockCheckResult {
+  if (!config.time || hands.hour === null || hands.minute === null) {
+    return { type: "ignored" };
+  }
+
+  return hands.hour === config.time.hour && hands.minute === config.time.minute ? { type: "right" } : { type: "wrong" };
+}
+
+/** Read mode: what a tap on a written time does. */
+export function resolveClockReadTap(config: Pick<ClockSetConfig, "time" | "options">, optionId: string): ClockCheckResult {
+  const option = config.options.find((candidate) => candidate.id === optionId);
+  if (!option || !config.time) {
+    return { type: "ignored" };
+  }
+
+  return sameClockTime(option.time, config.time) ? { type: "right" } : { type: "wrong" };
+}
+
+/**
+ * Set mode: the hand a tap on the dial's number `n` (1–12) moves, and what it
+ * then shows. The short hand takes the hour, the long one the minutes the
+ * number stands for (3 is :15, 12 is :00); the other hand glows next.
+ */
+export function pressClockNumber(
+  hands: { hour: number | null; minute: number | null; active: "hour" | "minute" },
+  n: number,
+): { hour: number | null; minute: number | null; active: "hour" | "minute" } {
+  if (!Number.isInteger(n) || n < 1 || n > 12) {
+    return hands;
+  }
+
+  return hands.active === "hour"
+    ? { ...hands, hour: n, active: "minute" }
+    : { ...hands, minute: (n % 12) * CLOCK_MINUTE_STEP, active: "hour" };
+}
+
+/** Proportions of the clock game. */
+export const CLOCK_SET_LAYOUT = {
+  /** The clock's share of the width when the rest stands beside it, tried in turn. */
+  sideShares: [0.5, 0.56, 0.62],
+  /** Its share of the height when the rest stands under it. */
+  stackShares: [0.55, 0.62],
+  /** The dial's numbers: their middle at this share of the radius, this tall. */
+  numberRadius: 0.74,
+  numberHeight: 0.17,
+  /** A number's place to tap: a circle this share of the radius across, round its middle. */
+  zoneShare: 0.4,
+  /** The written time and the cards of read mode: a line this tall, within these. */
+  minLine: 26,
+  maxLine: 64,
+  /** The tick under the written time, as tall as this share of the line, within the key sizes. */
+  checkShare: 1.4,
+  /** Between the cards of read mode, as a share of a card. */
+  cardGap: 0.18,
+} as const;
+
+export type ClockSetLayout = {
+  arrangement: "side" | "stack";
+  /** The clock, a square. */
+  clock: BoardRect;
+  /** The dial's numbers: where each is written, and the place a tap on it takes (set mode). */
+  numbers: Array<{ n: number; glyph: BoardRect; zone: BoardRect }>;
+  /** Set mode: the time to set, written, and the tick under it; null in read mode. */
+  target: TextLineBox | null;
+  check: BoardRect | null;
+  /** Read mode: a card a time, in `options` order. */
+  options: Array<BoardRect & { id: string; line: TextLineBox }>;
+};
+
+/**
+ * Where everything of the clock game goes. The background covers the stage;
+ * the clock stands as big as it can at the left (at the top on a tall
+ * stage), and beside it the written time with its tick, or the cards to pick
+ * from — two safe areas, apart, inside the stage less `insets`.
+ */
+export function layoutClockSet(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<ClockSetConfig, "mode" | "time" | "options">,
+  insets: SceneInsets = {},
+): ClockSetLayout | null {
+  const L = CLOCK_SET_LAYOUT;
+  const originX = insets.left ?? 0;
+  const originY = insets.top ?? 0;
+  const usableWidth = stageWidth - originX - (insets.right ?? 0);
+  const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+
+  if (usableWidth <= 0 || usableHeight <= 0 || !config.time) {
+    return null;
+  }
+
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const gap = sceneGap(stageWidth, stageHeight);
+  const area: BoardRect = {
+    left: originX + edge,
+    top: originY + edge,
+    width: Math.max(usableWidth - edge * 2, 1),
+    height: Math.max(usableHeight - edge * 2, 1),
+  };
+  const labels = config.mode === "read" ? config.options.map((option) => option.label) : [clockTimeLabel(config.time)];
+  const units = Math.max(...labels.map((label) => textLineUnits(label)));
+  let best: { score: number; layout: ClockSetLayout } | null = null;
+
+  const tryArrangement = (arrangement: "side" | "stack", share: number, columns: number) => {
+    const slot: BoardRect = arrangement === "side"
+      ? { left: area.left, top: area.top, width: area.width * share - gap / 2, height: area.height }
+      : { left: area.left, top: area.top, width: area.width, height: area.height * share - gap / 2 };
+    const rest: BoardRect = arrangement === "side"
+      ? { left: slot.left + slot.width + gap, top: area.top, width: area.width - slot.width - gap, height: area.height }
+      : { left: area.left, top: slot.top + slot.height + gap, width: area.width, height: area.height - slot.height - gap };
+    if (slot.width <= 0 || slot.height <= 0 || rest.width <= 0 || rest.height <= 0) {
+      return;
+    }
+
+    const size = Math.min(slot.width, slot.height);
+    const clock: BoardRect = {
+      left: slot.left + (slot.width - size) / 2,
+      top: slot.top + (slot.height - size) / 2,
+      width: size,
+      height: size,
+    };
+    const radius = size / 2;
+    const middle = { x: clock.left + radius, y: clock.top + radius };
+    const numbers = Array.from({ length: 12 }, (_unused, index) => {
+      const n = index + 1;
+      const angle = (n * 30 * Math.PI) / 180;
+      const x = middle.x + Math.sin(angle) * radius * L.numberRadius;
+      const y = middle.y - Math.cos(angle) * radius * L.numberRadius;
+      const glyphHeight = radius * L.numberHeight;
+      const glyphWidth = glyphHeight * (n >= 10 ? 1.25 : 0.7);
+      const zone = radius * L.zoneShare;
+      return {
+        n,
+        glyph: { left: x - glyphWidth / 2, top: y - glyphHeight / 2, width: glyphWidth, height: glyphHeight },
+        zone: { left: x - zone / 2, top: y - zone / 2, width: zone, height: zone },
+      };
+    });
+
+    let target: TextLineBox | null = null;
+    let check: BoardRect | null = null;
+    let options: ClockSetLayout["options"] = [];
+    let line = 0;
+
+    if (config.mode === "set") {
+      // The written time over its tick, in the middle of the room left.
+      const padded = units + 0.8;
+      line = Math.min(L.maxLine, rest.width / padded, rest.height / (1 + L.checkShare + 0.6));
+      const keyHeight = Math.min(MATH_INPUT_LAYOUT.maxKey, Math.max(MATH_INPUT_LAYOUT.minKey, line * L.checkShare));
+      const block = line + gap * 0.6 + keyHeight;
+      const top = rest.top + Math.max(0, (rest.height - block) / 2);
+      const width = units * line;
+      target = { text: labels[0], left: rest.left + (rest.width - width) / 2, top, width, height: line };
+      check = {
+        left: rest.left + (rest.width - keyHeight * MATH_INPUT_LAYOUT.keyAspect) / 2,
+        top: top + line + gap * 0.6,
+        width: keyHeight * MATH_INPUT_LAYOUT.keyAspect,
+        height: keyHeight,
+      };
+      if (check.top + check.height > rest.top + rest.height + 1e-6 || check.width > rest.width) {
+        return;
+      }
+    } else {
+      // The cards in a grid of `columns`, in the middle of the room left.
+      const count = Math.max(config.options.length, 1);
+      const rows = Math.ceil(count / columns);
+      const cardGap = gap * 0.6;
+      const cardPad = 0.9;
+      const across = (rest.width - (columns - 1) * cardGap) / columns;
+      const down = (rest.height - (rows - 1) * cardGap) / rows;
+      line = Math.min(L.maxLine, across / (units + cardPad), down / (1 + cardPad));
+      const cardWidth = Math.min(across, (units + cardPad) * line * 1.3);
+      const cardHeight = Math.min(down, line * (1 + cardPad));
+      const gridWidth = columns * cardWidth + (columns - 1) * cardGap;
+      const gridHeight = rows * cardHeight + (rows - 1) * cardGap;
+      options = config.options.map((option, index) => {
+        const left = rest.left + (rest.width - gridWidth) / 2 + (index % columns) * (cardWidth + cardGap);
+        const top = rest.top + (rest.height - gridHeight) / 2 + Math.floor(index / columns) * (cardHeight + cardGap);
+        const width = textLineUnits(option.label) * line;
+        return {
+          id: option.id,
+          left,
+          top,
+          width: cardWidth,
+          height: cardHeight,
+          line: { text: option.label, left: left + (cardWidth - width) / 2, top: top + (cardHeight - line) / 2, width, height: line },
+        };
+      });
+    }
+
+    // The clock as big as it goes, and the writing readable: a line under `minLine` loses.
+    const score = Math.min(size / 6, line) + (line >= L.minLine ? 0 : -100 + line) + size * 1e-3;
+    if (!best || score > best.score + 1e-9) {
+      best = { score, layout: { arrangement, clock, numbers, target, check, options } };
+    }
+  };
+
+  // The cards one under the other or two by two beside the clock; in a row, or two rows, under it.
+  const count = Math.max(config.options.length, 1);
+  const sideColumns = config.mode === "read" ? [1, 2] : [1];
+  const stackColumns = config.mode === "read" ? [count, Math.ceil(count / 2)] : [1];
+  L.sideShares.forEach((share) => sideColumns.forEach((columns) => tryArrangement("side", share, columns)));
+  L.stackShares.forEach((share) => stackColumns.forEach((columns) => tryArrangement("stack", share, columns)));
+
+  return (best as { score: number; layout: ClockSetLayout } | null)?.layout ?? null;
+}
+
 // --- Attempt metrics --------------------------------------------------------
 
 /**
@@ -7978,6 +8366,13 @@ export type MoneyPayMetrics = BaseGameMetrics & {
   livesRemaining: number;
 };
 
+export type ClockSetMetrics = BaseGameMetrics & {
+  mode: "set" | "read";
+  /** How many times a time was given: the tick pressed, or a card tapped. */
+  attempts: number;
+  livesRemaining: number;
+};
+
 export type TextChoiceMetrics = BaseGameMetrics & {
   /** Right answers the game has, and how many of them were found. */
   correct: number;
@@ -8056,6 +8451,7 @@ export const GAME_KIND_KEYS = {
   "reading-text": "readingText",
   "word-problem": "wordProblem",
   "money-pay": "moneyPay",
+  "clock-set": "clockSet",
   "memory-cards": "memoryCards",
   "pattern-next": "patternNext",
   "select-option": "selectOption",
@@ -8086,6 +8482,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "reading-text": GAME_TIMINGS.readingText,
   "word-problem": GAME_TIMINGS.wordProblem,
   "money-pay": GAME_TIMINGS.moneyPay,
+  "clock-set": GAME_TIMINGS.clockSet,
   "memory-cards": GAME_TIMINGS.memoryCards,
   "pattern-next": GAME_TIMINGS.patternNext,
   "select-option": GAME_TIMINGS.selectOption,
@@ -8123,6 +8520,7 @@ export const GAME_GESTURES = {
   "reading-text": "tap",
   "word-problem": "tap",
   "money-pay": "tap",
+  "clock-set": "tap",
   "memory-cards": "tap",
   "pattern-next": "tap",
   "select-option": "tap",
@@ -8204,6 +8602,7 @@ export type GameMetricsByKind = {
   "reading-text": ReadingTextMetrics;
   "word-problem": WordProblemMetrics;
   "money-pay": MoneyPayMetrics;
+  "clock-set": ClockSetMetrics;
   "memory-cards": MemoryCardsMetrics;
   "pattern-next": PatternNextMetrics;
   "select-option": SelectOptionMetrics;
