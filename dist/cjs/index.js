@@ -5761,13 +5761,16 @@ exports.CLOCK_SET_LAYOUT = {
     /** Its share of the height when the rest stands under it. */
     stackShares: [0.55, 0.62],
     /** The dial's numbers: their middle at this share of the radius, this tall. */
-    numberRadius: 0.74,
+    numberRadius: 0.66,
     numberHeight: 0.17,
     /** A number's place to tap: a circle this share of the radius across, round its middle. */
     zoneShare: 0.4,
     /** The written time and the cards of read mode: a line this tall, within these. */
     minLine: 26,
     maxLine: 64,
+    /** Around the written time on its card, as shares of its line. */
+    cardPadX: 0.35,
+    cardPadY: 0.2,
     /** The tick under the written time, as tall as this share of the line, within the key sizes. */
     checkShare: 1.4,
     /** Between the cards of read mode, as a share of a card. */
@@ -5833,21 +5836,25 @@ function layoutClockSet(stageWidth, stageHeight, config, insets = {}) {
             };
         });
         let target = null;
+        let targetCard = null;
         let check = null;
         let options = [];
         let line = 0;
         if (config.mode === "set") {
-            // The written time over its tick, in the middle of the room left.
-            const padded = units + 0.8;
-            line = Math.min(L.maxLine, rest.width / padded, rest.height / (1 + L.checkShare + 0.6));
+            // The written time on its card, over its tick, in the middle of the room left.
+            const padX = L.cardPadX;
+            const padY = L.cardPadY;
+            line = Math.min(L.maxLine, rest.width / (units + padX * 2), rest.height / (1 + padY * 2 + L.checkShare + 0.6));
             const keyHeight = Math.min(exports.MATH_INPUT_LAYOUT.maxKey, Math.max(exports.MATH_INPUT_LAYOUT.minKey, line * L.checkShare));
-            const block = line + gap * 0.6 + keyHeight;
+            const cardHeight = line * (1 + padY * 2);
+            const block = cardHeight + gap * 0.6 + keyHeight;
             const top = rest.top + Math.max(0, (rest.height - block) / 2);
             const width = units * line;
-            target = { text: labels[0], left: rest.left + (rest.width - width) / 2, top, width, height: line };
+            targetCard = { left: rest.left + (rest.width - width) / 2 - line * padX, top, width: width + line * padX * 2, height: cardHeight };
+            target = { text: labels[0], left: targetCard.left + line * padX, top: top + line * padY, width, height: line };
             check = {
                 left: rest.left + (rest.width - keyHeight * exports.MATH_INPUT_LAYOUT.keyAspect) / 2,
-                top: top + line + gap * 0.6,
+                top: top + cardHeight + gap * 0.6,
                 width: keyHeight * exports.MATH_INPUT_LAYOUT.keyAspect,
                 height: keyHeight,
             };
@@ -5885,7 +5892,7 @@ function layoutClockSet(stageWidth, stageHeight, config, insets = {}) {
         // The clock as big as it goes, and the writing readable: a line under `minLine` loses.
         const score = Math.min(size / 6, line) + (line >= L.minLine ? 0 : -100 + line) + size * 1e-3;
         if (!best || score > best.score + 1e-9) {
-            best = { score, layout: { arrangement, clock, numbers, target, check, options } };
+            best = { score, layout: { arrangement, clock, numbers, target, targetCard, check, options } };
         }
     };
     // The cards one under the other or two by two beside the clock; in a row, or two rows, under it.

@@ -2114,10 +2114,10 @@ section('clock_set: set the hands of a clock, or read one');
     const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
     const rest = [layout && layout.target, layout && layout.check, ...(layout ? layout.options : [])].filter(Boolean);
     const ok = layout && inside(layout.clock, stage) && Math.abs(layout.clock.width - layout.clock.height) < 1e-6
-      && layout.numbers.length === 12 && layout.numbers.every((number) => inside(number.glyph, layout.clock) && number.zone.width >= 40)
+      && layout.numbers.length === 12 && layout.numbers.every((number) => inside(number.glyph, layout.clock) && number.zone.width >= 40 && Math.hypot(number.glyph.left + number.glyph.width / 2 - layout.clock.left - layout.clock.width / 2, number.glyph.top - layout.clock.top - layout.clock.height / 2) < layout.clock.width / 2 * 0.78 && Math.hypot(number.glyph.left + number.glyph.width / 2 - layout.clock.left - layout.clock.width / 2, number.glyph.top + number.glyph.height - layout.clock.top - layout.clock.height / 2) < layout.clock.width / 2 * 0.78)
       && rest.every((rect) => inside(rect, stage) && !overlap(rect, layout.clock))
       && (config.mode === 'set'
-        ? layout.target.text === '7:30' && layout.target.height >= rules.CLOCK_SET_LAYOUT.minLine && !overlap(layout.target, layout.check) && layout.check.height >= 40
+        ? layout.target.text === '7:30' && layout.target.height >= rules.CLOCK_SET_LAYOUT.minLine && inside(layout.target, layout.targetCard) && inside(layout.targetCard, stage) && !overlap(layout.targetCard, layout.check) && !overlap(layout.targetCard, layout.clock) && layout.check.height >= 40
         : layout.options.length === config.options.length && layout.options.every((card, i) => card.id === config.options[i].id && inside(card.line, card) && card.line.height >= rules.CLOCK_SET_LAYOUT.minLine
           && layout.options.every((other, j) => i === j || !overlap(card, other))));
     if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }

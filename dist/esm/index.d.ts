@@ -2440,13 +2440,16 @@ export declare const CLOCK_SET_LAYOUT: {
     /** Its share of the height when the rest stands under it. */
     readonly stackShares: readonly [0.55, 0.62];
     /** The dial's numbers: their middle at this share of the radius, this tall. */
-    readonly numberRadius: 0.74;
+    readonly numberRadius: 0.66;
     readonly numberHeight: 0.17;
     /** A number's place to tap: a circle this share of the radius across, round its middle. */
     readonly zoneShare: 0.4;
     /** The written time and the cards of read mode: a line this tall, within these. */
     readonly minLine: 26;
     readonly maxLine: 64;
+    /** Around the written time on its card, as shares of its line. */
+    readonly cardPadX: 0.35;
+    readonly cardPadY: 0.2;
     /** The tick under the written time, as tall as this share of the line, within the key sizes. */
     readonly checkShare: 1.4;
     /** Between the cards of read mode, as a share of a card. */
@@ -2462,8 +2465,9 @@ export type ClockSetLayout = {
         glyph: BoardRect;
         zone: BoardRect;
     }>;
-    /** Set mode: the time to set, written, and the tick under it; null in read mode. */
+    /** Set mode: the time to set, written on its card, and the tick under it; null in read mode. */
     target: TextLineBox | null;
+    targetCard: BoardRect | null;
     check: BoardRect | null;
     /** Read mode: a card a time, in `options` order. */
     options: Array<BoardRect & {
