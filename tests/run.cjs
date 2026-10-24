@@ -2246,5 +2246,56 @@ section('sentence_build: a sentence put together from its words');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.sentenceBuild.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['sentence-build'] === rules.GAME_TIMINGS.sentenceBuild && rules.GAME_GESTURES['sentence-build'] === 'tap');
 }
 
+section('word_sort: words sorted into baskets');
+
+{
+  ['word_sort', 'sort_words', 'word_groups', 'Word Sort'].forEach((type) => {
+    check(`${type} resolves to word-sort`, rules.resolveGameKind(type, {}) === 'word-sort');
+  });
+  check('pictures to sort are still their own game', rules.resolveGameKind('sort_bins', {}) === 'sort-bins');
+
+  const words = [['дом', 1], ['бежит', 2], ['красный', 3], ['книга', 1], ['читает', 2], ['большой', 3], ['мяч', 1], ['поёт', 2]];
+  const game = rules.normalizeWordSortConfig({ bins: [{ label: 'Предмет' }, 'Действие', 'Признак'], words: words.map(([word, bin]) => ({ word, bin })), bg_image: 'https://x/bg.webp', time_limit: 90 });
+  check('the baskets by their names, the words by their baskets counted from 1', game.bins.map((bin) => bin.label).join() === 'Предмет,Действие,Признак' && game.words.length === 8
+    && game.words.find((word) => word.word === 'красный').bin === 'bin_3' && game.words.find((word) => word.word === 'дом').bin === 'bin_1');
+  check('mixed, never three of one basket running', game.words.every((word, index) => index < 2 || !(word.bin === game.words[index - 1].bin && word.bin === game.words[index - 2].bin)));
+  check('defaults: lives 3, the background to preload', game.lives === 3 && game.time_limit === 90 && game.imageUris.join() === 'https://x/bg.webp');
+  check('a word given its basket by name', rules.normalizeWordSortConfig({ bins: ['a', 'b'], words: [{ word: 'w1', bin: 'A' }, { word: 'w2', bin: 'b' }, { word: 'w3', bin: 'a' }, { word: 'w4', bin: 'b' }] }).words.length === 4);
+  check('a word of no basket, and an empty word, are left out', rules.normalizeWordSortConfig({ bins: ['a', 'b'], words: [{ word: 'w1', bin: 1 }, { word: 'w2', bin: 2 }, { word: 'w3', bin: 1 }, { word: 'w4', bin: 2 }, { word: 'w5', bin: 5 }, { word: ' ', bin: 1 }] }).words.length === 4);
+  check('a basket of no word is left out; fewer than two baskets or four words is no game',
+    rules.normalizeWordSortConfig({ bins: ['a', 'b', 'c'], words: [{ word: 'w1', bin: 1 }, { word: 'w2', bin: 2 }, { word: 'w3', bin: 1 }, { word: 'w4', bin: 2 }] }).bins.length === 2
+      && rules.normalizeWordSortConfig({ bins: ['a', 'b'], words: [{ word: 'w1', bin: 1 }, { word: 'w2', bin: 1 }, { word: 'w3', bin: 1 }, { word: 'w4', bin: 1 }] }).words.length === 0
+      && rules.normalizeWordSortConfig({ bins: ['a', 'b'], words: [{ word: 'w1', bin: 1 }, { word: 'w2', bin: 2 }] }).words.length === 0);
+  check('eight words at most, three baskets', rules.normalizeWordSortConfig({ bins: ['a', 'b', 'c', 'd'], words: Array.from({ length: 12 }, (_u, i) => ({ word: 'w' + i, bin: (i % 4) + 1 })) }).words.length === 8);
+
+  const first = game.words[0];
+  const elsewhere = game.bins.find((bin) => bin.id !== first.bin).id;
+  check('the basket the word asked belongs in is right, another one is a mistake', JSON.stringify(rules.resolveWordSortTap(game, 0, first.bin)) === JSON.stringify({ type: 'right', word: first.id, complete: false })
+    && rules.resolveWordSortTap(game, 0, elsewhere).type === 'wrong');
+  check('the last word completes it, and nothing is asked after', rules.resolveWordSortTap(game, 7, game.words[7].bin).complete === true && rules.resolveWordSortTap(game, 8, 'bin_1').type === 'ignored' && rules.resolveWordSortTap(game, 0, 'nope').type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const two = rules.normalizeWordSortConfig({ bins: ['საგანი', 'მოქმედება'], words: [['სახლი', 1], ['ხტება', 2], ['წიგნი', 1], ['კითხულობს', 2], ['ბურთი', 1], ['მღერის', 2]].map(([word, bin]) => ({ word, bin })) });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [game, two].forEach((config, index) => {
+    const layout = rules.layoutWordSort(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const most = Math.max(...config.bins.map((bin) => config.words.filter((word) => word.bin === bin.id).length));
+    const ok = layout && inside(layout.card, stage) && layout.line >= rules.WORD_SORT_LAYOUT.minLine
+      && layout.bins.length === config.bins.length && layout.bins.every((bin, i) => bin.id === config.bins[i].id && inside(bin, stage) && !overlap(bin, layout.card)
+        && inside(bin.label, bin) && bin.slots.length === most && bin.slots.every((slot) => inside(slot, bin) && !overlap(slot, bin.label)))
+      && layout.bins.every((a, i) => layout.bins.every((b, j) => i === j || !overlap(a, b)));
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the word asked and the baskets are whole, apart, inside the safe area, every word with room in its basket', whole, detail);
+  check('no words, no layout', rules.layoutWordSort(852, 393, { bins: [], words: [] }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.wordSort.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-sort'] === rules.GAME_TIMINGS.wordSort && rules.GAME_GESTURES['word-sort'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

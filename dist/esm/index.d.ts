@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1322,6 +1322,17 @@ export declare const GAME_TIMINGS: {
         readonly wrongFeedbackMs: 520;
         readonly flyMs: 420;
         readonly successSettleMs: 1100;
+        readonly livesOutDelayMs: 320;
+    };
+    /**
+     * A right word flies into its basket over `flyMs` and the next comes;
+     * a wrong tap shakes the card for `wrongFeedbackMs`. After the last word
+     * the baskets are seen `successSettleMs`.
+     */
+    readonly wordSort: {
+        readonly wrongFeedbackMs: 520;
+        readonly flyMs: 380;
+        readonly successSettleMs: 900;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -2720,6 +2731,93 @@ export type SentenceBuildLayout = {
  * apart, inside the stage less `insets`.
  */
 export declare function layoutSentenceBuild(stageWidth: number, stageHeight: number, config: Pick<SentenceBuildConfig, "words" | "tiles" | "ending" | "questionImage">, insets?: SceneInsets): SentenceBuildLayout | null;
+/** Baskets: two or three. Words: four to eight. */
+export declare const WORD_SORT_BINS: {
+    readonly min: 2;
+    readonly max: 3;
+};
+export declare const WORD_SORT_WORDS: {
+    readonly min: 4;
+    readonly max: 8;
+};
+export type WordSortBin = {
+    id: string;
+    label: string;
+};
+export type WordSortWord = {
+    id: string;
+    word: string;
+    bin: string;
+};
+export type WordSortConfig = {
+    bins: WordSortBin[];
+    /** In the order they are asked: mixed once here, never two of one basket three times running. */
+    words: WordSortWord[];
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `bins` are the baskets' names (a text, or
+ * { label }) and `words` the words ({ word, bin }, `bin` the basket's place
+ * from 0 or 1, or its name). A word of no basket, a basket of no word, and
+ * past the most of either, are left out; a game left with fewer than two
+ * baskets or four words is none.
+ */
+export declare function normalizeWordSortConfig(config: Record<string, unknown>): WordSortConfig;
+export type WordSortTapResult = 
+/** Every word is sorted already, or there is no such basket. */
+{
+    type: "ignored";
+}
+/** The word asked belongs there; `complete` when it was the last. */
+ | {
+    type: "right";
+    word: string;
+    complete: boolean;
+}
+/** It does not: a mistake, and the word waits for another tap. */
+ | {
+    type: "wrong";
+    word: string;
+};
+/** What a tap on a basket does, `sorted` words having been put away already: the whole play rule. */
+export declare function resolveWordSortTap(config: Pick<WordSortConfig, "bins" | "words">, sorted: number, binId: string): WordSortTapResult;
+/** Proportions of the word game. Shares are of a line of writing. */
+export declare const WORD_SORT_LAYOUT: {
+    /** The word asked: its card this many lines high, a line within these, in px. */
+    readonly cardLines: 1.9;
+    readonly minLine: 26;
+    readonly maxLine: 60;
+    /** A basket's name: this share of the word's line, under its rim. */
+    readonly labelShare: 0.7;
+    /** A word put away: this share of the word's line, listed in its basket. */
+    readonly sortedShare: 0.55;
+    /** Between the card and the baskets, and between baskets, in lines. */
+    readonly gap: 0.5;
+    /** The card's share of the height, at most; the baskets take the rest. */
+    readonly maxCardShare: 0.34;
+};
+export type WordSortLayout = {
+    /** The card the word asked stands on, and its line. */
+    card: BoardRect;
+    line: number;
+    /** In `bins` order: the basket, its name, and where its words go one under the other. */
+    bins: Array<BoardRect & {
+        id: string;
+        label: TextLineBox;
+        slots: BoardRect[];
+    }>;
+};
+/**
+ * Where everything of the word game goes. The background covers the stage;
+ * the word asked stands on its card at the top, the baskets side by side
+ * under it, each with its name under its rim and room for every word it can
+ * get. Inside the stage less `insets`.
+ */
+export declare function layoutWordSort(stageWidth: number, stageHeight: number, config: Pick<WordSortConfig, "bins" | "words">, insets?: SceneInsets): WordSortLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -2827,6 +2925,12 @@ export type SentenceBuildMetrics = BaseGameMetrics & {
     placed: number;
     livesRemaining: number;
 };
+export type WordSortMetrics = BaseGameMetrics & {
+    /** Words the game has, and how many of them were put away. */
+    words: number;
+    sorted: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -2896,6 +3000,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "clock-set": "clockSet";
     readonly "fraction-pick": "fractionPick";
     readonly "sentence-build": "sentenceBuild";
+    readonly "word-sort": "wordSort";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -2936,6 +3041,7 @@ export declare const GAME_GESTURES: {
     readonly "clock-set": "tap";
     readonly "fraction-pick": "tap";
     readonly "sentence-build": "tap";
+    readonly "word-sort": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -3002,6 +3108,7 @@ export type GameMetricsByKind = {
     "clock-set": ClockSetMetrics;
     "fraction-pick": FractionPickMetrics;
     "sentence-build": SentenceBuildMetrics;
+    "word-sort": WordSortMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

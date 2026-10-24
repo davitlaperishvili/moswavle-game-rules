@@ -788,6 +788,16 @@ export function resolveGameKind(type, config) {
         return "sentence-build";
     }
     if ([
+        "word_sort",
+        "wordsort",
+        "sort_words",
+        "words_sort",
+        "word_bins",
+        "word_groups",
+    ].includes(normalizedType)) {
+        return "word-sort";
+    }
+    if ([
         "memory_cards",
         "memory",
         "memorycards",
@@ -3062,6 +3072,12 @@ export const GAME_TIMINGS = {
      * built, so the child reads it whole before the win.
      */
     sentenceBuild: { wrongFeedbackMs: 520, flyMs: 420, successSettleMs: 1100, livesOutDelayMs: 320 },
+    /**
+     * A right word flies into its basket over `flyMs` and the next comes;
+     * a wrong tap shakes the card for `wrongFeedbackMs`. After the last word
+     * the baskets are seen `successSettleMs`.
+     */
+    wordSort: { wrongFeedbackMs: 520, flyMs: 380, successSettleMs: 900, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -6342,6 +6358,167 @@ export function layoutSentenceBuild(stageWidth, stageHeight, config, insets = {}
     }
     return low > 1 ? place(low) : null;
 }
+// --- word_sort: words sorted into baskets ------------------------------------
+//
+// Words come one at a time on a card — a thing, an action, a quality; living
+// or not — and the child taps the basket the word belongs in, each basket
+// named in words. A right tap sends the word into it, where it stays, listed;
+// a wrong one shakes the card and costs a life. Everything arrives already in
+// the language the game is played in, and is drawn by DrawnText.
+/** Baskets: two or three. Words: four to eight. */
+export const WORD_SORT_BINS = { min: 2, max: 3 };
+export const WORD_SORT_WORDS = { min: 4, max: 8 };
+/**
+ * The game as the players draw it. `bins` are the baskets' names (a text, or
+ * { label }) and `words` the words ({ word, bin }, `bin` the basket's place
+ * from 0 or 1, or its name). A word of no basket, a basket of no word, and
+ * past the most of either, are left out; a game left with fewer than two
+ * baskets or four words is none.
+ */
+export function normalizeWordSortConfig(config) {
+    const bg = normalizeBackground(config);
+    const rawBins = (Array.isArray(config.bins) ? config.bins : [])
+        .map((bin) => extractText(asRecord(bin)?.label ?? bin))
+        .slice(0, WORD_SORT_BINS.max);
+    const binIndex = (value) => {
+        const number = extractNumber(value);
+        if (number !== null && Number.isInteger(number)) {
+            // Counted from 1 in an author's field, from 0 in code: 0 can only be the first.
+            return number >= 1 && number <= rawBins.length ? number - 1 : number === 0 ? 0 : -1;
+        }
+        const text = extractText(value);
+        return text ? rawBins.findIndex((label) => label?.toLocaleLowerCase() === text.toLocaleLowerCase()) : -1;
+    };
+    const rows = (Array.isArray(config.words) ? config.words : [])
+        .map((row) => asRecord(row))
+        .filter((row) => row !== null)
+        .map((row) => ({ word: (extractText(row.word) ?? "").replace(/\s+/g, " ").trim(), bin: binIndex(row.bin) }))
+        .filter((row) => row.word !== "" && row.bin >= 0 && rawBins[row.bin])
+        .slice(0, WORD_SORT_WORDS.max);
+    const used = new Set(rows.map((row) => row.bin));
+    const bins = rawBins
+        .map((label, index) => ({ id: `bin_${index + 1}`, label: label ?? "", index }))
+        .filter((bin) => bin.label !== "" && used.has(bin.index))
+        .map(({ id, label }) => ({ id, label }));
+    if (bins.length < WORD_SORT_BINS.min || rows.length < WORD_SORT_WORDS.min) {
+        return { bins: [], words: [], bg_image: bg, time_limit: extractNumber(config.time_limit), lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)), imageUris: bg ? [bg] : [] };
+    }
+    const words = rows.map((row, index) => ({ id: `word_${index + 1}`, word: row.word, bin: `bin_${row.bin + 1}` }));
+    // Mixed, and not three of one basket running: a child would stop reading.
+    let order = shuffle(words);
+    for (let attempt = 0; attempt < 8 && order.some((word, index) => index >= 2 && word.bin === order[index - 1].bin && word.bin === order[index - 2].bin); attempt++) {
+        order = shuffle(words);
+    }
+    return {
+        bins,
+        words: order,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: bg ? [bg] : [],
+    };
+}
+/** What a tap on a basket does, `sorted` words having been put away already: the whole play rule. */
+export function resolveWordSortTap(config, sorted, binId) {
+    const word = config.words[sorted];
+    if (!word || !config.bins.some((bin) => bin.id === binId)) {
+        return { type: "ignored" };
+    }
+    return word.bin === binId
+        ? { type: "right", word: word.id, complete: sorted + 1 === config.words.length }
+        : { type: "wrong", word: word.id };
+}
+/** Proportions of the word game. Shares are of a line of writing. */
+export const WORD_SORT_LAYOUT = {
+    /** The word asked: its card this many lines high, a line within these, in px. */
+    cardLines: 1.9,
+    minLine: 26,
+    maxLine: 60,
+    /** A basket's name: this share of the word's line, under its rim. */
+    labelShare: 0.7,
+    /** A word put away: this share of the word's line, listed in its basket. */
+    sortedShare: 0.55,
+    /** Between the card and the baskets, and between baskets, in lines. */
+    gap: 0.5,
+    /** The card's share of the height, at most; the baskets take the rest. */
+    maxCardShare: 0.34,
+};
+/**
+ * Where everything of the word game goes. The background covers the stage;
+ * the word asked stands on its card at the top, the baskets side by side
+ * under it, each with its name under its rim and room for every word it can
+ * get. Inside the stage less `insets`.
+ */
+export function layoutWordSort(stageWidth, stageHeight, config, insets = {}) {
+    const L = WORD_SORT_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    if (usableWidth <= 0 || usableHeight <= 0 || config.bins.length === 0 || config.words.length === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const area = {
+        left: originX + edge,
+        top: originY + edge,
+        width: Math.max(usableWidth - edge * 2, 1),
+        height: Math.max(usableHeight - edge * 2, 1),
+    };
+    const count = config.bins.length;
+    const longestWord = Math.max(...config.words.map((word) => textLineUnits(word.word)));
+    const longestLabel = Math.max(...config.bins.map((bin) => textLineUnits(bin.label)));
+    const most = Math.max(...config.bins.map((bin) => config.words.filter((word) => word.bin === bin.id).length));
+    const place = (line) => {
+        const gap = line * L.gap;
+        const card = { left: 0, top: area.top, width: (longestWord + 1.2) * line, height: line * L.cardLines };
+        card.left = area.left + (area.width - card.width) / 2;
+        if (card.width > area.width || card.height > area.height * L.maxCardShare) {
+            return null;
+        }
+        const binTop = card.top + card.height + gap;
+        const binHeight = area.top + area.height - binTop;
+        const binWidth = (area.width - (count - 1) * gap) / count;
+        const label = line * L.labelShare;
+        const sorted = line * L.sortedShare;
+        // A basket holds its name and every word it can get, one under the other.
+        const needed = label * 1.6 + most * sorted * 1.25 + line * 0.4;
+        if (binHeight < needed || binWidth < Math.max(longestLabel * label, longestWord * sorted) + line * 0.6) {
+            return null;
+        }
+        const bins = config.bins.map((bin, index) => {
+            const left = area.left + index * (binWidth + gap);
+            const labelWidth = textLineUnits(bin.label) * label;
+            const slots = Array.from({ length: most }, (_unused, slot) => ({
+                left: left + line * 0.3,
+                top: binTop + label * 1.6 + slot * sorted * 1.25,
+                width: binWidth - line * 0.6,
+                height: sorted,
+            }));
+            return {
+                id: bin.id,
+                left,
+                top: binTop,
+                width: binWidth,
+                height: binHeight,
+                label: { text: bin.label, left: left + (binWidth - labelWidth) / 2, top: binTop + label * 0.3, width: labelWidth, height: label },
+                slots,
+            };
+        });
+        return { card, line, bins };
+    };
+    // The biggest writing at which everything fits, found by halving.
+    let low = 0;
+    let high = L.maxLine;
+    for (let step = 0; step < 18; step++) {
+        const middle = (low + high) / 2;
+        if (place(middle))
+            low = middle;
+        else
+            high = middle;
+    }
+    return low > 1 ? place(low) : null;
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -6367,6 +6544,7 @@ export const GAME_KIND_KEYS = {
     "clock-set": "clockSet",
     "fraction-pick": "fractionPick",
     "sentence-build": "sentenceBuild",
+    "word-sort": "wordSort",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -6395,6 +6573,7 @@ export const GAME_TIMINGS_BY_KIND = {
     "clock-set": GAME_TIMINGS.clockSet,
     "fraction-pick": GAME_TIMINGS.fractionPick,
     "sentence-build": GAME_TIMINGS.sentenceBuild,
+    "word-sort": GAME_TIMINGS.wordSort,
     "memory-cards": GAME_TIMINGS.memoryCards,
     "pattern-next": GAME_TIMINGS.patternNext,
     "select-option": GAME_TIMINGS.selectOption,
@@ -6429,6 +6608,7 @@ export const GAME_GESTURES = {
     "clock-set": "tap",
     "fraction-pick": "tap",
     "sentence-build": "tap",
+    "word-sort": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",
