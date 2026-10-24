@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1381,6 +1381,16 @@ export declare const GAME_TIMINGS: {
     /** A miss rings the tap red for `wrongFeedbackMs`; once the last is found the game waits `successSettleMs`. */
     readonly findInScene: {
         readonly wrongFeedbackMs: 600;
+        readonly successSettleMs: 900;
+        readonly livesOutDelayMs: 320;
+    };
+    /**
+     * A card put on its pin flies there over `flyMs`; one on another pin shakes
+     * it for `wrongFeedbackMs` and goes back. The last one put waits `successSettleMs`.
+     */
+    readonly mapPlace: {
+        readonly wrongFeedbackMs: 520;
+        readonly flyMs: 280;
         readonly successSettleMs: 900;
         readonly livesOutDelayMs: 320;
     };
@@ -3412,6 +3422,106 @@ export declare function findInScenePoint(layout: Pick<FindInSceneLayout, "sheet"
     x: number;
     y: number;
 };
+export declare const MAP_PLACE_ITEMS: {
+    readonly min: 2;
+    readonly max: 6;
+    readonly decoys: 3;
+};
+/** A place on the map, in percent of it: the box of the picture that belongs there. */
+export type MapPlaceSpot = {
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    /** The id of the item that belongs here; null for a place nobody's. */
+    item: string | null;
+};
+export type MapPlaceItem = {
+    id: string;
+    image: string;
+    /** The spot it belongs on. */
+    spot: string;
+};
+export type MapPlaceConfig = {
+    spots: MapPlaceSpot[];
+    /** The cards, in the order they wait in the tray (mixed once here). Empty when the game is none. */
+    items: MapPlaceItem[];
+    board: {
+        width: number;
+        height: number;
+    } | null;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `placements` are what the author put on
+ * the map, in percent of it: a picture on its own place, or a point with no
+ * picture — a place nobody's (three at most). Two to six pictures.
+ */
+export declare function normalizeMapPlaceConfig(config: Record<string, unknown>): MapPlaceConfig;
+export type MapPlaceDropResult = 
+/** The card is put already, the spot is taken, or there is no spot: the card only goes back. */
+{
+    type: "ignored";
+}
+/** Its own place; `complete` when it was the last card. */
+ | {
+    type: "right";
+    complete: boolean;
+}
+/** Another place: a mistake, and the card goes back. */
+ | {
+    type: "wrong";
+};
+/**
+ * What putting the card `itemId` on the spot `spotId` does, `placed` the ids
+ * of the cards put so far. A spot taken already takes nothing.
+ */
+export declare function resolveMapPlaceDrop(config: Pick<MapPlaceConfig, "spots" | "items">, placed: readonly string[], itemId: string, spotId: string | null): MapPlaceDropResult;
+/** Proportions of the map game. */
+export declare const MAP_PLACE_LAYOUT: {
+    /** The tray of cards: of the free width (a column) or height (a row), within these in px. */
+    readonly trayShare: 0.24;
+    readonly minCard: 56;
+    readonly maxCard: 112;
+    /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+    readonly sheetRim: 6;
+    /** A pin: this share of its place's shorter side, within these in px. */
+    readonly pinShare: 0.5;
+    readonly minPin: 30;
+    readonly maxPin: 46;
+    /** A drop counts this far round a pin's middle at least, in px. */
+    readonly minHit: 48;
+};
+export type MapPlaceLayout = {
+    /** The map, whole and never cropped. */
+    sheet: BoardRect;
+    /** Each spot's box on the stage — where its picture stands once put — and its pin, in `spots` order. */
+    spots: Array<BoardRect & {
+        id: string;
+        pin: BoardRect;
+    }>;
+    /** The tray, and a card a picture in `items` order. */
+    tray: BoardRect;
+    cards: Array<BoardRect & {
+        id: string;
+    }>;
+};
+/**
+ * Where everything of the map game goes: the tray of cards at the right of the
+ * map on a wide stage, over it on a tall one — one line of cards or two — and
+ * the map as big as the rest lets it be. Inside the stage less `insets`.
+ */
+export declare function layoutMapPlace(stageWidth: number, stageHeight: number, config: Pick<MapPlaceConfig, "spots" | "items" | "board">, insets?: SceneInsets): MapPlaceLayout | null;
+/**
+ * The spot a card let go at (`x`, `y`, on the stage) lands on: the one whose
+ * pin's middle is nearest, within its place's box grown to `minHit`; null over
+ * nothing.
+ */
+export declare function mapPlaceSpotAt(layout: Pick<MapPlaceLayout, "spots">, x: number, y: number): string | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -3557,6 +3667,13 @@ export type FindInSceneMetrics = BaseGameMetrics & {
     misses: number;
     livesRemaining: number;
 };
+export type MapPlaceMetrics = BaseGameMetrics & {
+    /** Cards to put, how many were put, and those put on another place. */
+    items: number;
+    placed: number;
+    wrong: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -3632,6 +3749,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "grid-route": "gridRoute";
     readonly "chart-read": "chartRead";
     readonly "find-in-scene": "findInScene";
+    readonly "map-place": "mapPlace";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -3678,6 +3796,7 @@ export declare const GAME_GESTURES: {
     readonly "grid-route": "tap";
     readonly "chart-read": "tap";
     readonly "find-in-scene": "tap";
+    readonly "map-place": "drag";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -3750,6 +3869,7 @@ export type GameMetricsByKind = {
     "grid-route": GridRouteMetrics;
     "chart-read": ChartReadMetrics;
     "find-in-scene": FindInSceneMetrics;
+    "map-place": MapPlaceMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

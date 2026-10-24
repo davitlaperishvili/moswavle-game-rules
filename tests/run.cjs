@@ -2580,5 +2580,65 @@ section('find_in_scene: every one of a kind found on a big picture');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.findInScene.successSettleMs > 0 && rules.GAME_TIMINGS_BY_KIND['find-in-scene'] === rules.GAME_TIMINGS.findInScene && rules.GAME_GESTURES['find-in-scene'] === 'tap');
 }
 
+section('map_place: pictures put on their places on a map');
+
+{
+  ['map_place', 'place_on_map', 'Map Place'].forEach((type) => {
+    check(`${type} resolves to map-place`, rules.resolveGameKind(type, {}) === 'map-place');
+  });
+
+  const sight = (name, x, y) => ({ image: `https://x/${name}.webp`, x, y, width: 8, height: 10 });
+  const config = rules.normalizeMapPlaceConfig({
+    bg_image: 'https://x/georgia.webp',
+    board_width: 1600,
+    board_height: 900,
+    placements: [sight('narikala', 60, 55), sight('svetitskhoveli', 55, 45), sight('gergeti', 50, 20), { x: 20, y: 60, width: 4, height: 6 }, { x: 0, y: 0, width: 0, height: 5 }],
+  });
+  check('a card a picture, a place for each and one nobody\'s; a box of nothing is nothing', config.items.length === 3 && config.spots.length === 4
+    && config.spots[3].item === null && config.items.every((item) => config.spots.find((spot) => spot.id === item.spot).item === item.id)
+    && config.imageUris.length === 4);
+  check('no game: one picture, no picture of the map or no size', rules.normalizeMapPlaceConfig({ bg_image: 'b', board_width: 10, board_height: 10, placements: [sight('a', 1, 1)] }).items.length === 0
+    && rules.normalizeMapPlaceConfig({ board_width: 10, board_height: 10, placements: [sight('a', 1, 1), sight('b', 50, 50)] }).items.length === 0);
+  check('six cards and three places nobody\'s at most', (() => {
+    const many = rules.normalizeMapPlaceConfig({ bg_image: 'b', board_width: 10, board_height: 10, placements: [...Array.from({ length: 8 }, (_v, i) => sight(`s${i}`, i * 10, 10)), ...Array.from({ length: 5 }, (_v, i) => ({ x: i * 10, y: 80, width: 3, height: 3 }))] });
+    return many.items.length === 6 && many.spots.length === 9;
+  })());
+
+  const drop = rules.resolveMapPlaceDrop;
+  const item = (name) => config.items.find((entry) => entry.image.includes(name));
+  const narikala = item('narikala');
+  const gergeti = item('gergeti');
+  check('its own place is right; another is wrong; nowhere only goes back', drop(config, [], narikala.id, narikala.spot).type === 'right'
+    && drop(config, [], narikala.id, gergeti.spot).type === 'wrong' && drop(config, [], narikala.id, 'spot_4').type === 'wrong' && drop(config, [], narikala.id, null).type === 'ignored');
+  check('a card put, or a place taken, takes nothing more; the last one completes', drop(config, [narikala.id], narikala.id, narikala.spot).type === 'ignored'
+    && drop(config, [narikala.id], gergeti.id, narikala.spot).type === 'ignored'
+    && drop(config, config.items.filter((entry) => entry !== gergeti).map((entry) => entry.id), gergeti.id, gergeti.spot).complete === true);
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const six = rules.normalizeMapPlaceConfig({ bg_image: 'b', board_width: 1000, board_height: 1000, placements: Array.from({ length: 6 }, (_v, i) => sight(`s${i}`, i * 15, 40)) });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [1024, 768, {}], [667, 300, { top: 60 }], [600, 800, {}]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [config, six].forEach((game, which) => {
+    const layout = rules.layoutMapPlace(w, h, game, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout && inside(layout.sheet, stage) && inside(layout.tray, stage) && !overlap(layout.sheet, layout.tray)
+      && Math.abs(layout.sheet.width / layout.sheet.height - game.board.width / game.board.height) < 1e-6
+      && layout.cards.length === game.items.length && layout.cards.every((card) => inside(card, layout.tray) && card.width >= rules.MAP_PLACE_LAYOUT.minCard)
+      && layout.cards.every((a, i) => layout.cards.every((b, j) => i === j || !overlap(a, b)))
+      && layout.spots.every((spot) => inside(spot, layout.sheet) && spot.pin.width >= rules.MAP_PLACE_LAYOUT.minPin);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} game ${which}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the map is whole and the cards beside it, big enough to carry, inside the safe area', whole, detail);
+  const layout = rules.layoutMapPlace(852, 393, config, {});
+  const spot = layout.spots[0];
+  check('a card let go near a pin lands on it, over nothing on nothing', rules.mapPlaceSpotAt(layout, spot.left + spot.width / 2 + 3, spot.top + spot.height / 2 - 3) === spot.id
+    && rules.mapPlaceSpotAt(layout, layout.sheet.left + 2, layout.sheet.top + 2) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.mapPlace.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['map-place'] === rules.GAME_TIMINGS.mapPlace && rules.GAME_GESTURES['map-place'] === 'drag');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

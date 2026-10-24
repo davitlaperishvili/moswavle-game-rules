@@ -847,6 +847,15 @@ export function resolveGameKind(type, config) {
         return "find-in-scene";
     }
     if ([
+        "map_place",
+        "mapplace",
+        "place_on_map",
+        "map_drop",
+        "put_on_map",
+    ].includes(normalizedType)) {
+        return "map-place";
+    }
+    if ([
         "memory_cards",
         "memory",
         "memorycards",
@@ -3152,6 +3161,11 @@ export const GAME_TIMINGS = {
     chartRead: { wrongFeedbackMs: 560, nextQuestionMs: 700, successSettleMs: 700, livesOutDelayMs: 320 },
     /** A miss rings the tap red for `wrongFeedbackMs`; once the last is found the game waits `successSettleMs`. */
     findInScene: { wrongFeedbackMs: 600, successSettleMs: 900, livesOutDelayMs: 320 },
+    /**
+     * A card put on its pin flies there over `flyMs`; one on another pin shakes
+     * it for `wrongFeedbackMs` and goes back. The last one put waits `successSettleMs`.
+     */
+    mapPlace: { wrongFeedbackMs: 520, flyMs: 280, successSettleMs: 900, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -7620,6 +7634,191 @@ export function findInScenePoint(layout, stageX, stageY) {
         y: ((stageY - layout.sheet.top) / layout.sheet.height) * 100,
     };
 }
+// --- map_place: pictures put on their places on a map ---------------------------
+//
+// A map or a plan shown whole, like label_diagram's sheet — never cropped,
+// nothing on it moved — with a round pin on every place, and beside it the
+// pictures on cards: the lights Tsitsina found, the sights of Georgia, the
+// animals of the continents. The child carries each card onto its pin (or
+// taps the card, then the pin). The right pin takes the picture where the
+// author put it; a wrong pin sends it back and costs a life; let go over
+// nothing, it only goes back. Authored as a picture placed on its spot; a
+// point of the background with no picture is a place nobody's, so the last
+// card is not put by elimination.
+export const MAP_PLACE_ITEMS = { min: 2, max: 6, decoys: 3 };
+/**
+ * The game as the players draw it. `placements` are what the author put on
+ * the map, in percent of it: a picture on its own place, or a point with no
+ * picture — a place nobody's (three at most). Two to six pictures.
+ */
+export function normalizeMapPlaceConfig(config) {
+    const clampPercent = (value) => Math.max(0, Math.min(100, value ?? 0));
+    let pictures = 0;
+    let decoys = 0;
+    const placed = (Array.isArray(config.placements) ? config.placements : [])
+        .map((raw) => asRecord(raw))
+        .map((record) => {
+        if (!record)
+            return null;
+        const image = extractMediaUrl(record.image);
+        const x = clampPercent(extractNumber(record.x));
+        const y = clampPercent(extractNumber(record.y));
+        const width = Math.min(100 - x, clampPercent(extractNumber(record.width)));
+        const height = Math.min(100 - y, clampPercent(extractNumber(record.height)));
+        if (width <= 0 || height <= 0)
+            return null;
+        if (image ? pictures >= MAP_PLACE_ITEMS.max : decoys >= MAP_PLACE_ITEMS.decoys)
+            return null;
+        if (image)
+            pictures += 1;
+        else
+            decoys += 1;
+        return { image, x, y, width, height };
+    })
+        .filter((spot) => Boolean(spot));
+    const boardWidth = extractNumber(config.board_width);
+    const boardHeight = extractNumber(config.board_height);
+    const bg = extractMediaUrl(config.bg_image);
+    const playable = Boolean(bg) && pictures >= MAP_PLACE_ITEMS.min && boardWidth !== null && boardHeight !== null && boardWidth > 0 && boardHeight > 0;
+    const spots = placed.map((spot, index) => ({
+        id: `spot_${index + 1}`,
+        x: spot.x,
+        y: spot.y,
+        width: spot.width,
+        height: spot.height,
+        item: spot.image ? `item_${index + 1}` : null,
+    }));
+    const items = placed
+        .map((spot, index) => (spot.image ? { id: `item_${index + 1}`, image: spot.image, spot: `spot_${index + 1}` } : null))
+        .filter((item) => Boolean(item));
+    return {
+        spots: playable ? spots : [],
+        items: playable ? shuffle(items) : [],
+        board: playable ? { width: boardWidth, height: boardHeight } : null,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [...new Set([bg, ...items.map((item) => item.image)].filter((uri) => Boolean(uri)))],
+    };
+}
+/**
+ * What putting the card `itemId` on the spot `spotId` does, `placed` the ids
+ * of the cards put so far. A spot taken already takes nothing.
+ */
+export function resolveMapPlaceDrop(config, placed, itemId, spotId) {
+    const item = config.items.find((entry) => entry.id === itemId);
+    const spot = config.spots.find((entry) => entry.id === spotId);
+    if (!item || !spot || placed.includes(itemId) || (spot.item !== null && placed.includes(spot.item))) {
+        return { type: "ignored" };
+    }
+    return item.spot === spot.id ? { type: "right", complete: placed.length + 1 === config.items.length } : { type: "wrong" };
+}
+/** Proportions of the map game. */
+export const MAP_PLACE_LAYOUT = {
+    /** The tray of cards: of the free width (a column) or height (a row), within these in px. */
+    trayShare: 0.24,
+    minCard: 56,
+    maxCard: 112,
+    /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+    sheetRim: 6,
+    /** A pin: this share of its place's shorter side, within these in px. */
+    pinShare: 0.5,
+    minPin: 30,
+    maxPin: 46,
+    /** A drop counts this far round a pin's middle at least, in px. */
+    minHit: 48,
+};
+/**
+ * Where everything of the map game goes: the tray of cards at the right of the
+ * map on a wide stage, over it on a tall one — one line of cards or two — and
+ * the map as big as the rest lets it be. Inside the stage less `insets`.
+ */
+export function layoutMapPlace(stageWidth, stageHeight, config, insets = {}) {
+    const L = MAP_PLACE_LAYOUT;
+    const board = config.board;
+    const count = config.items.length;
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const area = {
+        left: (insets.left ?? 0) + edge,
+        top: (insets.top ?? 0) + edge,
+        width: stageWidth - (insets.left ?? 0) - (insets.right ?? 0) - edge * 2,
+        height: stageHeight - (insets.top ?? 0) - (insets.bottom ?? 0) - edge * 2,
+    };
+    if (!board || count === 0 || area.width <= 0 || area.height <= 0) {
+        return null;
+    }
+    const tall = area.height > area.width;
+    const cardGap = gap / 2;
+    let best = null;
+    for (const lines of [1, 2]) {
+        const perLine = Math.ceil(count / lines);
+        // The tray's depth across the stage, and the cards' size along it.
+        const along = tall ? area.width : area.height;
+        const cardAlong = (along - cardGap * (perLine - 1)) / perLine;
+        const depthCap = (tall ? area.height : area.width) * L.trayShare;
+        const card = Math.max(0, Math.min(L.maxCard, cardAlong, (depthCap - cardGap * (lines - 1)) / lines));
+        const depth = card * lines + cardGap * (lines - 1);
+        const room = tall
+            ? { left: area.left, top: area.top + depth + gap, width: area.width, height: area.height - depth - gap }
+            : { left: area.left, top: area.top, width: area.width - depth - gap, height: area.height };
+        const fit = Math.min((room.width - L.sheetRim * 2) / board.width, (room.height - L.sheetRim * 2) / board.height);
+        if (fit <= 0)
+            continue;
+        const sheet = {
+            left: room.left + (room.width - board.width * fit) / 2,
+            top: room.top + (room.height - board.height * fit) / 2,
+            width: board.width * fit,
+            height: board.height * fit,
+        };
+        const trayLength = card * perLine + cardGap * (perLine - 1);
+        const tray = tall
+            ? { left: area.left + (area.width - trayLength) / 2, top: area.top, width: trayLength, height: depth }
+            : { left: room.left + room.width + gap, top: area.top + (area.height - trayLength) / 2, width: depth, height: trayLength };
+        const cards = config.items.map((item, index) => {
+            const line = Math.floor(index / perLine);
+            const at = index % perLine;
+            return tall
+                ? { id: item.id, left: tray.left + at * (card + cardGap), top: tray.top + line * (card + cardGap), width: card, height: card }
+                : { id: item.id, left: tray.left + line * (card + cardGap), top: tray.top + at * (card + cardGap), width: card, height: card };
+        });
+        const spots = config.spots.map((spot) => {
+            const box = {
+                left: sheet.left + (spot.x / 100) * sheet.width,
+                top: sheet.top + (spot.y / 100) * sheet.height,
+                width: (spot.width / 100) * sheet.width,
+                height: (spot.height / 100) * sheet.height,
+            };
+            const pin = Math.max(L.minPin, Math.min(L.maxPin, Math.min(box.width, box.height) * L.pinShare));
+            return { id: spot.id, ...box, pin: { left: box.left + box.width / 2 - pin / 2, top: box.top + box.height / 2 - pin / 2, width: pin, height: pin } };
+        });
+        // The cards big enough to carry first, then the map as big as it goes.
+        const score = Math.min(card, L.minCard) * 1000 + Math.min(sheet.width, sheet.height) + card * 0.5;
+        if (!best || score > best.score + 1e-9) {
+            best = { score, layout: { sheet, spots, tray, cards } };
+        }
+    }
+    return best ? best.layout : null;
+}
+/**
+ * The spot a card let go at (`x`, `y`, on the stage) lands on: the one whose
+ * pin's middle is nearest, within its place's box grown to `minHit`; null over
+ * nothing.
+ */
+export function mapPlaceSpotAt(layout, x, y) {
+    const reach = MAP_PLACE_LAYOUT.minHit / 2;
+    let best = null;
+    for (const spot of layout.spots) {
+        const middleX = spot.left + spot.width / 2;
+        const middleY = spot.top + spot.height / 2;
+        const inside = Math.abs(x - middleX) <= Math.max(spot.width / 2, reach) && Math.abs(y - middleY) <= Math.max(spot.height / 2, reach);
+        const distance = Math.hypot(x - middleX, y - middleY);
+        if (inside && (!best || distance < best.distance)) {
+            best = { id: spot.id, distance };
+        }
+    }
+    return best ? best.id : null;
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -7651,6 +7850,7 @@ export const GAME_KIND_KEYS = {
     "grid-route": "gridRoute",
     "chart-read": "chartRead",
     "find-in-scene": "findInScene",
+    "map-place": "mapPlace",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -7685,6 +7885,7 @@ export const GAME_TIMINGS_BY_KIND = {
     "grid-route": GAME_TIMINGS.gridRoute,
     "chart-read": GAME_TIMINGS.chartRead,
     "find-in-scene": GAME_TIMINGS.findInScene,
+    "map-place": GAME_TIMINGS.mapPlace,
     "memory-cards": GAME_TIMINGS.memoryCards,
     "pattern-next": GAME_TIMINGS.patternNext,
     "select-option": GAME_TIMINGS.selectOption,
@@ -7725,6 +7926,7 @@ export const GAME_GESTURES = {
     "grid-route": "tap",
     "chart-read": "tap",
     "find-in-scene": "tap",
+    "map-place": "drag",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",
