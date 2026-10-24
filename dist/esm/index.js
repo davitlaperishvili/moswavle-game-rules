@@ -7114,8 +7114,9 @@ export function layoutGridRoute(stageWidth, stageHeight, config, insets = {}) {
 // A chart the game draws: two to five bars, each with a library picture under
 // it (apples, pears, plums picked). Bars: a coloured column against a numbered
 // scale. Pictures: the picture itself stacked as many times as it counts — a
-// pictograph. One to three questions are asked in turn on a card beside it,
-// in words of the game's language with the bars' pictures among them: which
+// pictograph, two abreast where that makes them bigger. One to three questions
+// are asked in turn on a card beside it, in words of the game's language with
+// the bars' pictures among them: which
 // is the most, which the fewest (a tap on its bar), how many of one, how many
 // more of one than of another (a tap on a number). A wrong answer costs a life
 // and the question stays.
@@ -7327,14 +7328,24 @@ export function layoutChartRead(stageWidth, stageHeight, config, index, insets =
             return { value, y, label: { left: inner.left, top: y - scaleLine / 2, width: scaleWidth, height: scaleLine } };
         })
         : [];
-    const unit = config.style === "pictures" ? Math.min(slot * 0.8, plot.height / Math.max(1, ...config.bars.map((bar) => bar.value))) : 0;
+    // A pictograph stacks its pictures one above the other, or two abreast where that makes them bigger.
+    const tallest = Math.max(1, ...config.bars.map((bar) => bar.value));
+    const single = Math.min(slot * 0.8, plot.height / tallest);
+    const paired = Math.min((slot * 0.8) / 2, plot.height / Math.ceil(tallest / 2));
+    const abreast = config.style === "pictures" && paired > single * 1.15 ? 2 : 1;
+    const unit = config.style === "pictures" ? (abreast === 2 ? paired : single) : 0;
     const bars = config.bars.map((bar, at) => {
         const middle = plot.left + slot * (at + 0.5);
         const height = config.style === "bars" ? (bar.value / config.scaleMax) * plot.height : 0;
         return {
             column: config.style === "bars" ? { left: middle - (slot * L.barShare) / 2, top: floor - height, width: slot * L.barShare, height } : null,
             units: config.style === "pictures"
-                ? Array.from({ length: bar.value }, (_unused, step) => ({ left: middle - unit * 0.46, top: floor - (step + 1) * unit + unit * 0.04, width: unit * 0.92, height: unit * 0.92 }))
+                ? Array.from({ length: bar.value }, (_unused, step) => ({
+                    left: middle - (unit * abreast) / 2 + (step % abreast) * unit + unit * 0.04,
+                    top: floor - (Math.floor(step / abreast) + 1) * unit + unit * 0.04,
+                    width: unit * 0.92,
+                    height: unit * 0.92,
+                }))
                 : [],
             icon: { left: middle - icon / 2, top: floor + gap / 2, width: icon, height: icon },
             zone: { left: plot.left + slot * at, top: plot.top, width: slot, height: plot.height + gap / 2 + icon },
