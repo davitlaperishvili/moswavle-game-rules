@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1365,6 +1365,17 @@ export declare const GAME_TIMINGS: {
         readonly wrongFeedbackMs: 520;
         readonly stepMs: 220;
         readonly successSettleMs: 800;
+        readonly livesOutDelayMs: 320;
+    };
+    /**
+     * A wrong bar or number shakes for `wrongFeedbackMs` and the question stays;
+     * a right one shows for `nextQuestionMs` before the next, and the last for
+     * `successSettleMs`.
+     */
+    readonly chartRead: {
+        readonly wrongFeedbackMs: 560;
+        readonly nextQuestionMs: 700;
+        readonly successSettleMs: 700;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -3124,6 +3135,172 @@ export declare function gridRouteCellRect(layout: Pick<GridRouteLayout, "grid" |
  * the other (follow). Inside the stage less `insets`.
  */
 export declare function layoutGridRoute(stageWidth: number, stageHeight: number, config: Pick<GridRouteConfig, "mode" | "columns" | "rows" | "goal" | "route">, insets?: SceneInsets): GridRouteLayout | null;
+export declare const CHART_READ_SIZE: {
+    readonly minBars: 2;
+    readonly maxBars: 5;
+    readonly maxValue: 20;
+    readonly maxPictures: 10;
+    readonly maxQuestions: 3;
+};
+/** The bars' colours, in turn: a toy's own, the same in both players. */
+export declare const CHART_BAR_COLORS: readonly ["#ff9f43", "#28bbf9", "#34d399", "#f472b6", "#a78bfa"];
+/** The questions as each language says them; {a} and {b} are the bars' pictures. */
+export declare const CHART_WORDS: {
+    readonly ka: {
+        readonly most: "რომელი არის ყველაზე მეტი?";
+        readonly least: "რომელი არის ყველაზე ცოტა?";
+        readonly count: "რამდენია {a}?";
+        readonly difference: "რამდენით მეტია {a}, ვიდრე {b}?";
+    };
+    readonly ru: {
+        readonly most: "Чего больше всего?";
+        readonly least: "Чего меньше всего?";
+        readonly count: "Сколько {a}?";
+        readonly difference: "На сколько {a} больше, чем {b}?";
+    };
+    readonly en: {
+        readonly most: "Which is the most?";
+        readonly least: "Which is the fewest?";
+        readonly count: "How many {a}?";
+        readonly difference: "How many more {a} than {b}?";
+    };
+};
+export type ChartAsk = "most" | "least" | "count" | "difference";
+export type ChartBar = {
+    id: string;
+    image: string;
+    value: number;
+    color: string;
+};
+export type ChartQuestion = {
+    id: string;
+    ask: ChartAsk;
+    /** count, difference: the bar asked about; difference: `other`, the one it is compared with. From 0. */
+    bar: number | null;
+    other: number | null;
+    /** most, least: the bar to tap. count, difference: the number. */
+    answer: number;
+    /** count, difference: the numbers to choose from, smallest first. Empty where a bar is tapped. */
+    options: number[];
+};
+export type ChartReadConfig = {
+    style: "bars" | "pictures";
+    /** Empty when the game is none. */
+    bars: ChartBar[];
+    /** Bars: the top of the scale, and a number every `scaleStep`. */
+    scaleMax: number;
+    scaleStep: number;
+    /** In the order they are asked. */
+    questions: ChartQuestion[];
+    /** The language the questions are said in. */
+    language: string;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    imageUris: string[];
+};
+/** Whether the question is answered by a tap on a bar (rather than on a number). */
+export declare function chartQuestionTakesBar(question: Pick<ChartQuestion, "ask">): boolean;
+/**
+ * The game as the players draw it. `bars` are { image, value }: a whole
+ * number from 0 (to 20 in bars, 10 in pictures). `questions` are { ask, bar,
+ * other } — `bar` and `other` counted from 0. A "most" or "least" whose top
+ * or bottom two bars tie, a bar that is none, or a "difference" whose bar is
+ * not the bigger, is left out; fewer than two bars or no question is no game.
+ */
+export declare function normalizeChartReadConfig(config: Record<string, unknown>): ChartReadConfig;
+export type ChartReadTapResult = 
+/** Every question is answered already, or the tap is none of this question's. */
+{
+    type: "ignored";
+}
+/** The answer is right; `complete` when the question was the last. */
+ | {
+    type: "right";
+    complete: boolean;
+}
+/** It is not: a mistake, and the question stays. */
+ | {
+    type: "wrong";
+};
+/**
+ * What a tap does at the question `index`: `pick` is the bar tapped (from 0)
+ * where a bar is asked, the number tapped where a number is.
+ */
+export declare function resolveChartReadTap(config: Pick<ChartReadConfig, "questions" | "bars">, index: number, pick: number): ChartReadTapResult;
+/** A piece of a question as it is set on its card: a word, or a bar's picture. */
+export type ChartQuestionPiece = {
+    text: string;
+    bar?: undefined;
+} | {
+    bar: number;
+    text?: undefined;
+};
+/**
+ * The question in the game's language, Georgian where it has none, cut into
+ * its words and pictures; `glued` marks a piece that follows the one before
+ * with no space ("?" after a picture).
+ */
+export declare function chartQuestionPieces(question: Pick<ChartQuestion, "ask" | "bar" | "other">, language: string): Array<ChartQuestionPiece & {
+    glued: boolean;
+}>;
+/** Proportions of the chart game. */
+export declare const CHART_READ_LAYOUT: {
+    /** The chart's share of the width on a wide stage, of the height on a tall one. */
+    readonly chartShare: 0.58;
+    /** The pictures under the bars: of the chart's height at most, and in px. */
+    readonly iconShare: 0.17;
+    readonly maxIcon: 72;
+    /** A bar's column, of its slot's width. */
+    readonly barShare: 0.62;
+    /** A number of the scale: this tall within these, and its box this many heights wide. */
+    readonly minScaleLine: 12;
+    readonly maxScaleLine: 26;
+    readonly scaleUnits: 1.9;
+    /** The question's line, in px at most; a picture in it is this many lines wide. */
+    readonly maxCardLine: 44;
+    readonly pieceIcon: 1.3;
+    /** A number to tap: no smaller than this, no bigger than that, this wide for its height. */
+    readonly minOption: 48;
+    readonly maxOption: 92;
+    readonly optionAspect: 1.4;
+};
+export type ChartReadBarLayout = {
+    /** Bars: the coloured column (0 tall for 0). Pictures: null. */
+    column: BoardRect | null;
+    /** Pictures: one box a unit, from the bottom up. Bars: empty. */
+    units: BoardRect[];
+    /** The bar's picture under it. */
+    icon: BoardRect;
+    /** Where a tap picks the bar: its slot, from the top of the plot to under its picture. */
+    zone: BoardRect;
+};
+export type ChartReadLayout = {
+    /** The chart's panel, and where the bars stand on its floor. */
+    chart: BoardRect;
+    plot: BoardRect;
+    /** Bars: the numbers of the scale and the height of each line. Pictures: empty. */
+    scale: Array<{
+        value: number;
+        y: number;
+        label: BoardRect;
+    }>;
+    bars: ChartReadBarLayout[];
+    /** The question's card and its words and pictures. */
+    card: BoardRect;
+    pieces: Array<ChartQuestionPiece & BoardRect>;
+    /** The numbers to tap, where a number is asked. */
+    options: Array<BoardRect & {
+        value: number;
+    }>;
+};
+/**
+ * Where everything of the question `index` goes. The background covers the
+ * stage; the chart stands on a panel at the left (on top of a tall stage), the
+ * question's card and the numbers to tap beside it. The chart and the card's
+ * room are the same for every question, so nothing moves as they change.
+ */
+export declare function layoutChartRead(stageWidth: number, stageHeight: number, config: Pick<ChartReadConfig, "style" | "bars" | "scaleMax" | "scaleStep" | "questions" | "language">, index: number, insets?: SceneInsets): ChartReadLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -3255,6 +3432,13 @@ export type GridRouteMetrics = BaseGameMetrics & {
     shortest: number;
     livesRemaining: number;
 };
+export type ChartReadMetrics = BaseGameMetrics & {
+    style: "bars" | "pictures";
+    /** Questions asked, and how many were answered right at the first tap. */
+    questions: number;
+    firstTry: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -3328,6 +3512,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "number-line": "numberLine";
     readonly "true-false": "trueFalse";
     readonly "grid-route": "gridRoute";
+    readonly "chart-read": "chartRead";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -3372,6 +3557,7 @@ export declare const GAME_GESTURES: {
     readonly "number-line": "tap";
     readonly "true-false": "tap";
     readonly "grid-route": "tap";
+    readonly "chart-read": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -3442,6 +3628,7 @@ export type GameMetricsByKind = {
     "number-line": NumberLineMetrics;
     "true-false": TrueFalseMetrics;
     "grid-route": GridRouteMetrics;
+    "chart-read": ChartReadMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

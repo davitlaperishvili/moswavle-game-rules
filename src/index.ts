@@ -80,6 +80,7 @@ export type RuntimeGameKind =
   | "number-line"
   | "true-false"
   | "grid-route"
+  | "chart-read"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -1502,6 +1503,17 @@ export function resolveGameKind(
     "follow_route",
   ].includes(normalizedType)) {
     return "grid-route";
+  }
+
+  if ([
+    "chart_read",
+    "chartread",
+    "bar_chart",
+    "pictograph",
+    "read_chart",
+    "chart",
+  ].includes(normalizedType)) {
+    return "chart-read";
   }
 
   if ([
@@ -4640,6 +4652,12 @@ export const GAME_TIMINGS = {
    * in follow mode, the game waits `successSettleMs`.
    */
   gridRoute: { wrongFeedbackMs: 520, stepMs: 220, successSettleMs: 800, livesOutDelayMs: 320 },
+  /**
+   * A wrong bar or number shakes for `wrongFeedbackMs` and the question stays;
+   * a right one shows for `nextQuestionMs` before the next, and the last for
+   * `successSettleMs`.
+   */
+  chartRead: { wrongFeedbackMs: 560, nextQuestionMs: 700, successSettleMs: 700, livesOutDelayMs: 320 },
   mathEquation: {
     wrongFeedbackMs: 560,
     flyMs: 620,
@@ -9984,6 +10002,403 @@ export function layoutGridRoute(
   return (best as { score: number; layout: GridRouteLayout } | null)?.layout ?? null;
 }
 
+// --- chart_read: a chart read, and questions about it ---------------------------
+//
+// A chart the game draws: two to five bars, each with a library picture under
+// it (apples, pears, plums picked). Bars: a coloured column against a numbered
+// scale. Pictures: the picture itself stacked as many times as it counts — a
+// pictograph. One to three questions are asked in turn on a card beside it,
+// in words of the game's language with the bars' pictures among them: which
+// is the most, which the fewest (a tap on its bar), how many of one, how many
+// more of one than of another (a tap on a number). A wrong answer costs a life
+// and the question stays.
+
+export const CHART_READ_SIZE = { minBars: 2, maxBars: 5, maxValue: 20, maxPictures: 10, maxQuestions: 3 } as const;
+
+/** The bars' colours, in turn: a toy's own, the same in both players. */
+export const CHART_BAR_COLORS = ["#ff9f43", "#28bbf9", "#34d399", "#f472b6", "#a78bfa"] as const;
+
+/** The questions as each language says them; {a} and {b} are the bars' pictures. */
+export const CHART_WORDS = {
+  ka: { most: "რომელი არის ყველაზე მეტი?", least: "რომელი არის ყველაზე ცოტა?", count: "რამდენია {a}?", difference: "რამდენით მეტია {a}, ვიდრე {b}?" },
+  ru: { most: "Чего больше всего?", least: "Чего меньше всего?", count: "Сколько {a}?", difference: "На сколько {a} больше, чем {b}?" },
+  en: { most: "Which is the most?", least: "Which is the fewest?", count: "How many {a}?", difference: "How many more {a} than {b}?" },
+} as const;
+
+export type ChartAsk = "most" | "least" | "count" | "difference";
+
+export type ChartBar = {
+  id: string;
+  image: string;
+  value: number;
+  color: string;
+};
+
+export type ChartQuestion = {
+  id: string;
+  ask: ChartAsk;
+  /** count, difference: the bar asked about; difference: `other`, the one it is compared with. From 0. */
+  bar: number | null;
+  other: number | null;
+  /** most, least: the bar to tap. count, difference: the number. */
+  answer: number;
+  /** count, difference: the numbers to choose from, smallest first. Empty where a bar is tapped. */
+  options: number[];
+};
+
+export type ChartReadConfig = {
+  style: "bars" | "pictures";
+  /** Empty when the game is none. */
+  bars: ChartBar[];
+  /** Bars: the top of the scale, and a number every `scaleStep`. */
+  scaleMax: number;
+  scaleStep: number;
+  /** In the order they are asked. */
+  questions: ChartQuestion[];
+  /** The language the questions are said in. */
+  language: string;
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+  imageUris: string[];
+};
+
+/** Whether the question is answered by a tap on a bar (rather than on a number). */
+export function chartQuestionTakesBar(question: Pick<ChartQuestion, "ask">): boolean {
+  return question.ask === "most" || question.ask === "least";
+}
+
+/**
+ * The numbers a child who misreads would pick: one off either way first, then
+ * the other numbers of the question; three of them, none below 0.
+ */
+function chartConfusions(answer: number, near: number[]): number[] {
+  const pool = [answer + 1, answer - 1, ...near, answer + 2, answer - 2, answer + 3];
+  const picked: number[] = [];
+  for (const value of pool) {
+    if (value >= 0 && value !== answer && !picked.includes(value) && picked.length < 3) {
+      picked.push(value);
+    }
+  }
+  return [answer, ...picked].sort((a, b) => a - b);
+}
+
+/**
+ * The game as the players draw it. `bars` are { image, value }: a whole
+ * number from 0 (to 20 in bars, 10 in pictures). `questions` are { ask, bar,
+ * other } — `bar` and `other` counted from 0. A "most" or "least" whose top
+ * or bottom two bars tie, a bar that is none, or a "difference" whose bar is
+ * not the bigger, is left out; fewer than two bars or no question is no game.
+ */
+export function normalizeChartReadConfig(config: Record<string, unknown>): ChartReadConfig {
+  const bg = normalizeBackground(config);
+  const style = extractText(config.style) === "pictures" ? "pictures" : "bars";
+  const most = style === "pictures" ? CHART_READ_SIZE.maxPictures : CHART_READ_SIZE.maxValue;
+  const bars = (Array.isArray(config.bars) ? config.bars : [])
+    .map((row) => asRecord(row))
+    .map((row) => ({ image: extractMediaUrl(row?.image), value: extractNumber(row?.value) }))
+    .filter((row): row is { image: string; value: number } => Boolean(row.image) && row.value !== null && Number.isInteger(row.value) && row.value >= 0 && row.value <= most)
+    .slice(0, CHART_READ_SIZE.maxBars)
+    .map((row, index) => ({ id: `bar_${index + 1}`, image: row.image, value: row.value, color: CHART_BAR_COLORS[index % CHART_BAR_COLORS.length] }));
+  const values = bars.map((bar) => bar.value);
+  const top = Math.max(0, ...values);
+  const asked = extractNumber(config.scale_step);
+  const scaleStep = asked !== null && Number.isInteger(asked) && asked >= 1 && asked <= 10 ? asked : top <= 10 ? 1 : 2;
+  const scaleMax = Math.max(scaleStep, Math.ceil(top / scaleStep) * scaleStep);
+  const barAt = (value: unknown): number | null => {
+    const index = extractNumber(value);
+    return index !== null && Number.isInteger(index) && index >= 0 && index < bars.length ? index : null;
+  };
+  const only = (target: number): number | null => (values.filter((value) => value === target).length === 1 ? values.indexOf(target) : null);
+
+  const questions: ChartQuestion[] = [];
+  for (const row of Array.isArray(config.questions) ? config.questions : []) {
+    const record = asRecord(row);
+    const ask = extractText(record?.ask);
+    let question: Omit<ChartQuestion, "id"> | null = null;
+    if (ask === "most" || ask === "least") {
+      const answer = only(ask === "most" ? Math.max(...values) : Math.min(...values));
+      question = answer === null ? null : { ask, bar: null, other: null, answer, options: [] };
+    } else if (ask === "count") {
+      const bar = barAt(record?.bar);
+      question = bar === null ? null : {
+        ask, bar, other: null, answer: values[bar], options: chartConfusions(values[bar], values.filter((_value, index) => index !== bar)),
+      };
+    } else if (ask === "difference") {
+      const bar = barAt(record?.bar);
+      const other = barAt(record?.other);
+      question = bar === null || other === null || values[bar] <= values[other] ? null : {
+        ask, bar, other, answer: values[bar] - values[other], options: chartConfusions(values[bar] - values[other], [values[bar], values[other]]),
+      };
+    }
+    if (question && questions.length < CHART_READ_SIZE.maxQuestions) {
+      questions.push({ id: `question_${questions.length + 1}`, ...question });
+    }
+  }
+
+  const playable = bars.length >= CHART_READ_SIZE.minBars && questions.length > 0;
+
+  return {
+    style,
+    bars: playable ? bars : [],
+    scaleMax,
+    scaleStep,
+    questions: playable ? questions : [],
+    language: extractText(config.language) ?? "ka",
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    imageUris: [...new Set([bg, ...(playable ? bars : []).map((bar) => bar.image)].filter((uri): uri is string => Boolean(uri)))],
+  };
+}
+
+export type ChartReadTapResult =
+  /** Every question is answered already, or the tap is none of this question's. */
+  | { type: "ignored" }
+  /** The answer is right; `complete` when the question was the last. */
+  | { type: "right"; complete: boolean }
+  /** It is not: a mistake, and the question stays. */
+  | { type: "wrong" };
+
+/**
+ * What a tap does at the question `index`: `pick` is the bar tapped (from 0)
+ * where a bar is asked, the number tapped where a number is.
+ */
+export function resolveChartReadTap(config: Pick<ChartReadConfig, "questions" | "bars">, index: number, pick: number): ChartReadTapResult {
+  const question = config.questions[index];
+  if (!question) {
+    return { type: "ignored" };
+  }
+  const fits = chartQuestionTakesBar(question) ? pick >= 0 && pick < config.bars.length : question.options.includes(pick);
+  if (!fits) {
+    return { type: "ignored" };
+  }
+  return pick === question.answer ? { type: "right", complete: index + 1 === config.questions.length } : { type: "wrong" };
+}
+
+/** A piece of a question as it is set on its card: a word, or a bar's picture. */
+export type ChartQuestionPiece = { text: string; bar?: undefined } | { bar: number; text?: undefined };
+
+/**
+ * The question in the game's language, Georgian where it has none, cut into
+ * its words and pictures; `glued` marks a piece that follows the one before
+ * with no space ("?" after a picture).
+ */
+export function chartQuestionPieces(question: Pick<ChartQuestion, "ask" | "bar" | "other">, language: string): Array<ChartQuestionPiece & { glued: boolean }> {
+  const words = CHART_WORDS[(language in CHART_WORDS ? language : "ka") as keyof typeof CHART_WORDS];
+  const pieces: Array<ChartQuestionPiece & { glued: boolean }> = [];
+  for (const part of words[question.ask].split(/(\{a\}|\{b\})/)) {
+    if (part === "{a}" || part === "{b}") {
+      pieces.push({ bar: (part === "{a}" ? question.bar : question.other) ?? 0, glued: false });
+      continue;
+    }
+    part.split(/(\s+)/).forEach((word, at) => {
+      if (word.trim() === "") return;
+      pieces.push({ text: word, glued: at === 0 && pieces.length > 0 });
+    });
+  }
+  return pieces;
+}
+
+/** Proportions of the chart game. */
+export const CHART_READ_LAYOUT = {
+  /** The chart's share of the width on a wide stage, of the height on a tall one. */
+  chartShare: 0.58,
+  /** The pictures under the bars: of the chart's height at most, and in px. */
+  iconShare: 0.17,
+  maxIcon: 72,
+  /** A bar's column, of its slot's width. */
+  barShare: 0.62,
+  /** A number of the scale: this tall within these, and its box this many heights wide. */
+  minScaleLine: 12,
+  maxScaleLine: 26,
+  scaleUnits: 1.9,
+  /** The question's line, in px at most; a picture in it is this many lines wide. */
+  maxCardLine: 44,
+  pieceIcon: 1.3,
+  /** A number to tap: no smaller than this, no bigger than that, this wide for its height. */
+  minOption: 48,
+  maxOption: 92,
+  optionAspect: 1.4,
+} as const;
+
+export type ChartReadBarLayout = {
+  /** Bars: the coloured column (0 tall for 0). Pictures: null. */
+  column: BoardRect | null;
+  /** Pictures: one box a unit, from the bottom up. Bars: empty. */
+  units: BoardRect[];
+  /** The bar's picture under it. */
+  icon: BoardRect;
+  /** Where a tap picks the bar: its slot, from the top of the plot to under its picture. */
+  zone: BoardRect;
+};
+
+export type ChartReadLayout = {
+  /** The chart's panel, and where the bars stand on its floor. */
+  chart: BoardRect;
+  plot: BoardRect;
+  /** Bars: the numbers of the scale and the height of each line. Pictures: empty. */
+  scale: Array<{ value: number; y: number; label: BoardRect }>;
+  bars: ChartReadBarLayout[];
+  /** The question's card and its words and pictures. */
+  card: BoardRect;
+  pieces: Array<ChartQuestionPiece & BoardRect>;
+  /** The numbers to tap, where a number is asked. */
+  options: Array<BoardRect & { value: number }>;
+};
+
+/**
+ * Where everything of the question `index` goes. The background covers the
+ * stage; the chart stands on a panel at the left (on top of a tall stage), the
+ * question's card and the numbers to tap beside it. The chart and the card's
+ * room are the same for every question, so nothing moves as they change.
+ */
+export function layoutChartRead(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<ChartReadConfig, "style" | "bars" | "scaleMax" | "scaleStep" | "questions" | "language">,
+  index: number,
+  insets: SceneInsets = {},
+): ChartReadLayout | null {
+  const L = CHART_READ_LAYOUT;
+  const originX = insets.left ?? 0;
+  const originY = insets.top ?? 0;
+  const usableWidth = stageWidth - originX - (insets.right ?? 0);
+  const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+  const question = config.questions[Math.min(index, config.questions.length - 1)];
+
+  if (usableWidth <= 0 || usableHeight <= 0 || !question || config.bars.length === 0) {
+    return null;
+  }
+
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const gap = sceneGap(stageWidth, stageHeight);
+  const area: BoardRect = {
+    left: originX + edge,
+    top: originY + edge,
+    width: Math.max(usableWidth - edge * 2, 1),
+    height: Math.max(usableHeight - edge * 2, 1),
+  };
+  const tall = area.height > area.width;
+  const chart: BoardRect = tall
+    ? { left: area.left, top: area.top, width: area.width, height: area.height * L.chartShare - gap / 2 }
+    : { left: area.left, top: area.top, width: area.width * L.chartShare - gap / 2, height: area.height };
+  const column: BoardRect = tall
+    ? { left: area.left, top: chart.top + chart.height + gap, width: area.width, height: area.height - chart.height - gap }
+    : { left: chart.left + chart.width + gap, top: area.top, width: area.width - chart.width - gap, height: area.height };
+
+  // The chart: the scale at the left (bars), the pictures along the floor.
+  const pad = Math.max(gap / 2, Math.min(chart.width, chart.height) * 0.05);
+  const inner: BoardRect = { left: chart.left + pad, top: chart.top + pad, width: chart.width - pad * 2, height: chart.height - pad * 2 };
+  const count = config.bars.length;
+  const lines = config.scaleMax / config.scaleStep + 1;
+  const scaleLine = config.style === "bars"
+    ? Math.max(L.minScaleLine, Math.min(L.maxScaleLine, (inner.height * (1 - L.iconShare)) / lines * 0.8))
+    : 0;
+  const scaleWidth = config.style === "bars" ? scaleLine * L.scaleUnits : 0;
+  const slotRoom = inner.width - scaleWidth - (scaleWidth > 0 ? gap / 3 : 0);
+  const slot = slotRoom / count;
+  const icon = Math.min(L.maxIcon, inner.height * L.iconShare, slot * 0.8);
+  const plot: BoardRect = {
+    left: inner.left + inner.width - slotRoom,
+    top: inner.top + scaleLine / 2,
+    width: slotRoom,
+    height: Math.max(inner.height - icon - gap / 2 - scaleLine / 2, 1),
+  };
+  const floor = plot.top + plot.height;
+  const scale = config.style === "bars"
+    ? Array.from({ length: lines }, (_unused, line) => {
+      const value = line * config.scaleStep;
+      const y = floor - (value / config.scaleMax) * plot.height;
+      return { value, y, label: { left: inner.left, top: y - scaleLine / 2, width: scaleWidth, height: scaleLine } };
+    })
+    : [];
+  const unit = config.style === "pictures" ? Math.min(slot * 0.8, plot.height / Math.max(1, ...config.bars.map((bar) => bar.value))) : 0;
+  const bars = config.bars.map((bar, at): ChartReadBarLayout => {
+    const middle = plot.left + slot * (at + 0.5);
+    const height = config.style === "bars" ? (bar.value / config.scaleMax) * plot.height : 0;
+    return {
+      column: config.style === "bars" ? { left: middle - (slot * L.barShare) / 2, top: floor - height, width: slot * L.barShare, height } : null,
+      units: config.style === "pictures"
+        ? Array.from({ length: bar.value }, (_unused, step) => ({ left: middle - unit * 0.46, top: floor - (step + 1) * unit + unit * 0.04, width: unit * 0.92, height: unit * 0.92 }))
+        : [],
+      icon: { left: middle - icon / 2, top: floor + gap / 2, width: icon, height: icon },
+      zone: { left: plot.left + slot * at, top: plot.top, width: slot, height: plot.height + gap / 2 + icon },
+    };
+  });
+
+  // The numbers to tap, two in a row under the card, where any question asks one.
+  const asksNumbers = config.questions.some((item) => !chartQuestionTakesBar(item));
+  const optionHeight = asksNumbers
+    ? Math.max(L.minOption, Math.min(L.maxOption, (column.width - gap) / 2 / L.optionAspect, (column.height * 0.55 - gap) / 2))
+    : 0;
+  const optionWidth = optionHeight * L.optionAspect;
+  const optionsHeight = asksNumbers ? optionHeight * 2 + gap : 0;
+  const card: BoardRect = { left: column.left, top: column.top, width: column.width, height: Math.max(column.height - optionsHeight - (asksNumbers ? gap : 0), 1) };
+  const optionsTop = card.top + card.height + gap;
+  const options = question.options.map((value, at) => {
+    const row = Math.floor(at / 2);
+    const inRow = Math.min(2, question.options.length - row * 2);
+    const rowLeft = column.left + (column.width - (inRow * optionWidth + (inRow - 1) * gap)) / 2;
+    return { value, left: rowLeft + (at % 2) * (optionWidth + gap), top: optionsTop + row * (optionHeight + gap), width: optionWidth, height: optionHeight };
+  });
+
+  // The question set as big as it goes on its card, in rows, every row in the middle.
+  const pieces = chartQuestionPieces(question, config.language);
+  const room = { width: card.width * 0.9, height: card.height * 0.86 };
+  const widthOf = (piece: ChartQuestionPiece, size: number) => (piece.bar !== undefined ? size * L.pieceIcon : textLineUnits(piece.text) * size);
+  const set = (size: number) => {
+    const space = size * 0.22;
+    const rows: Array<Array<{ piece: ChartQuestionPiece; width: number; before: number }>> = [[]];
+    let used = 0;
+    for (const piece of pieces) {
+      const width = widthOf(piece, size);
+      const before = rows[rows.length - 1].length === 0 ? 0 : piece.glued ? 0 : space;
+      if (used + before + width > room.width && rows[rows.length - 1].length > 0 && !piece.glued) {
+        rows.push([{ piece, width, before: 0 }]);
+        used = width;
+      } else {
+        rows[rows.length - 1].push({ piece, width, before });
+        used += before + width;
+      }
+    }
+    return rows;
+  };
+  const fits = (size: number) => {
+    const rows = set(size);
+    const line = size * L.pieceIcon;
+    return rows.length * line <= room.height && rows.every((row) => row.reduce((sum, item) => sum + item.before + item.width, 0) <= room.width + 1e-6);
+  };
+  let size: number = L.maxCardLine;
+  if (!fits(size)) {
+    let low = 0;
+    let high: number = L.maxCardLine;
+    for (let step = 0; step < 24; step += 1) {
+      const middle = (low + high) / 2;
+      if (fits(middle)) low = middle;
+      else high = middle;
+    }
+    size = low;
+  }
+  const rows = set(size);
+  const line = size * L.pieceIcon;
+  const placed: ChartReadLayout["pieces"] = [];
+  rows.forEach((row, at) => {
+    const rowWidth = row.reduce((sum, item) => sum + item.before + item.width, 0);
+    let x = card.left + (card.width - rowWidth) / 2;
+    const y = card.top + (card.height - rows.length * line) / 2 + at * line;
+    for (const item of row) {
+      x += item.before;
+      placed.push(item.piece.bar !== undefined
+        ? { bar: item.piece.bar, left: x, top: y, width: item.width, height: line }
+        : { text: item.piece.text, left: x, top: y + (line - size) / 2, width: item.width, height: size });
+      x += item.width;
+    }
+  });
+
+  return { chart, plot, scale, bars, card, pieces: placed, options };
+}
+
 // --- Attempt metrics --------------------------------------------------------
 
 /**
@@ -10138,6 +10553,14 @@ export type GridRouteMetrics = BaseGameMetrics & {
   livesRemaining: number;
 };
 
+export type ChartReadMetrics = BaseGameMetrics & {
+  style: "bars" | "pictures";
+  /** Questions asked, and how many were answered right at the first tap. */
+  questions: number;
+  firstTry: number;
+  livesRemaining: number;
+};
+
 export type TextChoiceMetrics = BaseGameMetrics & {
   /** Right answers the game has, and how many of them were found. */
   correct: number;
@@ -10223,6 +10646,7 @@ export const GAME_KIND_KEYS = {
   "number-line": "numberLine",
   "true-false": "trueFalse",
   "grid-route": "gridRoute",
+  "chart-read": "chartRead",
   "memory-cards": "memoryCards",
   "pattern-next": "patternNext",
   "select-option": "selectOption",
@@ -10260,6 +10684,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "number-line": GAME_TIMINGS.numberLine,
   "true-false": GAME_TIMINGS.trueFalse,
   "grid-route": GAME_TIMINGS.gridRoute,
+  "chart-read": GAME_TIMINGS.chartRead,
   "memory-cards": GAME_TIMINGS.memoryCards,
   "pattern-next": GAME_TIMINGS.patternNext,
   "select-option": GAME_TIMINGS.selectOption,
@@ -10304,6 +10729,7 @@ export const GAME_GESTURES = {
   "number-line": "tap",
   "true-false": "tap",
   "grid-route": "tap",
+  "chart-read": "tap",
   "memory-cards": "tap",
   "pattern-next": "tap",
   "select-option": "tap",
@@ -10392,6 +10818,7 @@ export type GameMetricsByKind = {
   "number-line": NumberLineMetrics;
   "true-false": TrueFalseMetrics;
   "grid-route": GridRouteMetrics;
+  "chart-read": ChartReadMetrics;
   "memory-cards": MemoryCardsMetrics;
   "pattern-next": PatternNextMetrics;
   "select-option": SelectOptionMetrics;

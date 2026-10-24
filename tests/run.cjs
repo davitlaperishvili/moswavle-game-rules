@@ -2454,5 +2454,77 @@ section('grid_route: a hero steered across a grid, or a route followed');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.gridRoute.stepMs > 0 && rules.GAME_TIMINGS_BY_KIND['grid-route'] === rules.GAME_TIMINGS.gridRoute && rules.GAME_GESTURES['grid-route'] === 'tap');
 }
 
+section('chart_read: a chart read, and questions about it');
+
+{
+  ['chart_read', 'bar_chart', 'pictograph', 'Chart Read'].forEach((type) => {
+    check(`${type} resolves to chart-read`, rules.resolveGameKind(type, {}) === 'chart-read');
+  });
+
+  const fruit = [{ image: 'https://x/apple.webp', value: 7 }, { image: 'https://x/pear.webp', value: 4 }, { image: 'https://x/plum.webp', value: 9 }];
+  const config = rules.normalizeChartReadConfig({
+    bars: [...fruit, { image: '', value: 3 }, { image: 'https://x/x.webp', value: 2.5 }],
+    questions: [{ ask: 'most' }, { ask: 'count', bar: 1 }, { ask: 'difference', bar: 2, other: 1 }, { ask: 'least' }],
+    bg_image: 'https://x/bg.webp',
+    language: 'ru',
+  });
+  check('bars with a picture and a whole number; three questions at most', config.bars.length === 3 && config.bars[2].value === 9 && config.questions.length === 3
+    && config.bars[0].color !== config.bars[1].color && config.imageUris.length === 4);
+  check('the scale: a number every 1 to the top', config.scaleStep === 1 && config.scaleMax === 9
+    && rules.normalizeChartReadConfig({ bars: [{ image: 'a', value: 17 }, { image: 'b', value: 6 }], questions: [{ ask: 'most' }] }).scaleMax === 18
+    && rules.normalizeChartReadConfig({ bars: [{ image: 'a', value: 17 }, { image: 'b', value: 6 }], questions: [{ ask: 'most' }], scale_step: 5 }).scaleMax === 20);
+  const [most, count, difference] = config.questions;
+  check('the answers: the biggest bar, the count, the difference', most.answer === 2 && most.options.length === 0 && count.answer === 4 && difference.answer === 5);
+  check('the numbers to pick: four, smallest first, the right one among them', count.options.length === 4 && count.options.includes(4)
+    && count.options.every((value, index) => index === 0 || value > count.options[index - 1]) && difference.options.includes(5) && difference.options.every((value) => value >= 0));
+  check('no question: a tie on top, a bar that is none, a difference the wrong way round',
+    rules.normalizeChartReadConfig({ bars: [{ image: 'a', value: 5 }, { image: 'b', value: 5 }], questions: [{ ask: 'most' }] }).bars.length === 0
+      && rules.normalizeChartReadConfig({ bars: fruit, questions: [{ ask: 'count', bar: 3 }, { ask: 'difference', bar: 1, other: 0 }] }).questions.length === 0
+      && rules.normalizeChartReadConfig({ bars: [{ image: 'a', value: 12 }, { image: 'b', value: 5 }], style: 'pictures', questions: [{ ask: 'most' }] }).bars.length === 0);
+
+  const tap = rules.resolveChartReadTap;
+  check('a bar asked: the right bar, a wrong one, nothing else', tap(config, 0, 2).type === 'right' && tap(config, 0, 0).type === 'wrong' && tap(config, 0, 7).type === 'ignored');
+  check('a number asked: only its numbers count; the last right answer completes', tap(config, 1, 4).type === 'right' && tap(config, 1, count.options.find((v) => v !== 4)).type === 'wrong'
+    && tap(config, 1, 40).type === 'ignored' && tap(config, 2, 5).complete === true && tap(config, 3, 0).type === 'ignored');
+
+  const pieces = rules.chartQuestionPieces(difference, 'ru');
+  check('the question in its language, the pictures among the words', pieces.map((p) => p.bar !== undefined ? '#' + p.bar : p.text).join(' ') === 'На сколько #2 больше, чем #1 ?'
+    && pieces[pieces.length - 1].glued === true && rules.chartQuestionPieces(most, 'de')[0].text === 'რომელი');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const five = rules.normalizeChartReadConfig({ bars: [...fruit, { image: 'c', value: 20 }, { image: 'd', value: 13 }], questions: [{ ask: 'difference', bar: 3, other: 4 }, { ask: 'least' }], language: 'ka' });
+  const pictures = rules.normalizeChartReadConfig({ style: 'pictures', bars: fruit, questions: [{ ask: 'count', bar: 0 }, { ask: 'most' }], language: 'en' });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [1024, 768, {}], [667, 300, { top: 60 }], [600, 800, {}]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [config, five, pictures].forEach((game, which) => game.questions.forEach((question, index) => {
+    const layout = rules.layoutChartRead(w, h, game, index, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout && inside(layout.chart, stage) && inside(layout.card, stage) && !overlap(layout.chart, layout.card)
+      && layout.bars.every((bar) => inside(bar.icon, layout.chart) && (bar.column ? inside(bar.column, layout.plot) : true) && bar.units.every((u) => inside(u, layout.plot)))
+      && layout.bars.every((a, i) => layout.bars.every((b, j) => i === j || !overlap(a.zone, b.zone)))
+      && layout.scale.every((line) => inside(line.label, layout.chart))
+      && layout.pieces.length > 0 && layout.pieces.every((piece) => inside(piece, layout.card)) && layout.pieces.every((a, i) => layout.pieces.every((b, j) => i === j || !overlap(a, b)))
+      && layout.options.length === question.options.length
+      && layout.options.every((o) => inside(o, stage) && !overlap(o, layout.card) && !overlap(o, layout.chart) && o.height >= rules.CHART_READ_LAYOUT.minOption - 1e-6)
+      && layout.options.every((a, i) => layout.options.every((b, j) => i === j || !overlap(a, b)))
+      && layout.pieces.filter((p) => p.text !== undefined).every((p) => p.height >= 14);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} game ${which} question ${index}: ${JSON.stringify(layout)}`; }
+  })));
+  check('on every stage the chart, the card and the numbers are whole, apart, inside the safe area and readable', whole, detail);
+  const first = rules.layoutChartRead(852, 393, config, 0, {});
+  const second = rules.layoutChartRead(852, 393, config, 1, {});
+  check('the chart and the card stay put from question to question', JSON.stringify(first.chart) === JSON.stringify(second.chart) && JSON.stringify(first.card) === JSON.stringify(second.card));
+  check('the bars stand on one floor, as tall as they count', (() => {
+    const bars = first.bars.map((bar) => bar.column);
+    const floor = first.plot.top + first.plot.height;
+    return bars.every((bar) => Math.abs(bar.top + bar.height - floor) < 1e-6) && Math.abs(bars[2].height / bars[1].height - 9 / 4) < 1e-6;
+  })());
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.chartRead.nextQuestionMs > 0 && rules.GAME_TIMINGS_BY_KIND['chart-read'] === rules.GAME_TIMINGS.chartRead && rules.GAME_GESTURES['chart-read'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

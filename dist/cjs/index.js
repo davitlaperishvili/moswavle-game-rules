@@ -26,7 +26,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.CHART_READ_LAYOUT = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -165,6 +165,11 @@ exports.resolveGridRouteTap = resolveGridRouteTap;
 exports.gridRouteShortest = gridRouteShortest;
 exports.gridRouteCellRect = gridRouteCellRect;
 exports.layoutGridRoute = layoutGridRoute;
+exports.chartQuestionTakesBar = chartQuestionTakesBar;
+exports.normalizeChartReadConfig = normalizeChartReadConfig;
+exports.resolveChartReadTap = resolveChartReadTap;
+exports.chartQuestionPieces = chartQuestionPieces;
+exports.layoutChartRead = layoutChartRead;
 exports.gestureHintTapStops = gestureHintTapStops;
 exports.gestureHintDragEnd = gestureHintDragEnd;
 const letters_js_1 = require("./letters.js");
@@ -984,6 +989,16 @@ function resolveGameKind(type, config) {
         "follow_route",
     ].includes(normalizedType)) {
         return "grid-route";
+    }
+    if ([
+        "chart_read",
+        "chartread",
+        "bar_chart",
+        "pictograph",
+        "read_chart",
+        "chart",
+    ].includes(normalizedType)) {
+        return "chart-read";
     }
     if ([
         "memory_cards",
@@ -3283,6 +3298,12 @@ exports.GAME_TIMINGS = {
      * in follow mode, the game waits `successSettleMs`.
      */
     gridRoute: { wrongFeedbackMs: 520, stepMs: 220, successSettleMs: 800, livesOutDelayMs: 320 },
+    /**
+     * A wrong bar or number shakes for `wrongFeedbackMs` and the question stays;
+     * a right one shows for `nextQuestionMs` before the next, and the last for
+     * `successSettleMs`.
+     */
+    chartRead: { wrongFeedbackMs: 560, nextQuestionMs: 700, successSettleMs: 700, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -7251,6 +7272,309 @@ function layoutGridRoute(stageWidth, stageHeight, config, insets = {}) {
     });
     return best?.layout ?? null;
 }
+// --- chart_read: a chart read, and questions about it ---------------------------
+//
+// A chart the game draws: two to five bars, each with a library picture under
+// it (apples, pears, plums picked). Bars: a coloured column against a numbered
+// scale. Pictures: the picture itself stacked as many times as it counts — a
+// pictograph. One to three questions are asked in turn on a card beside it,
+// in words of the game's language with the bars' pictures among them: which
+// is the most, which the fewest (a tap on its bar), how many of one, how many
+// more of one than of another (a tap on a number). A wrong answer costs a life
+// and the question stays.
+exports.CHART_READ_SIZE = { minBars: 2, maxBars: 5, maxValue: 20, maxPictures: 10, maxQuestions: 3 };
+/** The bars' colours, in turn: a toy's own, the same in both players. */
+exports.CHART_BAR_COLORS = ["#ff9f43", "#28bbf9", "#34d399", "#f472b6", "#a78bfa"];
+/** The questions as each language says them; {a} and {b} are the bars' pictures. */
+exports.CHART_WORDS = {
+    ka: { most: "რომელი არის ყველაზე მეტი?", least: "რომელი არის ყველაზე ცოტა?", count: "რამდენია {a}?", difference: "რამდენით მეტია {a}, ვიდრე {b}?" },
+    ru: { most: "Чего больше всего?", least: "Чего меньше всего?", count: "Сколько {a}?", difference: "На сколько {a} больше, чем {b}?" },
+    en: { most: "Which is the most?", least: "Which is the fewest?", count: "How many {a}?", difference: "How many more {a} than {b}?" },
+};
+/** Whether the question is answered by a tap on a bar (rather than on a number). */
+function chartQuestionTakesBar(question) {
+    return question.ask === "most" || question.ask === "least";
+}
+/**
+ * The numbers a child who misreads would pick: one off either way first, then
+ * the other numbers of the question; three of them, none below 0.
+ */
+function chartConfusions(answer, near) {
+    const pool = [answer + 1, answer - 1, ...near, answer + 2, answer - 2, answer + 3];
+    const picked = [];
+    for (const value of pool) {
+        if (value >= 0 && value !== answer && !picked.includes(value) && picked.length < 3) {
+            picked.push(value);
+        }
+    }
+    return [answer, ...picked].sort((a, b) => a - b);
+}
+/**
+ * The game as the players draw it. `bars` are { image, value }: a whole
+ * number from 0 (to 20 in bars, 10 in pictures). `questions` are { ask, bar,
+ * other } — `bar` and `other` counted from 0. A "most" or "least" whose top
+ * or bottom two bars tie, a bar that is none, or a "difference" whose bar is
+ * not the bigger, is left out; fewer than two bars or no question is no game.
+ */
+function normalizeChartReadConfig(config) {
+    const bg = normalizeBackground(config);
+    const style = extractText(config.style) === "pictures" ? "pictures" : "bars";
+    const most = style === "pictures" ? exports.CHART_READ_SIZE.maxPictures : exports.CHART_READ_SIZE.maxValue;
+    const bars = (Array.isArray(config.bars) ? config.bars : [])
+        .map((row) => asRecord(row))
+        .map((row) => ({ image: extractMediaUrl(row?.image), value: extractNumber(row?.value) }))
+        .filter((row) => Boolean(row.image) && row.value !== null && Number.isInteger(row.value) && row.value >= 0 && row.value <= most)
+        .slice(0, exports.CHART_READ_SIZE.maxBars)
+        .map((row, index) => ({ id: `bar_${index + 1}`, image: row.image, value: row.value, color: exports.CHART_BAR_COLORS[index % exports.CHART_BAR_COLORS.length] }));
+    const values = bars.map((bar) => bar.value);
+    const top = Math.max(0, ...values);
+    const asked = extractNumber(config.scale_step);
+    const scaleStep = asked !== null && Number.isInteger(asked) && asked >= 1 && asked <= 10 ? asked : top <= 10 ? 1 : 2;
+    const scaleMax = Math.max(scaleStep, Math.ceil(top / scaleStep) * scaleStep);
+    const barAt = (value) => {
+        const index = extractNumber(value);
+        return index !== null && Number.isInteger(index) && index >= 0 && index < bars.length ? index : null;
+    };
+    const only = (target) => (values.filter((value) => value === target).length === 1 ? values.indexOf(target) : null);
+    const questions = [];
+    for (const row of Array.isArray(config.questions) ? config.questions : []) {
+        const record = asRecord(row);
+        const ask = extractText(record?.ask);
+        let question = null;
+        if (ask === "most" || ask === "least") {
+            const answer = only(ask === "most" ? Math.max(...values) : Math.min(...values));
+            question = answer === null ? null : { ask, bar: null, other: null, answer, options: [] };
+        }
+        else if (ask === "count") {
+            const bar = barAt(record?.bar);
+            question = bar === null ? null : {
+                ask, bar, other: null, answer: values[bar], options: chartConfusions(values[bar], values.filter((_value, index) => index !== bar)),
+            };
+        }
+        else if (ask === "difference") {
+            const bar = barAt(record?.bar);
+            const other = barAt(record?.other);
+            question = bar === null || other === null || values[bar] <= values[other] ? null : {
+                ask, bar, other, answer: values[bar] - values[other], options: chartConfusions(values[bar] - values[other], [values[bar], values[other]]),
+            };
+        }
+        if (question && questions.length < exports.CHART_READ_SIZE.maxQuestions) {
+            questions.push({ id: `question_${questions.length + 1}`, ...question });
+        }
+    }
+    const playable = bars.length >= exports.CHART_READ_SIZE.minBars && questions.length > 0;
+    return {
+        style,
+        bars: playable ? bars : [],
+        scaleMax,
+        scaleStep,
+        questions: playable ? questions : [],
+        language: extractText(config.language) ?? "ka",
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [...new Set([bg, ...(playable ? bars : []).map((bar) => bar.image)].filter((uri) => Boolean(uri)))],
+    };
+}
+/**
+ * What a tap does at the question `index`: `pick` is the bar tapped (from 0)
+ * where a bar is asked, the number tapped where a number is.
+ */
+function resolveChartReadTap(config, index, pick) {
+    const question = config.questions[index];
+    if (!question) {
+        return { type: "ignored" };
+    }
+    const fits = chartQuestionTakesBar(question) ? pick >= 0 && pick < config.bars.length : question.options.includes(pick);
+    if (!fits) {
+        return { type: "ignored" };
+    }
+    return pick === question.answer ? { type: "right", complete: index + 1 === config.questions.length } : { type: "wrong" };
+}
+/**
+ * The question in the game's language, Georgian where it has none, cut into
+ * its words and pictures; `glued` marks a piece that follows the one before
+ * with no space ("?" after a picture).
+ */
+function chartQuestionPieces(question, language) {
+    const words = exports.CHART_WORDS[(language in exports.CHART_WORDS ? language : "ka")];
+    const pieces = [];
+    for (const part of words[question.ask].split(/(\{a\}|\{b\})/)) {
+        if (part === "{a}" || part === "{b}") {
+            pieces.push({ bar: (part === "{a}" ? question.bar : question.other) ?? 0, glued: false });
+            continue;
+        }
+        part.split(/(\s+)/).forEach((word, at) => {
+            if (word.trim() === "")
+                return;
+            pieces.push({ text: word, glued: at === 0 && pieces.length > 0 });
+        });
+    }
+    return pieces;
+}
+/** Proportions of the chart game. */
+exports.CHART_READ_LAYOUT = {
+    /** The chart's share of the width on a wide stage, of the height on a tall one. */
+    chartShare: 0.58,
+    /** The pictures under the bars: of the chart's height at most, and in px. */
+    iconShare: 0.17,
+    maxIcon: 72,
+    /** A bar's column, of its slot's width. */
+    barShare: 0.62,
+    /** A number of the scale: this tall within these, and its box this many heights wide. */
+    minScaleLine: 12,
+    maxScaleLine: 26,
+    scaleUnits: 1.9,
+    /** The question's line, in px at most; a picture in it is this many lines wide. */
+    maxCardLine: 44,
+    pieceIcon: 1.3,
+    /** A number to tap: no smaller than this, no bigger than that, this wide for its height. */
+    minOption: 48,
+    maxOption: 92,
+    optionAspect: 1.4,
+};
+/**
+ * Where everything of the question `index` goes. The background covers the
+ * stage; the chart stands on a panel at the left (on top of a tall stage), the
+ * question's card and the numbers to tap beside it. The chart and the card's
+ * room are the same for every question, so nothing moves as they change.
+ */
+function layoutChartRead(stageWidth, stageHeight, config, index, insets = {}) {
+    const L = exports.CHART_READ_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    const question = config.questions[Math.min(index, config.questions.length - 1)];
+    if (usableWidth <= 0 || usableHeight <= 0 || !question || config.bars.length === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const area = {
+        left: originX + edge,
+        top: originY + edge,
+        width: Math.max(usableWidth - edge * 2, 1),
+        height: Math.max(usableHeight - edge * 2, 1),
+    };
+    const tall = area.height > area.width;
+    const chart = tall
+        ? { left: area.left, top: area.top, width: area.width, height: area.height * L.chartShare - gap / 2 }
+        : { left: area.left, top: area.top, width: area.width * L.chartShare - gap / 2, height: area.height };
+    const column = tall
+        ? { left: area.left, top: chart.top + chart.height + gap, width: area.width, height: area.height - chart.height - gap }
+        : { left: chart.left + chart.width + gap, top: area.top, width: area.width - chart.width - gap, height: area.height };
+    // The chart: the scale at the left (bars), the pictures along the floor.
+    const pad = Math.max(gap / 2, Math.min(chart.width, chart.height) * 0.05);
+    const inner = { left: chart.left + pad, top: chart.top + pad, width: chart.width - pad * 2, height: chart.height - pad * 2 };
+    const count = config.bars.length;
+    const lines = config.scaleMax / config.scaleStep + 1;
+    const scaleLine = config.style === "bars"
+        ? Math.max(L.minScaleLine, Math.min(L.maxScaleLine, (inner.height * (1 - L.iconShare)) / lines * 0.8))
+        : 0;
+    const scaleWidth = config.style === "bars" ? scaleLine * L.scaleUnits : 0;
+    const slotRoom = inner.width - scaleWidth - (scaleWidth > 0 ? gap / 3 : 0);
+    const slot = slotRoom / count;
+    const icon = Math.min(L.maxIcon, inner.height * L.iconShare, slot * 0.8);
+    const plot = {
+        left: inner.left + inner.width - slotRoom,
+        top: inner.top + scaleLine / 2,
+        width: slotRoom,
+        height: Math.max(inner.height - icon - gap / 2 - scaleLine / 2, 1),
+    };
+    const floor = plot.top + plot.height;
+    const scale = config.style === "bars"
+        ? Array.from({ length: lines }, (_unused, line) => {
+            const value = line * config.scaleStep;
+            const y = floor - (value / config.scaleMax) * plot.height;
+            return { value, y, label: { left: inner.left, top: y - scaleLine / 2, width: scaleWidth, height: scaleLine } };
+        })
+        : [];
+    const unit = config.style === "pictures" ? Math.min(slot * 0.8, plot.height / Math.max(1, ...config.bars.map((bar) => bar.value))) : 0;
+    const bars = config.bars.map((bar, at) => {
+        const middle = plot.left + slot * (at + 0.5);
+        const height = config.style === "bars" ? (bar.value / config.scaleMax) * plot.height : 0;
+        return {
+            column: config.style === "bars" ? { left: middle - (slot * L.barShare) / 2, top: floor - height, width: slot * L.barShare, height } : null,
+            units: config.style === "pictures"
+                ? Array.from({ length: bar.value }, (_unused, step) => ({ left: middle - unit * 0.46, top: floor - (step + 1) * unit + unit * 0.04, width: unit * 0.92, height: unit * 0.92 }))
+                : [],
+            icon: { left: middle - icon / 2, top: floor + gap / 2, width: icon, height: icon },
+            zone: { left: plot.left + slot * at, top: plot.top, width: slot, height: plot.height + gap / 2 + icon },
+        };
+    });
+    // The numbers to tap, two in a row under the card, where any question asks one.
+    const asksNumbers = config.questions.some((item) => !chartQuestionTakesBar(item));
+    const optionHeight = asksNumbers
+        ? Math.max(L.minOption, Math.min(L.maxOption, (column.width - gap) / 2 / L.optionAspect, (column.height * 0.55 - gap) / 2))
+        : 0;
+    const optionWidth = optionHeight * L.optionAspect;
+    const optionsHeight = asksNumbers ? optionHeight * 2 + gap : 0;
+    const card = { left: column.left, top: column.top, width: column.width, height: Math.max(column.height - optionsHeight - (asksNumbers ? gap : 0), 1) };
+    const optionsTop = card.top + card.height + gap;
+    const options = question.options.map((value, at) => {
+        const row = Math.floor(at / 2);
+        const inRow = Math.min(2, question.options.length - row * 2);
+        const rowLeft = column.left + (column.width - (inRow * optionWidth + (inRow - 1) * gap)) / 2;
+        return { value, left: rowLeft + (at % 2) * (optionWidth + gap), top: optionsTop + row * (optionHeight + gap), width: optionWidth, height: optionHeight };
+    });
+    // The question set as big as it goes on its card, in rows, every row in the middle.
+    const pieces = chartQuestionPieces(question, config.language);
+    const room = { width: card.width * 0.9, height: card.height * 0.86 };
+    const widthOf = (piece, size) => (piece.bar !== undefined ? size * L.pieceIcon : textLineUnits(piece.text) * size);
+    const set = (size) => {
+        const space = size * 0.22;
+        const rows = [[]];
+        let used = 0;
+        for (const piece of pieces) {
+            const width = widthOf(piece, size);
+            const before = rows[rows.length - 1].length === 0 ? 0 : piece.glued ? 0 : space;
+            if (used + before + width > room.width && rows[rows.length - 1].length > 0 && !piece.glued) {
+                rows.push([{ piece, width, before: 0 }]);
+                used = width;
+            }
+            else {
+                rows[rows.length - 1].push({ piece, width, before });
+                used += before + width;
+            }
+        }
+        return rows;
+    };
+    const fits = (size) => {
+        const rows = set(size);
+        const line = size * L.pieceIcon;
+        return rows.length * line <= room.height && rows.every((row) => row.reduce((sum, item) => sum + item.before + item.width, 0) <= room.width + 1e-6);
+    };
+    let size = L.maxCardLine;
+    if (!fits(size)) {
+        let low = 0;
+        let high = L.maxCardLine;
+        for (let step = 0; step < 24; step += 1) {
+            const middle = (low + high) / 2;
+            if (fits(middle))
+                low = middle;
+            else
+                high = middle;
+        }
+        size = low;
+    }
+    const rows = set(size);
+    const line = size * L.pieceIcon;
+    const placed = [];
+    rows.forEach((row, at) => {
+        const rowWidth = row.reduce((sum, item) => sum + item.before + item.width, 0);
+        let x = card.left + (card.width - rowWidth) / 2;
+        const y = card.top + (card.height - rows.length * line) / 2 + at * line;
+        for (const item of row) {
+            x += item.before;
+            placed.push(item.piece.bar !== undefined
+                ? { bar: item.piece.bar, left: x, top: y, width: item.width, height: line }
+                : { text: item.piece.text, left: x, top: y + (line - size) / 2, width: item.width, height: size });
+            x += item.width;
+        }
+    });
+    return { chart, plot, scale, bars, card, pieces: placed, options };
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -7280,6 +7604,7 @@ exports.GAME_KIND_KEYS = {
     "number-line": "numberLine",
     "true-false": "trueFalse",
     "grid-route": "gridRoute",
+    "chart-read": "chartRead",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -7312,6 +7637,7 @@ exports.GAME_TIMINGS_BY_KIND = {
     "number-line": exports.GAME_TIMINGS.numberLine,
     "true-false": exports.GAME_TIMINGS.trueFalse,
     "grid-route": exports.GAME_TIMINGS.gridRoute,
+    "chart-read": exports.GAME_TIMINGS.chartRead,
     "memory-cards": exports.GAME_TIMINGS.memoryCards,
     "pattern-next": exports.GAME_TIMINGS.patternNext,
     "select-option": exports.GAME_TIMINGS.selectOption,
@@ -7350,6 +7676,7 @@ exports.GAME_GESTURES = {
     "number-line": "tap",
     "true-false": "tap",
     "grid-route": "tap",
+    "chart-read": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",
