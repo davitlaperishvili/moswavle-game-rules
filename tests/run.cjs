@@ -2127,5 +2127,66 @@ section('clock_set: set the hands of a clock, or read one');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.clockSet.turnMs > 0 && rules.GAME_TIMINGS_BY_KIND['clock-set'] === rules.GAME_TIMINGS.clockSet && rules.GAME_GESTURES['clock-set'] === 'tap');
 }
 
+section('fraction_pick: shade a fraction of a shape, or pick the shape that shows it');
+
+{
+  ['fraction_pick', 'fractions', 'shade_fraction', 'Fraction Pick'].forEach((type) => {
+    check(`${type} resolves to fraction-pick`, rules.resolveGameKind(type, {}) === 'fraction-pick');
+  });
+
+  const label = (fraction) => `${fraction.shaded}/${fraction.parts}`;
+  check('a fraction from 3/4, the two numbers, or an object', label(rules.readFraction('3/4')) === '3/4' && label(rules.readFraction(2, 5)) === '2/5' && label(rules.readFraction({ numerator: 1, denominator: 3 })) === '1/3');
+  check('none a shape cannot show', [rules.readFraction('0/4'), rules.readFraction('5/4'), rules.readFraction('1/13'), rules.readFraction('1/1'), rules.readFraction('half')].every((value) => value === null));
+  check('the same amount is the same', rules.sameFractionValue({ shaded: 2, parts: 4 }, { shaded: 1, parts: 2 }) && !rules.sameFractionValue({ shaded: 1, parts: 3 }, { shaded: 1, parts: 4 }));
+  check('the likeliest mistakes: the part left unshaded first, none the same amount, never the whole',
+    rules.fractionConfusions({ shaded: 3, parts: 4 }).map(label).join() === '1/4,2/4,3/5'
+      && rules.fractionConfusions({ shaded: 1, parts: 2 }).every((fraction) => fraction.shaded < fraction.parts && !rules.sameFractionValue(fraction, { shaded: 1, parts: 2 })));
+
+  const shade = rules.normalizeFractionPickConfig({ fraction: '3/4', bg_image: 'https://x/bg.webp', time_limit: 60 });
+  check('shade mode on a circle by default', shade.mode === 'shade' && shade.shape === 'circle' && label(shade.fraction) === '3/4' && shade.options.length === 0 && shade.lives === 3 && shade.imageUris.join() === 'https://x/bg.webp');
+  const pick = rules.normalizeFractionPickConfig({ mode: 'pick', shape: 'bar', fraction: '1/2', wrong: ['2/4', '1/3', '1/3', 'x'] });
+  check('pick mode: the right shape among the wrong ones, one of the same amount left out, mixed',
+    pick.shape === 'bar' && pick.options.map((option) => label(option.fraction)).sort().join() === '1/2,1/3,1/4', pick.options.map((option) => label(option.fraction)).join());
+  check('three shapes at least, four at most', rules.normalizeFractionPickConfig({ mode: 'pick', fraction: '2/3', wrong: ['1/3', '1/4', '3/4', '2/5', '1/5'] }).options.length === 4);
+  check('no fraction, no game', rules.normalizeFractionPickConfig({ fraction: '7/4' }).fraction === null);
+
+  check('a part tapped is shaded, tapped again it is not', rules.toggleFractionPart([], 2, 4).join() === '2' && rules.toggleFractionPart([0, 2], 2, 4).join() === '0' && rules.toggleFractionPart([1], 3, 4).join() === '1,3' && rules.toggleFractionPart([1], 9, 4).join() === '1');
+  check('the tick: right for as many parts as the top number, any of them',
+    rules.resolveFractionShadeCheck(shade, []).type === 'ignored' && rules.resolveFractionShadeCheck(shade, [0, 2, 3]).type === 'right' && rules.resolveFractionShadeCheck(shade, [1, 2, 3]).type === 'right' && rules.resolveFractionShadeCheck(shade, [0, 1]).type === 'wrong');
+  const right = pick.options.find((option) => label(option.fraction) === '1/2');
+  const wrong = pick.options.find((option) => label(option.fraction) === '1/3');
+  check('a shape: right, wrong, or none of them', rules.resolveFractionPickTap(pick, right.id).type === 'right' && rules.resolveFractionPickTap(pick, wrong.id).type === 'wrong' && rules.resolveFractionPickTap(pick, 'nope').type === 'ignored');
+  check('a circle is cut from the top clockwise, a bar from the left, into as many parts as asked',
+    rules.fractionPartPaths('circle', 4).length === 4 && rules.fractionPartPaths('circle', 4)[0] === 'M50 50L50 4A46 46 0 0 1 96 50Z'
+      && rules.fractionPartPaths('bar', 3)[0] === 'M4 4H101.33V96H4Z' && rules.fractionShapeViewBox('bar').width === 300);
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const bar = rules.normalizeFractionPickConfig({ fraction: '5/8', shape: 'bar' });
+  const pickCircle = rules.normalizeFractionPickConfig({ mode: 'pick', fraction: '2/3', wrong: ['1/3', '3/4', '2/5'] });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [shade, bar, pick, pickCircle].forEach((config, index) => {
+    const layout = rules.layoutFractionPick(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const card = layout && layout.fraction;
+    const things = layout ? [layout.shape, layout.check, ...layout.options].filter(Boolean) : [];
+    const ok = layout && inside(card.card, stage) && [card.top, card.bar, card.bottom].every((rect) => inside(rect, card.card))
+      && !overlap(card.top, card.bottom) && card.top.height >= rules.FRACTION_PICK_LAYOUT.minNumber
+      && things.every((rect) => inside(rect, stage) && !overlap(rect, card.card))
+      && things.every((a, i) => things.every((b, j) => i === j || !overlap(a, b)))
+      && (config.mode === 'shade'
+        ? layout.check.height >= 40 && Math.abs(layout.shape.width / layout.shape.height - (config.shape === 'bar' ? 3 : 1)) < 1e-6
+        : layout.options.length === config.options.length && layout.options.every((option, i) => option.id === config.options[i].id && option.height >= 60));
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the fraction, the shape and its tick, or the shapes to pick, are whole, apart, inside the safe area and big enough', whole, detail);
+  check('no fraction, no layout', rules.layoutFractionPick(852, 393, { mode: 'shade', shape: 'circle', fraction: null, options: [] }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.fractionPick.fillMs > 0 && rules.GAME_TIMINGS_BY_KIND['fraction-pick'] === rules.GAME_TIMINGS.fractionPick && rules.GAME_GESTURES['fraction-pick'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

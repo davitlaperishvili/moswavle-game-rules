@@ -768,6 +768,16 @@ export function resolveGameKind(type, config) {
         return "clock-set";
     }
     if ([
+        "fraction_pick",
+        "fractionpick",
+        "fraction",
+        "fractions",
+        "shade_fraction",
+        "pick_fraction",
+    ].includes(normalizedType)) {
+        return "fraction-pick";
+    }
+    if ([
         "memory_cards",
         "memory",
         "memorycards",
@@ -3031,6 +3041,11 @@ export const GAME_TIMINGS = {
      * the card) for `wrongFeedbackMs`; the right one is seen `successSettleMs`.
      */
     clockSet: { wrongFeedbackMs: 560, turnMs: 320, successSettleMs: 800, livesOutDelayMs: 320 },
+    /**
+     * A part tapped fills over `fillMs`. A wrong answer shakes for
+     * `wrongFeedbackMs`; the right one is seen `successSettleMs`.
+     */
+    fractionPick: { wrongFeedbackMs: 560, fillMs: 180, successSettleMs: 800, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -5775,6 +5790,306 @@ export function layoutClockSet(stageWidth, stageHeight, config, insets = {}) {
     L.stackShares.forEach((share) => stackColumns.forEach((columns) => tryArrangement("stack", share, columns)));
     return best?.layout ?? null;
 }
+// --- fraction_pick: shade a fraction of a shape, or pick the shape that shows it
+//
+// A circle or a bar cut into equal parts, drawn in code. Shade: the fraction
+// is written ("3 over 4") and the child taps parts to shade them — any of
+// them, as many as the top number says — and presses the tick. Pick: three or
+// four shapes, each with some parts shaded, and the child taps the one that
+// shows the fraction written. No other shape offered shows the same amount:
+// 2/4 is never beside 1/2.
+/** A shape is cut into this many parts at least, and at most. */
+export const FRACTION_PARTS = { min: 2, max: 12 };
+/** A fraction from "3/4", { shaded, parts } or the two numbers; null when it is no fraction a shape shows. */
+export function readFraction(value, partsValue) {
+    let shaded = null;
+    let parts = null;
+    const record = asRecord(value);
+    if (typeof value === "string" && /^\s*\d+\s*\/\s*\d+\s*$/.test(value)) {
+        [shaded, parts] = value.split("/").map((part) => Number(part.trim()));
+    }
+    else if (record) {
+        shaded = extractNumber(record.shaded ?? record.numerator);
+        parts = extractNumber(record.parts ?? record.denominator);
+    }
+    else {
+        shaded = extractNumber(value);
+        parts = extractNumber(partsValue);
+    }
+    if (shaded === null || parts === null || !Number.isInteger(shaded) || !Number.isInteger(parts)) {
+        return null;
+    }
+    if (parts < FRACTION_PARTS.min || parts > FRACTION_PARTS.max || shaded < 1 || shaded > parts) {
+        return null;
+    }
+    return { shaded, parts };
+}
+/** Whether two fractions are the same amount: 2/4 and 1/2 are. */
+export function sameFractionValue(a, b) {
+    return a.shaded * b.parts === b.shaded * a.parts;
+}
+/**
+ * Wrong fractions a child mistakes for `fraction`, the likeliest first: the
+ * part left unshaded (3/4 → 1/4), one part more or fewer, the same top number
+ * of a whole cut otherwise (1/3 → 1/4) — none of them the same amount, and
+ * never the whole shape.
+ */
+export function fractionConfusions(fraction) {
+    const { shaded, parts } = fraction;
+    const candidates = [
+        readFraction(parts - shaded, parts),
+        readFraction(shaded + 1, parts),
+        readFraction(shaded - 1, parts),
+        readFraction(shaded, parts + 1),
+        readFraction(shaded, parts - 1),
+        readFraction(shaded + 2, parts),
+        readFraction(1, parts === 2 ? 4 : 2),
+    ];
+    const seen = [];
+    for (const candidate of candidates) {
+        // The whole shaded is no fraction to tell apart.
+        if (candidate && candidate.shaded < candidate.parts && !sameFractionValue(candidate, fraction) && !seen.some((other) => sameFractionValue(other, candidate))) {
+            seen.push(candidate);
+        }
+    }
+    return seen;
+}
+/** How many shapes a pick game offers, the right one with them. */
+export const FRACTION_PICK_OPTIONS = { min: 3, max: 4 };
+/**
+ * The game as the players draw it. The fraction is `fraction` ("3/4") or
+ * `shaded` and `parts`; pick mode takes its wrong fractions from `wrong`
+ * ("1/4" or { shaded, parts }) and makes up the ones missing from
+ * `fractionConfusions`, three or four shapes in all, mixed. A wrong one of
+ * the same amount as the right one is left out.
+ */
+export function normalizeFractionPickConfig(config) {
+    const bg = normalizeBackground(config);
+    const fraction = readFraction(config.fraction ?? config.shaded, config.parts);
+    const mode = extractText(config.mode) === "pick" ? "pick" : "shade";
+    const shape = extractText(config.shape) === "bar" ? "bar" : "circle";
+    let options = [];
+    if (mode === "pick" && fraction) {
+        const wrong = [];
+        const add = (entry) => {
+            if (entry && !sameFractionValue(entry, fraction) && !wrong.some((other) => sameFractionValue(other, entry))) {
+                wrong.push(entry);
+            }
+        };
+        (Array.isArray(config.wrong) ? config.wrong : []).forEach((item) => add(readFraction(item)));
+        // As many as were written, within three and four in all; the ones missing are made up.
+        const count = Math.min(FRACTION_PICK_OPTIONS.max, Math.max(FRACTION_PICK_OPTIONS.min, wrong.length + 1));
+        fractionConfusions(fraction).forEach(add);
+        options = shuffle([fraction, ...wrong.slice(0, count - 1)].map((entry) => ({ id: `fraction-${entry.shaded}-${entry.parts}`, fraction: entry })));
+    }
+    return {
+        mode,
+        shape,
+        fraction,
+        options,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: bg ? [bg] : [],
+    };
+}
+/** Shade mode: a part tapped is shaded, or unshaded when it was. */
+export function toggleFractionPart(shaded, index, parts) {
+    if (!Number.isInteger(index) || index < 0 || index >= parts) {
+        return [...shaded];
+    }
+    return shaded.includes(index) ? shaded.filter((part) => part !== index) : [...shaded, index].sort((a, b) => a - b);
+}
+/** Shade mode: what the tick does — right when as many parts are shaded as the top number says. Nothing before one is. */
+export function resolveFractionShadeCheck(config, shaded) {
+    if (!config.fraction || shaded.length === 0) {
+        return { type: "ignored" };
+    }
+    return shaded.length === config.fraction.shaded ? { type: "right" } : { type: "wrong" };
+}
+/** Pick mode: what a tap on a shape does. */
+export function resolveFractionPickTap(config, optionId) {
+    const option = config.options.find((candidate) => candidate.id === optionId);
+    if (!option || !config.fraction) {
+        return { type: "ignored" };
+    }
+    return sameFractionValue(option.fraction, config.fraction) ? { type: "right" } : { type: "wrong" };
+}
+/** A shape's own box: a circle in 100 × 100, a bar in 300 × 100. */
+export function fractionShapeViewBox(shape) {
+    return shape === "bar" ? { width: 300, height: 100 } : { width: 100, height: 100 };
+}
+/**
+ * The parts of a shape as SVG paths in its own box (`fractionShapeViewBox`):
+ * a circle's slices from the top clockwise, a bar's from the left. Both
+ * players draw these and nothing else, so a part is the same on both.
+ */
+export function fractionPartPaths(shape, parts) {
+    const count = Math.max(1, Math.min(FRACTION_PARTS.max, Math.floor(parts)));
+    const round = (value) => Math.round(value * 100) / 100;
+    if (shape === "bar") {
+        const left = 4;
+        const width = 292 / count;
+        return Array.from({ length: count }, (_unused, index) => {
+            const x = round(left + index * width);
+            return `M${x} 4H${round(x + width)}V96H${x}Z`;
+        });
+    }
+    if (count === 1) {
+        return ["M50 4A46 46 0 1 1 49.99 4Z"];
+    }
+    const point = (step) => {
+        const angle = (step / count) * Math.PI * 2;
+        return `${round(50 + Math.sin(angle) * 46)} ${round(50 - Math.cos(angle) * 46)}`;
+    };
+    return Array.from({ length: count }, (_unused, index) => `M50 50L${point(index)}A46 46 0 0 1 ${point(index + 1)}Z`);
+}
+/** Proportions of the fraction game. */
+export const FRACTION_PICK_LAYOUT = {
+    /** The shape's share of the width (shade) or the fraction's column (pick), tried in turn. */
+    sideShares: [0.56, 0.64, 0.72],
+    stackShares: [0.55, 0.64],
+    /** The written fraction: a number this tall within these, in px. */
+    minNumber: 28,
+    maxNumber: 70,
+    /** The tick under the fraction, as tall as this share of a number, within the key sizes. */
+    checkShare: 1.2,
+    /** Between the shapes of pick mode, as a share of a shape's height. */
+    optionGap: 0.16,
+    /** A part tapped in shade mode is never thinner than this, in px, at its widest. */
+    minPart: 40,
+};
+function placeFractionCard(area, number, fraction) {
+    const digits = Math.max(String(fraction.shaded).length, String(fraction.parts).length);
+    const numberWidth = number * MATH_EQUATION_LAYOUT.digit * digits;
+    const barHeight = Math.max(4, number * 0.1);
+    const padX = number * 0.4;
+    const padY = number * 0.25;
+    const cardWidth = numberWidth + padX * 2;
+    const cardHeight = number * 2 + barHeight + number * 0.3 + padY * 2;
+    const card = {
+        left: area.left + (area.width - cardWidth) / 2,
+        top: area.top + (area.height - cardHeight) / 2,
+        width: cardWidth,
+        height: cardHeight,
+    };
+    const left = card.left + padX;
+    const top = { left, top: card.top + padY, width: numberWidth, height: number };
+    const bar = { left: left - number * 0.1, top: top.top + number + number * 0.15, width: numberWidth + number * 0.2, height: barHeight };
+    const bottom = { left, top: bar.top + barHeight + number * 0.15, width: numberWidth, height: number };
+    return { card, top, bar, bottom };
+}
+/**
+ * Where everything of the fraction game goes. The background covers the
+ * stage. Shade: the shape as big as it can be, and beside it the written
+ * fraction with its tick. Pick: the written fraction at the left (the top on
+ * a tall stage) and the shapes to pick from beside it, in a row or two by
+ * two. Two safe areas, apart, inside the stage less `insets`.
+ */
+export function layoutFractionPick(stageWidth, stageHeight, config, insets = {}) {
+    const L = FRACTION_PICK_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    const fraction = config.fraction;
+    if (usableWidth <= 0 || usableHeight <= 0 || !fraction) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const area = {
+        left: originX + edge,
+        top: originY + edge,
+        width: Math.max(usableWidth - edge * 2, 1),
+        height: Math.max(usableHeight - edge * 2, 1),
+    };
+    const view = fractionShapeViewBox(config.shape);
+    const aspect = view.width / view.height;
+    const digits = Math.max(String(fraction.shaded).length, String(fraction.parts).length);
+    // The card's width and height for a number 1 px tall (see placeFractionCard).
+    const cardUnitsX = MATH_EQUATION_LAYOUT.digit * digits + 0.8;
+    const cardUnitsY = 2 + 0.1 + 0.3 + 0.5;
+    let best = null;
+    const fit = (box, ratio) => {
+        const width = Math.min(box.width, box.height * ratio);
+        const height = width / ratio;
+        return { left: box.left + (box.width - width) / 2, top: box.top + (box.height - height) / 2, width, height };
+    };
+    const tryArrangement = (arrangement, share, columns) => {
+        const first = arrangement === "side"
+            ? { left: area.left, top: area.top, width: area.width * share - gap / 2, height: area.height }
+            : { left: area.left, top: area.top, width: area.width, height: area.height * share - gap / 2 };
+        const second = arrangement === "side"
+            ? { left: first.left + first.width + gap, top: area.top, width: area.width - first.width - gap, height: area.height }
+            : { left: area.left, top: first.top + first.height + gap, width: area.width, height: area.height - first.height - gap };
+        if (first.width <= 0 || first.height <= 0 || second.width <= 0 || second.height <= 0) {
+            return;
+        }
+        if (config.mode === "shade") {
+            // The shape in the first room; the fraction over its tick in the second.
+            const shape = fit(first, aspect);
+            const keyFor = (number) => Math.min(MATH_INPUT_LAYOUT.maxKey, Math.max(MATH_INPUT_LAYOUT.minKey, number * L.checkShare));
+            let number = Math.min(L.maxNumber, second.width / cardUnitsX, second.height / (cardUnitsY + L.checkShare + 0.4));
+            while (number > 8 && number * cardUnitsY + gap * 0.6 + keyFor(number) > second.height) {
+                number *= 0.94;
+            }
+            const keyHeight = keyFor(number);
+            const block = number * cardUnitsY + gap * 0.6 + keyHeight;
+            const column = { left: second.left, top: second.top + Math.max(0, (second.height - block) / 2), width: second.width, height: number * cardUnitsY };
+            const card = placeFractionCard(column, number, fraction);
+            const check = {
+                left: second.left + (second.width - keyHeight * MATH_INPUT_LAYOUT.keyAspect) / 2,
+                top: card.card.top + card.card.height + gap * 0.6,
+                width: keyHeight * MATH_INPUT_LAYOUT.keyAspect,
+                height: keyHeight,
+            };
+            if (check.top + check.height > second.top + second.height + 1e-6 || check.width > second.width) {
+                return;
+            }
+            // A part as wide as a finger: a circle's slice at its rim, a bar's strip.
+            const partWidth = config.shape === "bar" ? (shape.width * 292) / 300 / fraction.parts : (Math.PI * shape.width * 0.92) / fraction.parts;
+            const score = Math.min(shape.height / 3, number) + (number >= L.minNumber ? 0 : -100 + number)
+                + (partWidth >= L.minPart ? 0 : -50 + partWidth / 10) + shape.height * 1e-3;
+            if (!best || score > best.score + 1e-9) {
+                best = { score, layout: { arrangement, fraction: card, shape, check, options: [] } };
+            }
+            return;
+        }
+        // Pick: the fraction in the first room — a narrow one — and the shapes in the second.
+        const number = Math.min(L.maxNumber, first.width / cardUnitsX, first.height / cardUnitsY);
+        const card = placeFractionCard(first, number, fraction);
+        const count = Math.max(config.options.length, 1);
+        const rows = Math.ceil(count / columns);
+        const cellWidth = (second.width - (columns - 1) * gap * 0.6) / columns;
+        const cellHeight = (second.height - (rows - 1) * gap * 0.6) / rows;
+        const one = fit({ left: 0, top: 0, width: cellWidth, height: cellHeight }, aspect);
+        const gridWidth = columns * one.width + (columns - 1) * gap * 0.6;
+        const gridHeight = rows * one.height + (rows - 1) * gap * 0.6;
+        const options = config.options.map((option, index) => ({
+            id: option.id,
+            left: second.left + (second.width - gridWidth) / 2 + (index % columns) * (one.width + gap * 0.6),
+            top: second.top + (second.height - gridHeight) / 2 + Math.floor(index / columns) * (one.height + gap * 0.6),
+            width: one.width,
+            height: one.height,
+        }));
+        const score = Math.min(one.height, number * 2) + (number >= L.minNumber ? 0 : -100 + number) + one.height * 1e-3;
+        if (!best || score > best.score + 1e-9) {
+            best = { score, layout: { arrangement, fraction: card, shape: null, check: null, options } };
+        }
+    };
+    const count = Math.max(config.options.length, 1);
+    if (config.mode === "shade") {
+        L.sideShares.forEach((share) => tryArrangement("side", share, 1));
+        L.stackShares.forEach((share) => tryArrangement("stack", share, 1));
+    }
+    else {
+        // The fraction's column is narrow: what is left of the shares above.
+        L.sideShares.forEach((share) => [1, 2, count].forEach((columns) => tryArrangement("side", 1 - share, columns)));
+        L.stackShares.forEach((share) => [count, Math.ceil(count / 2)].forEach((columns) => tryArrangement("stack", 1 - share, columns)));
+    }
+    return best?.layout ?? null;
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -5798,6 +6113,7 @@ export const GAME_KIND_KEYS = {
     "word-problem": "wordProblem",
     "money-pay": "moneyPay",
     "clock-set": "clockSet",
+    "fraction-pick": "fractionPick",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -5824,6 +6140,7 @@ export const GAME_TIMINGS_BY_KIND = {
     "word-problem": GAME_TIMINGS.wordProblem,
     "money-pay": GAME_TIMINGS.moneyPay,
     "clock-set": GAME_TIMINGS.clockSet,
+    "fraction-pick": GAME_TIMINGS.fractionPick,
     "memory-cards": GAME_TIMINGS.memoryCards,
     "pattern-next": GAME_TIMINGS.patternNext,
     "select-option": GAME_TIMINGS.selectOption,
@@ -5856,6 +6173,7 @@ export const GAME_GESTURES = {
     "word-problem": "tap",
     "money-pay": "tap",
     "clock-set": "tap",
+    "fraction-pick": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",

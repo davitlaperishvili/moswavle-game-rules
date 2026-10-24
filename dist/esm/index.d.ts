@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1303,6 +1303,16 @@ export declare const GAME_TIMINGS: {
         readonly successSettleMs: 800;
         readonly livesOutDelayMs: 320;
     };
+    /**
+     * A part tapped fills over `fillMs`. A wrong answer shakes for
+     * `wrongFeedbackMs`; the right one is seen `successSettleMs`.
+     */
+    readonly fractionPick: {
+        readonly wrongFeedbackMs: 560;
+        readonly fillMs: 180;
+        readonly successSettleMs: 800;
+        readonly livesOutDelayMs: 320;
+    };
     readonly mathEquation: {
         readonly wrongFeedbackMs: 560;
         readonly flyMs: 620;
@@ -2482,6 +2492,125 @@ export type ClockSetLayout = {
  * from — two safe areas, apart, inside the stage less `insets`.
  */
 export declare function layoutClockSet(stageWidth: number, stageHeight: number, config: Pick<ClockSetConfig, "mode" | "time" | "options">, insets?: SceneInsets): ClockSetLayout | null;
+/** A shape is cut into this many parts at least, and at most. */
+export declare const FRACTION_PARTS: {
+    readonly min: 2;
+    readonly max: 12;
+};
+export type FractionShape = "circle" | "bar";
+export type Fraction = {
+    /** How many parts are shaded: the top number. */
+    shaded: number;
+    /** How many equal parts the whole is cut into: the bottom number. */
+    parts: number;
+};
+/** A fraction from "3/4", { shaded, parts } or the two numbers; null when it is no fraction a shape shows. */
+export declare function readFraction(value: unknown, partsValue?: unknown): Fraction | null;
+/** Whether two fractions are the same amount: 2/4 and 1/2 are. */
+export declare function sameFractionValue(a: Fraction, b: Fraction): boolean;
+/**
+ * Wrong fractions a child mistakes for `fraction`, the likeliest first: the
+ * part left unshaded (3/4 → 1/4), one part more or fewer, the same top number
+ * of a whole cut otherwise (1/3 → 1/4) — none of them the same amount, and
+ * never the whole shape.
+ */
+export declare function fractionConfusions(fraction: Fraction): Fraction[];
+export type FractionOption = {
+    id: string;
+    fraction: Fraction;
+};
+export type FractionPickConfig = {
+    /** Shade the parts the fraction says, or pick the shape that shows it. */
+    mode: "shade" | "pick";
+    shape: FractionShape;
+    /** The fraction asked; null when it is none a shape shows, and the game is not played. */
+    fraction: Fraction | null;
+    /** Pick mode: the right shape among the wrong ones, mixed. Empty in shade mode. */
+    options: FractionOption[];
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background: preload before the clock. */
+    imageUris: string[];
+};
+/** How many shapes a pick game offers, the right one with them. */
+export declare const FRACTION_PICK_OPTIONS: {
+    readonly min: 3;
+    readonly max: 4;
+};
+/**
+ * The game as the players draw it. The fraction is `fraction` ("3/4") or
+ * `shaded` and `parts`; pick mode takes its wrong fractions from `wrong`
+ * ("1/4" or { shaded, parts }) and makes up the ones missing from
+ * `fractionConfusions`, three or four shapes in all, mixed. A wrong one of
+ * the same amount as the right one is left out.
+ */
+export declare function normalizeFractionPickConfig(config: Record<string, unknown>): FractionPickConfig;
+/** Shade mode: a part tapped is shaded, or unshaded when it was. */
+export declare function toggleFractionPart(shaded: readonly number[], index: number, parts: number): number[];
+export type FractionCheckResult = {
+    type: "ignored";
+} | {
+    type: "right";
+} | {
+    type: "wrong";
+};
+/** Shade mode: what the tick does — right when as many parts are shaded as the top number says. Nothing before one is. */
+export declare function resolveFractionShadeCheck(config: Pick<FractionPickConfig, "fraction">, shaded: readonly number[]): FractionCheckResult;
+/** Pick mode: what a tap on a shape does. */
+export declare function resolveFractionPickTap(config: Pick<FractionPickConfig, "fraction" | "options">, optionId: string): FractionCheckResult;
+/** A shape's own box: a circle in 100 × 100, a bar in 300 × 100. */
+export declare function fractionShapeViewBox(shape: FractionShape): {
+    width: number;
+    height: number;
+};
+/**
+ * The parts of a shape as SVG paths in its own box (`fractionShapeViewBox`):
+ * a circle's slices from the top clockwise, a bar's from the left. Both
+ * players draw these and nothing else, so a part is the same on both.
+ */
+export declare function fractionPartPaths(shape: FractionShape, parts: number): string[];
+/** Proportions of the fraction game. */
+export declare const FRACTION_PICK_LAYOUT: {
+    /** The shape's share of the width (shade) or the fraction's column (pick), tried in turn. */
+    readonly sideShares: readonly [0.56, 0.64, 0.72];
+    readonly stackShares: readonly [0.55, 0.64];
+    /** The written fraction: a number this tall within these, in px. */
+    readonly minNumber: 28;
+    readonly maxNumber: 70;
+    /** The tick under the fraction, as tall as this share of a number, within the key sizes. */
+    readonly checkShare: 1.2;
+    /** Between the shapes of pick mode, as a share of a shape's height. */
+    readonly optionGap: 0.16;
+    /** A part tapped in shade mode is never thinner than this, in px, at its widest. */
+    readonly minPart: 40;
+};
+export type FractionCard = {
+    card: BoardRect;
+    top: BoardRect;
+    bar: BoardRect;
+    bottom: BoardRect;
+};
+export type FractionPickLayout = {
+    arrangement: "side" | "stack";
+    /** The written fraction: its card, its two numbers and the bar between them. */
+    fraction: FractionCard;
+    /** Shade mode: the shape to shade and the tick; null in pick mode. */
+    shape: BoardRect | null;
+    check: BoardRect | null;
+    /** Pick mode: a box a shape, in `options` order. */
+    options: Array<BoardRect & {
+        id: string;
+    }>;
+};
+/**
+ * Where everything of the fraction game goes. The background covers the
+ * stage. Shade: the shape as big as it can be, and beside it the written
+ * fraction with its tick. Pick: the written fraction at the left (the top on
+ * a tall stage) and the shapes to pick from beside it, in a row or two by
+ * two. Two safe areas, apart, inside the stage less `insets`.
+ */
+export declare function layoutFractionPick(stageWidth: number, stageHeight: number, config: Pick<FractionPickConfig, "mode" | "shape" | "fraction" | "options">, insets?: SceneInsets): FractionPickLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -2577,6 +2706,12 @@ export type ClockSetMetrics = BaseGameMetrics & {
     attempts: number;
     livesRemaining: number;
 };
+export type FractionPickMetrics = BaseGameMetrics & {
+    mode: "shade" | "pick";
+    /** How many times an answer was given: the tick pressed, or a shape tapped. */
+    attempts: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -2644,6 +2779,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "word-problem": "wordProblem";
     readonly "money-pay": "moneyPay";
     readonly "clock-set": "clockSet";
+    readonly "fraction-pick": "fractionPick";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -2682,6 +2818,7 @@ export declare const GAME_GESTURES: {
     readonly "word-problem": "tap";
     readonly "money-pay": "tap";
     readonly "clock-set": "tap";
+    readonly "fraction-pick": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -2746,6 +2883,7 @@ export type GameMetricsByKind = {
     "word-problem": WordProblemMetrics;
     "money-pay": MoneyPayMetrics;
     "clock-set": ClockSetMetrics;
+    "fraction-pick": FractionPickMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;
