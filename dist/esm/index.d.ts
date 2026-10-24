@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "story-scene" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1392,6 +1392,16 @@ export declare const GAME_TIMINGS: {
         readonly wrongFeedbackMs: 520;
         readonly flyMs: 280;
         readonly successSettleMs: 900;
+        readonly livesOutDelayMs: 320;
+    };
+    /**
+     * A step done shows for `stepMs` before the next piece; a thing carried goes
+     * to its place over `carryMs`. Nothing is wrong in a story, and it has no lives.
+     */
+    readonly storyScene: {
+        readonly stepMs: 700;
+        readonly carryMs: 320;
+        readonly successSettleMs: 1000;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -3522,6 +3532,115 @@ export declare function layoutMapPlace(stageWidth: number, stageHeight: number, 
  * nothing.
  */
 export declare function mapPlaceSpotAt(layout: Pick<MapPlaceLayout, "spots">, x: number, y: number): string | null;
+export declare const STORY_SCENE_PIECES: {
+    readonly min: 1;
+    readonly max: 6;
+};
+export type StoryAction = "tap" | "drag" | "listen";
+/** A thing on the scene, in percent of it; null `image` for a point of the scene itself. */
+export type StorySceneThing = {
+    id: string;
+    image: string | null;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+export type StoryScenePiece = {
+    id: string;
+    /** What Tsitsina says, in the language the game is played in. */
+    text: string;
+    /** Its recording, or null when none was made. */
+    voice: string | null;
+    action: StoryAction;
+    /** tap: the thing to tap; drag: the thing to carry. */
+    thing: string | null;
+    /** drag: where it goes. */
+    place: string | null;
+};
+export type StorySceneConfig = {
+    things: StorySceneThing[];
+    /** Empty when the game is none. */
+    pieces: StoryScenePiece[];
+    board: {
+        width: number;
+        height: number;
+    } | null;
+    bg_image: string | null;
+    /** A story is never timed. */
+    time_limit: null;
+    lives: number;
+    imageUris: string[];
+    /** The pieces' recordings: fetched with the pictures, before the scene opens. */
+    voiceUris: string[];
+};
+/**
+ * The game as the players draw it. `placements` are the things on the scene,
+ * in percent of it — pictures, or points of the scene (only ever a place).
+ * `pieces` are { text, voice, action, thing, place }, `thing` and `place`
+ * counted from 0 among the placements. A tap needs a thing; a carry a thing
+ * with a picture and another place; a piece whose action cannot be done is
+ * only listened to.
+ */
+export declare function normalizeStorySceneConfig(config: Record<string, unknown>): StorySceneConfig;
+export type StorySceneStepResult = 
+/** Not this piece's thing, or not its way: nothing happens but the way being shown again. */
+{
+    type: "ignored";
+}
+/** Done: the story goes on; `complete` when it was the last piece. */
+ | {
+    type: "done";
+    complete: boolean;
+};
+/**
+ * What the child's step does at the piece `index`: a tap on `thingId`, a
+ * carry of `thingId` let go on `placeId`, or the go-on button (`thingId`
+ * null) of a piece only listened to.
+ */
+export declare function resolveStorySceneStep(config: Pick<StorySceneConfig, "pieces">, index: number, step: {
+    kind: "tap" | "next";
+    thingId?: string | null;
+} | {
+    kind: "drop";
+    thingId: string;
+    placeId: string | null;
+}): StorySceneStepResult;
+/** Proportions of the story scene. */
+export declare const STORY_SCENE_LAYOUT: {
+    /** The caption under the scene: of the free height, within these in px. */
+    readonly captionShare: 0.2;
+    readonly minCaption: 56;
+    readonly maxCaption: 110;
+    /** Its writing: no bigger than this, and under `minLine` it is not shown — the voice tells it. */
+    readonly maxLine: 34;
+    readonly minLine: 17;
+    /** The go-on button at the caption's right, as tall as the caption. */
+    readonly nextShare: 1;
+    /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+    readonly sheetRim: 6;
+    /** A carry lands on a place this far round its middle at least, in px; a tap too. */
+    readonly minHit: 52;
+};
+export type StorySceneLayout = {
+    /** The scene, whole and never cropped. */
+    sheet: BoardRect;
+    /** Each thing on the stage, in `things` order. */
+    things: BoardRect[];
+    /** The caption and its writing (empty when the piece is too long to show: the voice tells it). */
+    caption: BoardRect;
+    lines: TextLineBox[];
+    /** The go-on button of a piece only listened to. */
+    next: BoardRect;
+};
+/**
+ * Where everything of the piece `index` goes: the scene as big as it can be
+ * over a caption band, the go-on button at the band's right. The band is the
+ * same for every piece, so the scene never moves as the story goes on.
+ */
+export declare function layoutStoryScene(stageWidth: number, stageHeight: number, config: Pick<StorySceneConfig, "things" | "pieces" | "board">, index: number, insets?: SceneInsets): StorySceneLayout | null;
+/** The thing whose box, grown to a fingertip, holds (`x`, `y`) on the stage — the nearest middle of several; null over none. */
+export declare function storySceneThingAt(layout: Pick<StorySceneLayout, "things">, things: readonly StorySceneThing[], x: number, y: number): string | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -3674,6 +3793,11 @@ export type MapPlaceMetrics = BaseGameMetrics & {
     wrong: number;
     livesRemaining: number;
 };
+export type StorySceneMetrics = BaseGameMetrics & {
+    /** Pieces told, and taps that did nothing (never a mistake). */
+    pieces: number;
+    strayTaps: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -3750,6 +3874,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "chart-read": "chartRead";
     readonly "find-in-scene": "findInScene";
     readonly "map-place": "mapPlace";
+    readonly "story-scene": "storyScene";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -3797,6 +3922,7 @@ export declare const GAME_GESTURES: {
     readonly "chart-read": "tap";
     readonly "find-in-scene": "tap";
     readonly "map-place": "drag";
+    readonly "story-scene": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -3870,6 +3996,7 @@ export type GameMetricsByKind = {
     "chart-read": ChartReadMetrics;
     "find-in-scene": FindInSceneMetrics;
     "map-place": MapPlaceMetrics;
+    "story-scene": StorySceneMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

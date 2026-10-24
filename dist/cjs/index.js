@@ -26,7 +26,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -178,6 +178,10 @@ exports.normalizeMapPlaceConfig = normalizeMapPlaceConfig;
 exports.resolveMapPlaceDrop = resolveMapPlaceDrop;
 exports.layoutMapPlace = layoutMapPlace;
 exports.mapPlaceSpotAt = mapPlaceSpotAt;
+exports.normalizeStorySceneConfig = normalizeStorySceneConfig;
+exports.resolveStorySceneStep = resolveStorySceneStep;
+exports.layoutStoryScene = layoutStoryScene;
+exports.storySceneThingAt = storySceneThingAt;
 exports.gestureHintTapStops = gestureHintTapStops;
 exports.gestureHintDragEnd = gestureHintDragEnd;
 const letters_js_1 = require("./letters.js");
@@ -1025,6 +1029,14 @@ function resolveGameKind(type, config) {
         "put_on_map",
     ].includes(normalizedType)) {
         return "map-place";
+    }
+    if ([
+        "story_scene",
+        "storyscene",
+        "story",
+        "tell_story",
+    ].includes(normalizedType)) {
+        return "story-scene";
     }
     if ([
         "memory_cards",
@@ -3337,6 +3349,11 @@ exports.GAME_TIMINGS = {
      * it for `wrongFeedbackMs` and goes back. The last one put waits `successSettleMs`.
      */
     mapPlace: { wrongFeedbackMs: 520, flyMs: 280, successSettleMs: 900, livesOutDelayMs: 320 },
+    /**
+     * A step done shows for `stepMs` before the next piece; a thing carried goes
+     * to its place over `carryMs`. Nothing is wrong in a story, and it has no lives.
+     */
+    storyScene: { stepMs: 700, carryMs: 320, successSettleMs: 1000, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -7990,6 +8007,201 @@ function mapPlaceSpotAt(layout, x, y) {
     }
     return best ? best.id : null;
 }
+// --- story_scene: a story told on a scene, the child helping along ---------------
+//
+// A scene shown whole, like label_diagram's sheet, with the story's heroes and
+// things standing on it. Tsitsina tells the story a piece at a time — its own
+// clip, its words on a caption under the scene where they are short enough —
+// and after each piece the child does one thing: taps a thing, carries a thing
+// to a place, or only listens and goes on. Nothing is scored: there are no
+// lives and no clock, a tap elsewhere only shows the way again. The journeys
+// are made of these.
+exports.STORY_SCENE_PIECES = { min: 1, max: 6 };
+/**
+ * The game as the players draw it. `placements` are the things on the scene,
+ * in percent of it — pictures, or points of the scene (only ever a place).
+ * `pieces` are { text, voice, action, thing, place }, `thing` and `place`
+ * counted from 0 among the placements. A tap needs a thing; a carry a thing
+ * with a picture and another place; a piece whose action cannot be done is
+ * only listened to.
+ */
+function normalizeStorySceneConfig(config) {
+    const clampPercent = (value) => Math.max(0, Math.min(100, value ?? 0));
+    const things = (Array.isArray(config.placements) ? config.placements : [])
+        .map((raw) => asRecord(raw))
+        .map((record) => {
+        if (!record)
+            return null;
+        const x = clampPercent(extractNumber(record.x));
+        const y = clampPercent(extractNumber(record.y));
+        return {
+            image: extractMediaUrl(record.image),
+            x,
+            y,
+            width: Math.min(100 - x, clampPercent(extractNumber(record.width))),
+            height: Math.min(100 - y, clampPercent(extractNumber(record.height))),
+        };
+    })
+        // Kept in place even when empty, so a piece's count still names the right one.
+        .map((thing, index) => ({ id: `thing_${index + 1}`, ...(thing ?? { image: null, x: 0, y: 0, width: 0, height: 0 }) }));
+    const real = (index) => {
+        const at = extractNumber(index);
+        const thing = at !== null && Number.isInteger(at) ? things[at] : undefined;
+        return thing && thing.width > 0 && thing.height > 0 ? thing : null;
+    };
+    const pieces = (Array.isArray(config.pieces) ? config.pieces : [])
+        .map((raw) => asRecord(raw))
+        .filter((record) => record !== null)
+        .map((record) => {
+        const text = (extractText(record.text) ?? "").replace(/\s+/g, " ").trim();
+        const asked = extractText(record.action);
+        const thing = real(record.thing);
+        const place = real(record.place);
+        let action = "listen";
+        if (asked === "tap" && thing)
+            action = "tap";
+        if (asked === "drag" && thing?.image && place && place.id !== thing.id)
+            action = "drag";
+        return {
+            text,
+            voice: extractMediaUrl(record.voice),
+            action,
+            thing: action === "listen" ? null : thing?.id ?? null,
+            place: action === "drag" ? place?.id ?? null : null,
+        };
+    })
+        .filter((piece) => piece.text !== "" || piece.voice !== null)
+        .slice(0, exports.STORY_SCENE_PIECES.max)
+        .map((piece, index) => ({ id: `piece_${index + 1}`, ...piece }));
+    const boardWidth = extractNumber(config.board_width);
+    const boardHeight = extractNumber(config.board_height);
+    const bg = extractMediaUrl(config.bg_image);
+    const playable = Boolean(bg) && pieces.length >= exports.STORY_SCENE_PIECES.min && boardWidth !== null && boardHeight !== null && boardWidth > 0 && boardHeight > 0;
+    return {
+        things: playable ? things : [],
+        pieces: playable ? pieces : [],
+        board: playable ? { width: boardWidth, height: boardHeight } : null,
+        bg_image: bg,
+        time_limit: null,
+        lives: 1,
+        imageUris: [...new Set([bg, ...things.map((thing) => thing.image)].filter((uri) => Boolean(uri)))],
+        voiceUris: playable ? [...new Set(pieces.map((piece) => piece.voice).filter((uri) => Boolean(uri)))] : [],
+    };
+}
+/**
+ * What the child's step does at the piece `index`: a tap on `thingId`, a
+ * carry of `thingId` let go on `placeId`, or the go-on button (`thingId`
+ * null) of a piece only listened to.
+ */
+function resolveStorySceneStep(config, index, step) {
+    const piece = config.pieces[index];
+    if (!piece) {
+        return { type: "ignored" };
+    }
+    const done = { type: "done", complete: index + 1 === config.pieces.length };
+    if (piece.action === "listen")
+        return step.kind === "next" ? done : { type: "ignored" };
+    if (piece.action === "tap")
+        return step.kind === "tap" && step.thingId === piece.thing ? done : { type: "ignored" };
+    return step.kind === "drop" && step.thingId === piece.thing && step.placeId === piece.place ? done : { type: "ignored" };
+}
+/** Proportions of the story scene. */
+exports.STORY_SCENE_LAYOUT = {
+    /** The caption under the scene: of the free height, within these in px. */
+    captionShare: 0.2,
+    minCaption: 56,
+    maxCaption: 110,
+    /** Its writing: no bigger than this, and under `minLine` it is not shown — the voice tells it. */
+    maxLine: 34,
+    minLine: 17,
+    /** The go-on button at the caption's right, as tall as the caption. */
+    nextShare: 1,
+    /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+    sheetRim: 6,
+    /** A carry lands on a place this far round its middle at least, in px; a tap too. */
+    minHit: 52,
+};
+/**
+ * Where everything of the piece `index` goes: the scene as big as it can be
+ * over a caption band, the go-on button at the band's right. The band is the
+ * same for every piece, so the scene never moves as the story goes on.
+ */
+function layoutStoryScene(stageWidth, stageHeight, config, index, insets = {}) {
+    const L = exports.STORY_SCENE_LAYOUT;
+    const board = config.board;
+    const piece = config.pieces[Math.min(index, config.pieces.length - 1)];
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const area = {
+        left: (insets.left ?? 0) + edge,
+        top: (insets.top ?? 0) + edge,
+        width: stageWidth - (insets.left ?? 0) - (insets.right ?? 0) - edge * 2,
+        height: stageHeight - (insets.top ?? 0) - (insets.bottom ?? 0) - edge * 2,
+    };
+    if (!board || !piece || area.width <= 0 || area.height <= 0) {
+        return null;
+    }
+    const band = Math.max(L.minCaption, Math.min(L.maxCaption, area.height * L.captionShare));
+    const room = { left: area.left, top: area.top, width: area.width, height: Math.max(area.height - band - gap, 1) };
+    const fit = Math.min((room.width - L.sheetRim * 2) / board.width, (room.height - L.sheetRim * 2) / board.height);
+    const sheet = {
+        left: room.left + (room.width - board.width * fit) / 2,
+        top: room.top + (room.height - board.height * fit) / 2,
+        width: board.width * fit,
+        height: board.height * fit,
+    };
+    const bandTop = area.top + area.height - band;
+    const next = { left: area.left + area.width - band * L.nextShare, top: bandTop, width: band * L.nextShare, height: band };
+    const captionWidth = Math.min(area.width - next.width - gap, Math.max(sheet.width, area.width * 0.6));
+    const caption = { left: area.left + (area.width - next.width - gap - captionWidth) / 2, top: bandTop, width: captionWidth, height: band };
+    let lines = [];
+    if (piece.text !== "") {
+        const passage = fitPassage(piece.text, caption.width * 0.92, caption.height * 0.86);
+        const size = Math.min(passage.size, L.maxLine);
+        if (size >= L.minLine) {
+            lines = passage.lines.map((text, line) => {
+                const width = textLineUnits(text) * size;
+                return {
+                    text,
+                    left: caption.left + (caption.width - width) / 2,
+                    top: caption.top + (caption.height - passage.lines.length * size) / 2 + line * size,
+                    width,
+                    height: size,
+                };
+            });
+        }
+    }
+    return {
+        sheet,
+        things: config.things.map((thing) => ({
+            left: sheet.left + (thing.x / 100) * sheet.width,
+            top: sheet.top + (thing.y / 100) * sheet.height,
+            width: (thing.width / 100) * sheet.width,
+            height: (thing.height / 100) * sheet.height,
+        })),
+        caption,
+        lines,
+        next,
+    };
+}
+/** The thing whose box, grown to a fingertip, holds (`x`, `y`) on the stage — the nearest middle of several; null over none. */
+function storySceneThingAt(layout, things, x, y) {
+    const reach = exports.STORY_SCENE_LAYOUT.minHit / 2;
+    let best = null;
+    layout.things.forEach((box, index) => {
+        const thing = things[index];
+        if (!thing || box.width <= 0 || box.height <= 0)
+            return;
+        const middleX = box.left + box.width / 2;
+        const middleY = box.top + box.height / 2;
+        const inside = Math.abs(x - middleX) <= Math.max(box.width / 2, reach) && Math.abs(y - middleY) <= Math.max(box.height / 2, reach);
+        const distance = Math.hypot(x - middleX, y - middleY);
+        if (inside && (!best || distance < best.distance)) {
+            best = { id: thing.id, distance };
+        }
+    });
+    return best?.id ?? null;
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -8022,6 +8234,7 @@ exports.GAME_KIND_KEYS = {
     "chart-read": "chartRead",
     "find-in-scene": "findInScene",
     "map-place": "mapPlace",
+    "story-scene": "storyScene",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -8057,6 +8270,7 @@ exports.GAME_TIMINGS_BY_KIND = {
     "chart-read": exports.GAME_TIMINGS.chartRead,
     "find-in-scene": exports.GAME_TIMINGS.findInScene,
     "map-place": exports.GAME_TIMINGS.mapPlace,
+    "story-scene": exports.GAME_TIMINGS.storyScene,
     "memory-cards": exports.GAME_TIMINGS.memoryCards,
     "pattern-next": exports.GAME_TIMINGS.patternNext,
     "select-option": exports.GAME_TIMINGS.selectOption,
@@ -8098,6 +8312,7 @@ exports.GAME_GESTURES = {
     "chart-read": "tap",
     "find-in-scene": "tap",
     "map-place": "drag",
+    "story-scene": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",

@@ -2640,5 +2640,70 @@ section('map_place: pictures put on their places on a map');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.mapPlace.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['map-place'] === rules.GAME_TIMINGS.mapPlace && rules.GAME_GESTURES['map-place'] === 'drag');
 }
 
+section('story_scene: a story told on a scene, the child helping along');
+
+{
+  ['story_scene', 'tell_story', 'Story Scene'].forEach((type) => {
+    check(`${type} resolves to story-scene`, rules.resolveGameKind(type, {}) === 'story-scene');
+  });
+
+  const config = rules.normalizeStorySceneConfig({
+    bg_image: 'https://x/narikala.webp',
+    board_width: 1600,
+    board_height: 900,
+    placements: [
+      { image: 'https://x/lantern.webp', x: 20, y: 50, width: 10, height: 18 },
+      { image: 'https://x/firefly.webp', x: 60, y: 20, width: 8, height: 12 },
+      { x: 75, y: 70, width: 6, height: 8 },
+    ],
+    pieces: [
+      { text: 'ღამით ნარიყალაზე ქარმა ჩემი ციცინათელები გაფანტა.', voice: 'https://x/v1.mp3', action: 'listen' },
+      { text: 'შეეხე ფარანს!', voice: 'https://x/v2.mp3', action: 'tap', thing: 0 },
+      { text: 'მიიყვანე ციცინათელა იქ.', voice: 'https://x/v3.mp3', action: 'drag', thing: 1, place: 2 },
+      { text: 'გაუწყვეტელი', action: 'drag', thing: 2, place: 0 },
+      { text: '', voice: '' },
+    ],
+  });
+  check('the things in their order, the pieces with their actions; an empty piece is none', config.things.length === 3 && config.pieces.length === 4
+    && config.pieces.map((piece) => piece.action).join() === 'listen,tap,drag,listen' && config.pieces[2].thing === 'thing_2' && config.pieces[2].place === 'thing_3'
+    && config.voiceUris.length === 3 && config.time_limit === null);
+  check('no game: no picture, no size, no piece', rules.normalizeStorySceneConfig({ board_width: 10, board_height: 10, pieces: [{ text: 'a' }] }).pieces.length === 0
+    && rules.normalizeStorySceneConfig({ bg_image: 'b', pieces: [{ text: 'a' }] }).pieces.length === 0
+    && rules.normalizeStorySceneConfig({ bg_image: 'b', board_width: 10, board_height: 10, pieces: [] }).pieces.length === 0);
+
+  const step = rules.resolveStorySceneStep;
+  check('a piece listened to goes on with the button alone', step(config, 0, { kind: 'next' }).type === 'done' && step(config, 0, { kind: 'tap', thingId: 'thing_1' }).type === 'ignored');
+  check('a tap on its thing goes on, on another nothing', step(config, 1, { kind: 'tap', thingId: 'thing_1' }).type === 'done' && step(config, 1, { kind: 'tap', thingId: 'thing_2' }).type === 'ignored'
+    && step(config, 1, { kind: 'next' }).type === 'ignored');
+  check('its thing carried to its place goes on; anywhere else nothing; the last piece completes', step(config, 2, { kind: 'drop', thingId: 'thing_2', placeId: 'thing_3' }).type === 'done'
+    && step(config, 2, { kind: 'drop', thingId: 'thing_2', placeId: null }).type === 'ignored' && step(config, 2, { kind: 'drop', thingId: 'thing_1', placeId: 'thing_3' }).type === 'ignored'
+    && step(config, 3, { kind: 'next' }).complete === true && step(config, 4, { kind: 'next' }).type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [1024, 768, {}], [667, 300, { top: 60 }], [600, 800, {}]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => config.pieces.forEach((piece, index) => {
+    const layout = rules.layoutStoryScene(w, h, config, index, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout && inside(layout.sheet, stage) && inside(layout.caption, stage) && inside(layout.next, stage)
+      && !overlap(layout.sheet, layout.caption) && !overlap(layout.sheet, layout.next) && !overlap(layout.caption, layout.next)
+      && Math.abs(layout.sheet.width / layout.sheet.height - 16 / 9) < 1e-6 && layout.things.every((thing) => inside(thing, layout.sheet))
+      && layout.lines.every((line) => inside(line, layout.caption) && line.height >= rules.STORY_SCENE_LAYOUT.minLine) && layout.next.height >= 48;
+    if (!ok && whole) { whole = false; detail = `${w}x${h} piece ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the scene is whole over its caption and the go-on button, inside the safe area', whole, detail);
+  const first = rules.layoutStoryScene(852, 393, config, 0, {});
+  const second = rules.layoutStoryScene(852, 393, config, 1, {});
+  check('the scene stays put from piece to piece; a short piece is written on its caption', JSON.stringify(first.sheet) === JSON.stringify(second.sheet) && second.lines.length > 0);
+  const lantern = first.things[0];
+  check('a tap or a carry is read on the nearest thing grown to a fingertip', rules.storySceneThingAt(first, config.things, lantern.left + lantern.width / 2, lantern.top + lantern.height / 2) === 'thing_1'
+    && rules.storySceneThingAt(first, config.things, first.sheet.left + first.sheet.width - 2, first.sheet.top + 2) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.storyScene.stepMs > 0 && rules.GAME_TIMINGS_BY_KIND['story-scene'] === rules.GAME_TIMINGS.storyScene && rules.GAME_GESTURES['story-scene'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

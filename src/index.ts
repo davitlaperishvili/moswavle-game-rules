@@ -83,6 +83,7 @@ export type RuntimeGameKind =
   | "chart-read"
   | "find-in-scene"
   | "map-place"
+  | "story-scene"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -1536,6 +1537,15 @@ export function resolveGameKind(
     "put_on_map",
   ].includes(normalizedType)) {
     return "map-place";
+  }
+
+  if ([
+    "story_scene",
+    "storyscene",
+    "story",
+    "tell_story",
+  ].includes(normalizedType)) {
+    return "story-scene";
   }
 
   if ([
@@ -4687,6 +4697,11 @@ export const GAME_TIMINGS = {
    * it for `wrongFeedbackMs` and goes back. The last one put waits `successSettleMs`.
    */
   mapPlace: { wrongFeedbackMs: 520, flyMs: 280, successSettleMs: 900, livesOutDelayMs: 320 },
+  /**
+   * A step done shows for `stepMs` before the next piece; a thing carried goes
+   * to its place over `carryMs`. Nothing is wrong in a story, and it has no lives.
+   */
+  storyScene: { stepMs: 700, carryMs: 320, successSettleMs: 1000, livesOutDelayMs: 320 },
   mathEquation: {
     wrongFeedbackMs: 560,
     flyMs: 620,
@@ -10940,6 +10955,276 @@ export function mapPlaceSpotAt(layout: Pick<MapPlaceLayout, "spots">, x: number,
   return best ? best.id : null;
 }
 
+// --- story_scene: a story told on a scene, the child helping along ---------------
+//
+// A scene shown whole, like label_diagram's sheet, with the story's heroes and
+// things standing on it. Tsitsina tells the story a piece at a time — its own
+// clip, its words on a caption under the scene where they are short enough —
+// and after each piece the child does one thing: taps a thing, carries a thing
+// to a place, or only listens and goes on. Nothing is scored: there are no
+// lives and no clock, a tap elsewhere only shows the way again. The journeys
+// are made of these.
+
+export const STORY_SCENE_PIECES = { min: 1, max: 6 } as const;
+
+export type StoryAction = "tap" | "drag" | "listen";
+
+/** A thing on the scene, in percent of it; null `image` for a point of the scene itself. */
+export type StorySceneThing = {
+  id: string;
+  image: string | null;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type StoryScenePiece = {
+  id: string;
+  /** What Tsitsina says, in the language the game is played in. */
+  text: string;
+  /** Its recording, or null when none was made. */
+  voice: string | null;
+  action: StoryAction;
+  /** tap: the thing to tap; drag: the thing to carry. */
+  thing: string | null;
+  /** drag: where it goes. */
+  place: string | null;
+};
+
+export type StorySceneConfig = {
+  things: StorySceneThing[];
+  /** Empty when the game is none. */
+  pieces: StoryScenePiece[];
+  board: { width: number; height: number } | null;
+  bg_image: string | null;
+  /** A story is never timed. */
+  time_limit: null;
+  lives: number;
+  imageUris: string[];
+  /** The pieces' recordings: fetched with the pictures, before the scene opens. */
+  voiceUris: string[];
+};
+
+/**
+ * The game as the players draw it. `placements` are the things on the scene,
+ * in percent of it — pictures, or points of the scene (only ever a place).
+ * `pieces` are { text, voice, action, thing, place }, `thing` and `place`
+ * counted from 0 among the placements. A tap needs a thing; a carry a thing
+ * with a picture and another place; a piece whose action cannot be done is
+ * only listened to.
+ */
+export function normalizeStorySceneConfig(config: Record<string, unknown>): StorySceneConfig {
+  const clampPercent = (value: number | null) => Math.max(0, Math.min(100, value ?? 0));
+  const things: StorySceneThing[] = (Array.isArray(config.placements) ? config.placements : [])
+    .map((raw) => asRecord(raw))
+    .map((record) => {
+      if (!record) return null;
+      const x = clampPercent(extractNumber(record.x));
+      const y = clampPercent(extractNumber(record.y));
+      return {
+        image: extractMediaUrl(record.image),
+        x,
+        y,
+        width: Math.min(100 - x, clampPercent(extractNumber(record.width))),
+        height: Math.min(100 - y, clampPercent(extractNumber(record.height))),
+      };
+    })
+    // Kept in place even when empty, so a piece's count still names the right one.
+    .map((thing, index) => ({ id: `thing_${index + 1}`, ...(thing ?? { image: null, x: 0, y: 0, width: 0, height: 0 }) }));
+  const real = (index: unknown): StorySceneThing | null => {
+    const at = extractNumber(index);
+    const thing = at !== null && Number.isInteger(at) ? things[at] : undefined;
+    return thing && thing.width > 0 && thing.height > 0 ? thing : null;
+  };
+
+  const pieces: StoryScenePiece[] = (Array.isArray(config.pieces) ? config.pieces : [])
+    .map((raw) => asRecord(raw))
+    .filter((record): record is Record<string, unknown> => record !== null)
+    .map((record) => {
+      const text = (extractText(record.text) ?? "").replace(/\s+/g, " ").trim();
+      const asked = extractText(record.action);
+      const thing = real(record.thing);
+      const place = real(record.place);
+      let action: StoryAction = "listen";
+      if (asked === "tap" && thing) action = "tap";
+      if (asked === "drag" && thing?.image && place && place.id !== thing.id) action = "drag";
+      return {
+        text,
+        voice: extractMediaUrl(record.voice),
+        action,
+        thing: action === "listen" ? null : thing?.id ?? null,
+        place: action === "drag" ? place?.id ?? null : null,
+      };
+    })
+    .filter((piece) => piece.text !== "" || piece.voice !== null)
+    .slice(0, STORY_SCENE_PIECES.max)
+    .map((piece, index) => ({ id: `piece_${index + 1}`, ...piece }));
+
+  const boardWidth = extractNumber(config.board_width);
+  const boardHeight = extractNumber(config.board_height);
+  const bg = extractMediaUrl(config.bg_image);
+  const playable = Boolean(bg) && pieces.length >= STORY_SCENE_PIECES.min && boardWidth !== null && boardHeight !== null && boardWidth > 0 && boardHeight > 0;
+
+  return {
+    things: playable ? things : [],
+    pieces: playable ? pieces : [],
+    board: playable ? { width: boardWidth as number, height: boardHeight as number } : null,
+    bg_image: bg,
+    time_limit: null,
+    lives: 1,
+    imageUris: [...new Set([bg, ...things.map((thing) => thing.image)].filter((uri): uri is string => Boolean(uri)))],
+    voiceUris: playable ? [...new Set(pieces.map((piece) => piece.voice).filter((uri): uri is string => Boolean(uri)))] : [],
+  };
+}
+
+export type StorySceneStepResult =
+  /** Not this piece's thing, or not its way: nothing happens but the way being shown again. */
+  | { type: "ignored" }
+  /** Done: the story goes on; `complete` when it was the last piece. */
+  | { type: "done"; complete: boolean };
+
+/**
+ * What the child's step does at the piece `index`: a tap on `thingId`, a
+ * carry of `thingId` let go on `placeId`, or the go-on button (`thingId`
+ * null) of a piece only listened to.
+ */
+export function resolveStorySceneStep(
+  config: Pick<StorySceneConfig, "pieces">,
+  index: number,
+  step: { kind: "tap" | "next"; thingId?: string | null } | { kind: "drop"; thingId: string; placeId: string | null },
+): StorySceneStepResult {
+  const piece = config.pieces[index];
+  if (!piece) {
+    return { type: "ignored" };
+  }
+  const done = { type: "done" as const, complete: index + 1 === config.pieces.length };
+  if (piece.action === "listen") return step.kind === "next" ? done : { type: "ignored" };
+  if (piece.action === "tap") return step.kind === "tap" && step.thingId === piece.thing ? done : { type: "ignored" };
+  return step.kind === "drop" && step.thingId === piece.thing && step.placeId === piece.place ? done : { type: "ignored" };
+}
+
+/** Proportions of the story scene. */
+export const STORY_SCENE_LAYOUT = {
+  /** The caption under the scene: of the free height, within these in px. */
+  captionShare: 0.2,
+  minCaption: 56,
+  maxCaption: 110,
+  /** Its writing: no bigger than this, and under `minLine` it is not shown — the voice tells it. */
+  maxLine: 34,
+  minLine: 17,
+  /** The go-on button at the caption's right, as tall as the caption. */
+  nextShare: 1,
+  /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+  sheetRim: 6,
+  /** A carry lands on a place this far round its middle at least, in px; a tap too. */
+  minHit: 52,
+} as const;
+
+export type StorySceneLayout = {
+  /** The scene, whole and never cropped. */
+  sheet: BoardRect;
+  /** Each thing on the stage, in `things` order. */
+  things: BoardRect[];
+  /** The caption and its writing (empty when the piece is too long to show: the voice tells it). */
+  caption: BoardRect;
+  lines: TextLineBox[];
+  /** The go-on button of a piece only listened to. */
+  next: BoardRect;
+};
+
+/**
+ * Where everything of the piece `index` goes: the scene as big as it can be
+ * over a caption band, the go-on button at the band's right. The band is the
+ * same for every piece, so the scene never moves as the story goes on.
+ */
+export function layoutStoryScene(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<StorySceneConfig, "things" | "pieces" | "board">,
+  index: number,
+  insets: SceneInsets = {},
+): StorySceneLayout | null {
+  const L = STORY_SCENE_LAYOUT;
+  const board = config.board;
+  const piece = config.pieces[Math.min(index, config.pieces.length - 1)];
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const gap = sceneGap(stageWidth, stageHeight);
+  const area: BoardRect = {
+    left: (insets.left ?? 0) + edge,
+    top: (insets.top ?? 0) + edge,
+    width: stageWidth - (insets.left ?? 0) - (insets.right ?? 0) - edge * 2,
+    height: stageHeight - (insets.top ?? 0) - (insets.bottom ?? 0) - edge * 2,
+  };
+
+  if (!board || !piece || area.width <= 0 || area.height <= 0) {
+    return null;
+  }
+
+  const band = Math.max(L.minCaption, Math.min(L.maxCaption, area.height * L.captionShare));
+  const room: BoardRect = { left: area.left, top: area.top, width: area.width, height: Math.max(area.height - band - gap, 1) };
+  const fit = Math.min((room.width - L.sheetRim * 2) / board.width, (room.height - L.sheetRim * 2) / board.height);
+  const sheet: BoardRect = {
+    left: room.left + (room.width - board.width * fit) / 2,
+    top: room.top + (room.height - board.height * fit) / 2,
+    width: board.width * fit,
+    height: board.height * fit,
+  };
+  const bandTop = area.top + area.height - band;
+  const next: BoardRect = { left: area.left + area.width - band * L.nextShare, top: bandTop, width: band * L.nextShare, height: band };
+  const captionWidth = Math.min(area.width - next.width - gap, Math.max(sheet.width, area.width * 0.6));
+  const caption: BoardRect = { left: area.left + (area.width - next.width - gap - captionWidth) / 2, top: bandTop, width: captionWidth, height: band };
+
+  let lines: TextLineBox[] = [];
+  if (piece.text !== "") {
+    const passage = fitPassage(piece.text, caption.width * 0.92, caption.height * 0.86);
+    const size = Math.min(passage.size, L.maxLine);
+    if (size >= L.minLine) {
+      lines = passage.lines.map((text, line): TextLineBox => {
+        const width = textLineUnits(text) * size;
+        return {
+          text,
+          left: caption.left + (caption.width - width) / 2,
+          top: caption.top + (caption.height - passage.lines.length * size) / 2 + line * size,
+          width,
+          height: size,
+        };
+      });
+    }
+  }
+
+  return {
+    sheet,
+    things: config.things.map((thing) => ({
+      left: sheet.left + (thing.x / 100) * sheet.width,
+      top: sheet.top + (thing.y / 100) * sheet.height,
+      width: (thing.width / 100) * sheet.width,
+      height: (thing.height / 100) * sheet.height,
+    })),
+    caption,
+    lines,
+    next,
+  };
+}
+
+/** The thing whose box, grown to a fingertip, holds (`x`, `y`) on the stage — the nearest middle of several; null over none. */
+export function storySceneThingAt(layout: Pick<StorySceneLayout, "things">, things: readonly StorySceneThing[], x: number, y: number): string | null {
+  const reach = STORY_SCENE_LAYOUT.minHit / 2;
+  let best: { id: string; distance: number } | null = null;
+  layout.things.forEach((box, index) => {
+    const thing = things[index];
+    if (!thing || box.width <= 0 || box.height <= 0) return;
+    const middleX = box.left + box.width / 2;
+    const middleY = box.top + box.height / 2;
+    const inside = Math.abs(x - middleX) <= Math.max(box.width / 2, reach) && Math.abs(y - middleY) <= Math.max(box.height / 2, reach);
+    const distance = Math.hypot(x - middleX, y - middleY);
+    if (inside && (!best || distance < best.distance)) {
+      best = { id: thing.id, distance };
+    }
+  });
+  return (best as { id: string; distance: number } | null)?.id ?? null;
+}
+
 // --- Attempt metrics --------------------------------------------------------
 
 /**
@@ -11118,6 +11403,12 @@ export type MapPlaceMetrics = BaseGameMetrics & {
   livesRemaining: number;
 };
 
+export type StorySceneMetrics = BaseGameMetrics & {
+  /** Pieces told, and taps that did nothing (never a mistake). */
+  pieces: number;
+  strayTaps: number;
+};
+
 export type TextChoiceMetrics = BaseGameMetrics & {
   /** Right answers the game has, and how many of them were found. */
   correct: number;
@@ -11206,6 +11497,7 @@ export const GAME_KIND_KEYS = {
   "chart-read": "chartRead",
   "find-in-scene": "findInScene",
   "map-place": "mapPlace",
+  "story-scene": "storyScene",
   "memory-cards": "memoryCards",
   "pattern-next": "patternNext",
   "select-option": "selectOption",
@@ -11246,6 +11538,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "chart-read": GAME_TIMINGS.chartRead,
   "find-in-scene": GAME_TIMINGS.findInScene,
   "map-place": GAME_TIMINGS.mapPlace,
+  "story-scene": GAME_TIMINGS.storyScene,
   "memory-cards": GAME_TIMINGS.memoryCards,
   "pattern-next": GAME_TIMINGS.patternNext,
   "select-option": GAME_TIMINGS.selectOption,
@@ -11293,6 +11586,7 @@ export const GAME_GESTURES = {
   "chart-read": "tap",
   "find-in-scene": "tap",
   "map-place": "drag",
+  "story-scene": "tap",
   "memory-cards": "tap",
   "pattern-next": "tap",
   "select-option": "tap",
@@ -11384,6 +11678,7 @@ export type GameMetricsByKind = {
   "chart-read": ChartReadMetrics;
   "find-in-scene": FindInSceneMetrics;
   "map-place": MapPlaceMetrics;
+  "story-scene": StorySceneMetrics;
   "memory-cards": MemoryCardsMetrics;
   "pattern-next": PatternNextMetrics;
   "select-option": SelectOptionMetrics;
