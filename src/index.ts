@@ -10961,13 +10961,23 @@ export function mapPlaceSpotAt(layout: Pick<MapPlaceLayout, "spots">, x: number,
 // things standing on it. Tsitsina tells the story a piece at a time — its own
 // clip, its words on a caption under the scene where they are short enough —
 // and after each piece the child does one thing: taps a thing, carries a thing
-// to a place, or only listens and goes on. Nothing is scored: there are no
-// lives and no clock, a tap elsewhere only shows the way again. The journeys
-// are made of these.
+// to a place, only listens and goes on — or chooses: what to take on the way,
+// where to go, among two or three things, and the reply told after it is that
+// choice's own (the plan's "story_choice"). Nothing is scored: there are no
+// lives and no clock, no choice is wrong, a tap elsewhere only shows the way
+// again. The journeys are made of these.
 
 export const STORY_SCENE_PIECES = { min: 1, max: 6 } as const;
 
-export type StoryAction = "tap" | "drag" | "listen";
+export type StoryAction = "tap" | "drag" | "listen" | "choose";
+
+/** A thing to choose among, and what is told once it is chosen. */
+export type StoryChoice = {
+  thing: string;
+  /** The reply, in the language the game is played in, and its recording. */
+  text: string;
+  voice: string | null;
+};
 
 /** A thing on the scene, in percent of it; null `image` for a point of the scene itself. */
 export type StorySceneThing = {
@@ -10990,6 +11000,8 @@ export type StoryScenePiece = {
   thing: string | null;
   /** drag: where it goes. */
   place: string | null;
+  /** choose: two or three things, each with its reply. Empty otherwise. */
+  choices: StoryChoice[];
 };
 
 export type StorySceneConfig = {
@@ -11046,15 +11058,24 @@ export function normalizeStorySceneConfig(config: Record<string, unknown>): Stor
       const asked = extractText(record.action);
       const thing = real(record.thing);
       const place = real(record.place);
+      const choices: StoryChoice[] = (Array.isArray(record.choices) ? record.choices : [])
+        .map((raw) => asRecord(raw))
+        .map((choice) => ({ thing: real(choice?.thing), text: (extractText(choice?.text) ?? "").replace(/\s+/g, " ").trim(), voice: extractMediaUrl(choice?.voice) }))
+        .filter((choice, at, all): choice is { thing: StorySceneThing; text: string; voice: string | null } =>
+          choice.thing !== null && all.findIndex((other) => other.thing?.id === choice.thing?.id) === at)
+        .slice(0, 3)
+        .map((choice) => ({ thing: choice.thing.id, text: choice.text, voice: choice.voice }));
       let action: StoryAction = "listen";
       if (asked === "tap" && thing) action = "tap";
       if (asked === "drag" && thing?.image && place && place.id !== thing.id) action = "drag";
+      if (asked === "choose" && choices.length >= 2) action = "choose";
       return {
         text,
         voice: extractMediaUrl(record.voice),
         action,
-        thing: action === "listen" ? null : thing?.id ?? null,
+        thing: action === "tap" || action === "drag" ? thing?.id ?? null : null,
         place: action === "drag" ? place?.id ?? null : null,
+        choices: action === "choose" ? choices : [],
       };
     })
     .filter((piece) => piece.text !== "" || piece.voice !== null)
@@ -11074,7 +11095,9 @@ export function normalizeStorySceneConfig(config: Record<string, unknown>): Stor
     time_limit: null,
     lives: 1,
     imageUris: [...new Set([bg, ...things.map((thing) => thing.image)].filter((uri): uri is string => Boolean(uri)))],
-    voiceUris: playable ? [...new Set(pieces.map((piece) => piece.voice).filter((uri): uri is string => Boolean(uri)))] : [],
+    voiceUris: playable
+      ? [...new Set(pieces.flatMap((piece) => [piece.voice, ...piece.choices.map((choice) => choice.voice)]).filter((uri): uri is string => Boolean(uri)))]
+      : [],
   };
 }
 
@@ -11082,17 +11105,21 @@ export type StorySceneStepResult =
   /** Not this piece's thing, or not its way: nothing happens but the way being shown again. */
   | { type: "ignored" }
   /** Done: the story goes on; `complete` when it was the last piece. */
-  | { type: "done"; complete: boolean };
+  | { type: "done"; complete: boolean }
+  /** choose: this one is chosen — its reply is told, then the go-on button goes on. */
+  | { type: "chosen"; choice: StoryChoice };
 
 /**
  * What the child's step does at the piece `index`: a tap on `thingId`, a
  * carry of `thingId` let go on `placeId`, or the go-on button (`thingId`
- * null) of a piece only listened to.
+ * null) of a piece only listened to. A piece to choose in takes a tap on one
+ * of its things (`chosen`), and then — `chosen` passed back — the go-on button.
  */
 export function resolveStorySceneStep(
   config: Pick<StorySceneConfig, "pieces">,
   index: number,
   step: { kind: "tap" | "next"; thingId?: string | null } | { kind: "drop"; thingId: string; placeId: string | null },
+  chosen: string | null = null,
 ): StorySceneStepResult {
   const piece = config.pieces[index];
   if (!piece) {
@@ -11100,6 +11127,11 @@ export function resolveStorySceneStep(
   }
   const done = { type: "done" as const, complete: index + 1 === config.pieces.length };
   if (piece.action === "listen") return step.kind === "next" ? done : { type: "ignored" };
+  if (piece.action === "choose") {
+    if (chosen !== null) return step.kind === "next" ? done : { type: "ignored" };
+    const choice = step.kind === "tap" ? piece.choices.find((entry) => entry.thing === step.thingId) : undefined;
+    return choice ? { type: "chosen", choice } : { type: "ignored" };
+  }
   if (piece.action === "tap") return step.kind === "tap" && step.thingId === piece.thing ? done : { type: "ignored" };
   return step.kind === "drop" && step.thingId === piece.thing && step.placeId === piece.place ? done : { type: "ignored" };
 }
@@ -11144,6 +11176,8 @@ export function layoutStoryScene(
   config: Pick<StorySceneConfig, "things" | "pieces" | "board">,
   index: number,
   insets: SceneInsets = {},
+  /** What the caption says, when not the piece's own words: a choice's reply. */
+  told?: string,
 ): StorySceneLayout | null {
   const L = STORY_SCENE_LAYOUT;
   const board = config.board;
@@ -11176,8 +11210,9 @@ export function layoutStoryScene(
   const caption: BoardRect = { left: area.left + (area.width - next.width - gap - captionWidth) / 2, top: bandTop, width: captionWidth, height: band };
 
   let lines: TextLineBox[] = [];
-  if (piece.text !== "") {
-    const passage = fitPassage(piece.text, caption.width * 0.92, caption.height * 0.86);
+  const words = told ?? piece.text;
+  if (words !== "") {
+    const passage = fitPassage(words, caption.width * 0.92, caption.height * 0.86);
     const size = Math.min(passage.size, L.maxLine);
     if (size >= L.minLine) {
       lines = passage.lines.map((text, line): TextLineBox => {

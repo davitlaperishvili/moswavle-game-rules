@@ -2705,5 +2705,41 @@ section('story_scene: a story told on a scene, the child helping along');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.storyScene.stepMs > 0 && rules.GAME_TIMINGS_BY_KIND['story-scene'] === rules.GAME_TIMINGS.storyScene && rules.GAME_GESTURES['story-scene'] === 'tap');
 }
 
+section('story_scene: a choice of the way, its reply its own');
+
+{
+  const config = rules.normalizeStorySceneConfig({
+    bg_image: 'https://x/road.webp',
+    board_width: 1600,
+    board_height: 900,
+    placements: [
+      { image: 'https://x/umbrella.webp', x: 20, y: 50, width: 10, height: 18 },
+      { image: 'https://x/hat.webp', x: 45, y: 50, width: 10, height: 18 },
+      { image: 'https://x/kite.webp', x: 70, y: 50, width: 10, height: 18 },
+    ],
+    pieces: [
+      { text: 'What shall we take?', action: 'choose', choices: [
+        { thing: 0, text: 'An umbrella: Svaneti is rainy!', voice: 'https://x/c1.mp3' },
+        { thing: 1, text: 'A hat: the sun is high.', voice: 'https://x/c2.mp3' },
+        { thing: 1, text: 'twice' },
+        { thing: 9, text: 'none' },
+      ] },
+      { text: 'Only one to choose', action: 'choose', choices: [{ thing: 2, text: 'kite' }] },
+    ],
+  });
+  const [choose, single] = config.pieces;
+  check('two or three things to choose among, each its reply; a thing twice or not there is none; one choice is no choice', choose.action === 'choose'
+    && choose.choices.length === 2 && choose.choices[1].text === 'A hat: the sun is high.' && single.action === 'listen' && config.voiceUris.length === 2);
+
+  const step = rules.resolveStorySceneStep;
+  const picked = step(config, 0, { kind: 'tap', thingId: 'thing_2' });
+  check('a tap on one of its things chooses it; on another thing nothing; the button waits for a choice', picked.type === 'chosen' && picked.choice.text === 'A hat: the sun is high.'
+    && step(config, 0, { kind: 'tap', thingId: 'thing_3' }).type === 'ignored' && step(config, 0, { kind: 'next' }).type === 'ignored');
+  check('once chosen, the button goes on and no other choice is taken', step(config, 0, { kind: 'next' }, 'thing_2').type === 'done' && step(config, 0, { kind: 'tap', thingId: 'thing_1' }, 'thing_2').type === 'ignored');
+  const own = rules.layoutStoryScene(852, 393, config, 0, {});
+  const reply = rules.layoutStoryScene(852, 393, config, 0, {}, 'A hat: the sun is high.');
+  check('the caption tells the reply once chosen, the scene where it was', reply.lines.map((line) => line.text).join(' ') === 'A hat: the sun is high.' && JSON.stringify(own.sheet) === JSON.stringify(reply.sheet));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

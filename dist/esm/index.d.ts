@@ -3536,7 +3536,14 @@ export declare const STORY_SCENE_PIECES: {
     readonly min: 1;
     readonly max: 6;
 };
-export type StoryAction = "tap" | "drag" | "listen";
+export type StoryAction = "tap" | "drag" | "listen" | "choose";
+/** A thing to choose among, and what is told once it is chosen. */
+export type StoryChoice = {
+    thing: string;
+    /** The reply, in the language the game is played in, and its recording. */
+    text: string;
+    voice: string | null;
+};
 /** A thing on the scene, in percent of it; null `image` for a point of the scene itself. */
 export type StorySceneThing = {
     id: string;
@@ -3557,6 +3564,8 @@ export type StoryScenePiece = {
     thing: string | null;
     /** drag: where it goes. */
     place: string | null;
+    /** choose: two or three things, each with its reply. Empty otherwise. */
+    choices: StoryChoice[];
 };
 export type StorySceneConfig = {
     things: StorySceneThing[];
@@ -3592,11 +3601,17 @@ export type StorySceneStepResult =
  | {
     type: "done";
     complete: boolean;
+}
+/** choose: this one is chosen — its reply is told, then the go-on button goes on. */
+ | {
+    type: "chosen";
+    choice: StoryChoice;
 };
 /**
  * What the child's step does at the piece `index`: a tap on `thingId`, a
  * carry of `thingId` let go on `placeId`, or the go-on button (`thingId`
- * null) of a piece only listened to.
+ * null) of a piece only listened to. A piece to choose in takes a tap on one
+ * of its things (`chosen`), and then — `chosen` passed back — the go-on button.
  */
 export declare function resolveStorySceneStep(config: Pick<StorySceneConfig, "pieces">, index: number, step: {
     kind: "tap" | "next";
@@ -3605,7 +3620,7 @@ export declare function resolveStorySceneStep(config: Pick<StorySceneConfig, "pi
     kind: "drop";
     thingId: string;
     placeId: string | null;
-}): StorySceneStepResult;
+}, chosen?: string | null): StorySceneStepResult;
 /** Proportions of the story scene. */
 export declare const STORY_SCENE_LAYOUT: {
     /** The caption under the scene: of the free height, within these in px. */
@@ -3638,7 +3653,9 @@ export type StorySceneLayout = {
  * over a caption band, the go-on button at the band's right. The band is the
  * same for every piece, so the scene never moves as the story goes on.
  */
-export declare function layoutStoryScene(stageWidth: number, stageHeight: number, config: Pick<StorySceneConfig, "things" | "pieces" | "board">, index: number, insets?: SceneInsets): StorySceneLayout | null;
+export declare function layoutStoryScene(stageWidth: number, stageHeight: number, config: Pick<StorySceneConfig, "things" | "pieces" | "board">, index: number, insets?: SceneInsets, 
+/** What the caption says, when not the piece's own words: a choice's reply. */
+told?: string): StorySceneLayout | null;
 /** The thing whose box, grown to a fingertip, holds (`x`, `y`) on the stage — the nearest middle of several; null over none. */
 export declare function storySceneThingAt(layout: Pick<StorySceneLayout, "things">, things: readonly StorySceneThing[], x: number, y: number): string | null;
 /**
