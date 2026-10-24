@@ -2570,6 +2570,13 @@ export declare function fractionShapeViewBox(shape: FractionShape): {
  * players draw these and nothing else, so a part is the same on both.
  */
 export declare function fractionPartPaths(shape: FractionShape, parts: number): string[];
+/**
+ * Which part of a shape a point falls in, the point given as shares of the
+ * shape's box (0 to 1 across and down); -1 outside the drawing. A player that
+ * takes a tap on the whole shape asks this, so the parts are the same as
+ * `fractionPartPaths` draws them.
+ */
+export declare function fractionPartAt(shape: FractionShape, parts: number, across: number, down: number): number;
 /** Proportions of the fraction game. */
 export declare const FRACTION_PICK_LAYOUT: {
     /** The shape's share of the width (shade) or the fraction's column (pick), tried in turn. */

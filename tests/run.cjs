@@ -2156,6 +2156,9 @@ section('fraction_pick: shade a fraction of a shape, or pick the shape that show
   const right = pick.options.find((option) => label(option.fraction) === '1/2');
   const wrong = pick.options.find((option) => label(option.fraction) === '1/3');
   check('a shape: right, wrong, or none of them', rules.resolveFractionPickTap(pick, right.id).type === 'right' && rules.resolveFractionPickTap(pick, wrong.id).type === 'wrong' && rules.resolveFractionPickTap(pick, 'nope').type === 'ignored');
+  check('a point falls in the part drawn there, and outside in none',
+    rules.fractionPartAt('circle', 4, 0.7, 0.3) === 0 && rules.fractionPartAt('circle', 4, 0.7, 0.7) === 1 && rules.fractionPartAt('circle', 4, 0.3, 0.7) === 2 && rules.fractionPartAt('circle', 4, 0.3, 0.3) === 3
+      && rules.fractionPartAt('circle', 4, 0.02, 0.02) === -1 && rules.fractionPartAt('bar', 5, 0.05, 0.5) === 0 && rules.fractionPartAt('bar', 5, 0.95, 0.5) === 4 && rules.fractionPartAt('bar', 5, 0.5, 0.99) === -1);
   check('a circle is cut from the top clockwise, a bar from the left, into as many parts as asked',
     rules.fractionPartPaths('circle', 4).length === 4 && rules.fractionPartPaths('circle', 4)[0] === 'M50 50L50 4A46 46 0 0 1 96 50Z'
       && rules.fractionPartPaths('bar', 3)[0] === 'M4 4H101.33V96H4Z' && rules.fractionShapeViewBox('bar').width === 300);

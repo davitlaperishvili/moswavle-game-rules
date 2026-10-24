@@ -5944,6 +5944,32 @@ export function fractionPartPaths(shape, parts) {
     };
     return Array.from({ length: count }, (_unused, index) => `M50 50L${point(index)}A46 46 0 0 1 ${point(index + 1)}Z`);
 }
+/**
+ * Which part of a shape a point falls in, the point given as shares of the
+ * shape's box (0 to 1 across and down); -1 outside the drawing. A player that
+ * takes a tap on the whole shape asks this, so the parts are the same as
+ * `fractionPartPaths` draws them.
+ */
+export function fractionPartAt(shape, parts, across, down) {
+    const count = Math.max(1, Math.min(FRACTION_PARTS.max, Math.floor(parts)));
+    const view = fractionShapeViewBox(shape);
+    const x = across * view.width;
+    const y = down * view.height;
+    if (shape === "bar") {
+        if (x < 4 || x > 296 || y < 4 || y > 96) {
+            return -1;
+        }
+        return Math.min(count - 1, Math.floor(((x - 4) / 292) * count));
+    }
+    const dx = x - 50;
+    const dy = y - 50;
+    if (Math.hypot(dx, dy) > 46) {
+        return -1;
+    }
+    // Clockwise from the top, as the slices are cut.
+    const turn = (Math.atan2(dx, -dy) / (Math.PI * 2) + 1) % 1;
+    return Math.min(count - 1, Math.floor(turn * count));
+}
 /** Proportions of the fraction game. */
 export const FRACTION_PICK_LAYOUT = {
     /** The shape's share of the width (shade) or the fraction's column (pick), tried in turn. */
