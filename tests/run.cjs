@@ -2191,5 +2191,60 @@ section('fraction_pick: shade a fraction of a shape, or pick the shape that show
   check('the timings and the gesture are there', rules.GAME_TIMINGS.fractionPick.fillMs > 0 && rules.GAME_TIMINGS_BY_KIND['fraction-pick'] === rules.GAME_TIMINGS.fractionPick && rules.GAME_GESTURES['fraction-pick'] === 'tap');
 }
 
+section('sentence_build: a sentence put together from its words');
+
+{
+  ['sentence_build', 'build_sentence', 'word_order', 'Sentence Build'].forEach((type) => {
+    check(`${type} resolves to sentence-build`, rules.resolveGameKind(type, {}) === 'sentence-build');
+  });
+  check('a word is still its own game', rules.resolveGameKind('word_build', {}) === 'word-build');
+
+  const ka = rules.normalizeSentenceBuildConfig({ sentence: '  ნინომ ბაღში  პატარა კატა იპოვა. ', extra_words: 'სკოლაში, ძაღლი კატა', question_image: 'https://x/cat.webp', bg_image: 'https://x/bg.webp', time_limit: 90 });
+  check('the sentence a word a place, its end mark apart', ka.words.join(' ') === 'ნინომ ბაღში პატარა კატა იპოვა' && ka.ending === '.');
+  check('the tiles: its words and the ones that do not belong — none of them a word of it', ka.tiles.length === 7 && ka.tiles.map((tile) => tile.word).sort().join() === ['ნინომ', 'ბაღში', 'პატარა', 'კატა', 'იპოვა', 'სკოლაში', 'ძაღლი'].sort().join());
+  check('mixed, never already in order', !ka.tiles.slice(0, 5).every((tile, index) => tile.word === ka.words[index]));
+  check('defaults: lives 3, the background and the picture to preload', ka.lives === 3 && ka.time_limit === 90 && ka.imageUris.join() === 'https://x/bg.webp,https://x/cat.webp');
+  const ru = rules.normalizeSentenceBuildConfig({ sentence: 'Кошка спит на окне?', extra_words: ['собака', 'Собака'] });
+  check('a question mark, and a word that does not belong given twice is one tile', ru.ending === '?' && ru.tiles.length === 5);
+  check('no end mark is none', rules.normalizeSentenceBuildConfig({ sentence: 'Tom runs fast' }).ending === '');
+  check('one word is no sentence, and no game', rules.normalizeSentenceBuildConfig({ sentence: 'Cat.' }).words.length === 0 && rules.normalizeSentenceBuildConfig({ sentence: 'Cat.' }).tiles.length === 0);
+  check('ten words at most, three that do not belong', rules.normalizeSentenceBuildConfig({ sentence: 'a b c d e f g h i j k l', extra_words: 'p q r s t' }).tiles.length === 13);
+
+  const tap = rules.resolveSentenceBuildTap;
+  const game = { words: ['The', 'cat', 'sleeps'], tiles: [{ id: 'a', word: 'cat' }, { id: 'b', word: 'sleeps' }, { id: 'c', word: 'the' }, { id: 'd', word: 'dog' }] };
+  check('the word that comes next goes to its place, whatever its case', JSON.stringify(tap(game, [], 'c')) === '{"type":"place","slot":0,"complete":false}');
+  check('another word is a mistake', JSON.stringify(tap(game, ['c'], 'b')) === '{"type":"wrong","slot":1}' && tap(game, ['c'], 'd').type === 'wrong');
+  check('the last word completes it', JSON.stringify(tap(game, ['c', 'a'], 'b')) === '{"type":"place","slot":2,"complete":true}');
+  check('a tile placed already, or the sentence built, takes nothing', tap(game, ['c'], 'c').type === 'ignored' && tap(game, ['c', 'a', 'b'], 'd').type === 'ignored' && tap(game, [], 'zz').type === 'ignored');
+  const twice = { words: ['a', 'cat', 'and', 'a', 'dog'], tiles: [{ id: 'x', word: 'a' }, { id: 'y', word: 'a' }] };
+  check('a word the sentence has twice: either tile goes first', tap(twice, [], 'y').type === 'place' && tap(twice, ['y', 'q', 'r'], 'x').type === 'place');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const en = rules.normalizeSentenceBuildConfig({ sentence: 'The big brown dog runs in the green park every morning!', extra_words: 'cat, slowly, red' });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [ka, ru, en].forEach((config, index) => {
+    const layout = rules.layoutSentenceBuild(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout && inside(layout.panel, stage) && inside(layout.tray, stage) && !overlap(layout.panel, layout.tray)
+      && layout.slots.length === config.words.length && layout.slots.every((slot) => inside(slot, layout.panel))
+      && layout.slots.every((a, i) => layout.slots.every((b, j) => i === j || !overlap(a, b)))
+      && layout.tiles.length === config.tiles.length && layout.tiles.every((tile) => inside(tile, layout.tray) && tile.height >= 40)
+      && layout.tiles.every((a, i) => layout.tiles.every((b, j) => i === j || !overlap(a, b)))
+      // A tile flies into the place of its word: of the same spelling, they are the same size.
+      && config.tiles.every((tile, i) => { const slot = config.words.findIndex((word) => word === tile.word); return slot < 0 || Math.abs(layout.slots[slot].width - layout.tiles[i].width) < 1e-6; })
+      && (config.ending ? inside(layout.ending, layout.panel) && !layout.slots.some((slot) => overlap(slot, layout.ending)) : layout.ending === null)
+      && (config.questionImage ? inside(layout.picture, layout.panel) && !layout.slots.some((slot) => overlap(slot, layout.picture)) : layout.picture === null);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the sentence, its end mark and its picture on the panel, the tiles below, apart, inside the safe area and big enough to hit', whole, detail);
+  check('no sentence, no layout', rules.layoutSentenceBuild(852, 393, { words: [], tiles: [], ending: '', questionImage: null }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.sentenceBuild.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['sentence-build'] === rules.GAME_TIMINGS.sentenceBuild && rules.GAME_GESTURES['sentence-build'] === 'tap');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

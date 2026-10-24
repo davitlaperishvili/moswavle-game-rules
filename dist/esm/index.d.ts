@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1311,6 +1311,17 @@ export declare const GAME_TIMINGS: {
         readonly wrongFeedbackMs: 560;
         readonly fillMs: 180;
         readonly successSettleMs: 800;
+        readonly livesOutDelayMs: 320;
+    };
+    /**
+     * As word_build: a right word flies to its place over `flyMs`; a wrong one
+     * shakes for `wrongFeedbackMs`. The sentence stays `successSettleMs` once
+     * built, so the child reads it whole before the win.
+     */
+    readonly sentenceBuild: {
+        readonly wrongFeedbackMs: 520;
+        readonly flyMs: 420;
+        readonly successSettleMs: 1100;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -2618,6 +2629,97 @@ export type FractionPickLayout = {
  * two. Two safe areas, apart, inside the stage less `insets`.
  */
 export declare function layoutFractionPick(stageWidth: number, stageHeight: number, config: Pick<FractionPickConfig, "mode" | "shape" | "fraction" | "options">, insets?: SceneInsets): FractionPickLayout | null;
+/** A sentence has at most this many words, and at most this many that do not belong lie among them. */
+export declare const SENTENCE_BUILD_WORDS_MAX = 10;
+export declare const SENTENCE_BUILD_EXTRA_MAX = 3;
+export type SentenceBuildTile = {
+    id: string;
+    word: string;
+};
+export type SentenceBuildConfig = {
+    /** The sentence, a word a place, as written, without its end mark. */
+    words: string[];
+    /** The end mark after the last place: ".", "?", "!", or "". */
+    ending: string;
+    /** Its words and the ones that do not belong, mixed so that they do not already read as the sentence. */
+    tiles: SentenceBuildTile[];
+    /** A picture of what the sentence says; null when it has none. */
+    questionImage: string | null;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background and the picture: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `sentence` arrives already in the language
+ * of the game; its end mark is cut off and stands after the last place.
+ * `extra_words` (a text, or a list) are the words that do not belong — none of
+ * them a word of the sentence. The tiles are mixed so that they do not
+ * already read as the sentence.
+ */
+export declare function normalizeSentenceBuildConfig(config: Record<string, unknown>): SentenceBuildConfig;
+export type SentenceBuildTapResult = 
+/** The sentence is built already, the tile is in it, or the game does not have it. */
+{
+    type: "ignored";
+}
+/** The word that comes next: it goes to `slot`; `complete` when that was the last. */
+ | {
+    type: "place";
+    slot: number;
+    complete: boolean;
+}
+/** Not the word that comes next: a mistake. */
+ | {
+    type: "wrong";
+    slot: number;
+};
+/**
+ * What a tap on a tile does: the whole play rule, so both players follow it
+ * tap for tap. The sentence is built left to right; `placed` are the tiles in
+ * it so far, in order. Any tile of the right word is right.
+ */
+export declare function resolveSentenceBuildTap(config: Pick<SentenceBuildConfig, "words" | "tiles">, placed: readonly string[], tileId: string): SentenceBuildTapResult;
+/** Proportions of the sentence and its tiles. Shares are of a line of writing. */
+export declare const SENTENCE_BUILD_LAYOUT: {
+    /** A tile and a place: this tall for a line, and this much wider than its word. */
+    readonly tileHeight: 1.7;
+    readonly tilePadX: 0.7;
+    /** A line of writing is never taller than this, in px. */
+    readonly maxLine: 46;
+    /** Under this a tile is hard for a small finger to hit, in px. */
+    readonly minTile: 44;
+    /** Between tiles and between places, and round the sentence on its panel. */
+    readonly gap: 0.35;
+    readonly pad: 0.45;
+    /** The picture: a square this many tiles high at the panel's left. */
+    readonly picture: 2.2;
+    /** The most of the free height the sentence's panel takes. */
+    readonly maxPanelShare: 0.55;
+};
+export type SentenceBuildLayout = {
+    /** The panel the sentence sits on, floating on the background. */
+    panel: BoardRect;
+    picture: BoardRect | null;
+    /** A place for every word, in order, as wide as its word. */
+    slots: BoardRect[];
+    /** The end mark after the last place, or null. */
+    ending: TextLineBox | null;
+    /** Around the tiles, and each tile in `tiles` order. */
+    tray: BoardRect;
+    tiles: BoardRect[];
+    /** The height of a line of writing on a tile or a place. */
+    line: number;
+};
+/**
+ * Where everything of a sentence to build goes. The background covers the
+ * stage; the sentence's places sit on a panel above, in one row or more, its
+ * picture at their left when it has one; the tiles below, in rows. One size
+ * of writing for both — the biggest at which they fit — two safe areas a gap
+ * apart, inside the stage less `insets`.
+ */
+export declare function layoutSentenceBuild(stageWidth: number, stageHeight: number, config: Pick<SentenceBuildConfig, "words" | "tiles" | "ending" | "questionImage">, insets?: SceneInsets): SentenceBuildLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -2719,6 +2821,12 @@ export type FractionPickMetrics = BaseGameMetrics & {
     attempts: number;
     livesRemaining: number;
 };
+export type SentenceBuildMetrics = BaseGameMetrics & {
+    /** Words the sentence has, and how many of them stand in it. */
+    words: number;
+    placed: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -2787,6 +2895,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "money-pay": "moneyPay";
     readonly "clock-set": "clockSet";
     readonly "fraction-pick": "fractionPick";
+    readonly "sentence-build": "sentenceBuild";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -2826,6 +2935,7 @@ export declare const GAME_GESTURES: {
     readonly "money-pay": "tap";
     readonly "clock-set": "tap";
     readonly "fraction-pick": "tap";
+    readonly "sentence-build": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -2891,6 +3001,7 @@ export type GameMetricsByKind = {
     "money-pay": MoneyPayMetrics;
     "clock-set": ClockSetMetrics;
     "fraction-pick": FractionPickMetrics;
+    "sentence-build": SentenceBuildMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

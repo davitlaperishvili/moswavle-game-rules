@@ -75,6 +75,7 @@ export type RuntimeGameKind =
   | "money-pay"
   | "clock-set"
   | "fraction-pick"
+  | "sentence-build"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -1442,6 +1443,17 @@ export function resolveGameKind(
     "pick_fraction",
   ].includes(normalizedType)) {
     return "fraction-pick";
+  }
+
+  if ([
+    "sentence_build",
+    "sentencebuild",
+    "build_sentence",
+    "make_sentence",
+    "word_order",
+    "sentence_order",
+  ].includes(normalizedType)) {
+    return "sentence-build";
   }
 
   if ([
@@ -4551,6 +4563,12 @@ export const GAME_TIMINGS = {
    * `wrongFeedbackMs`; the right one is seen `successSettleMs`.
    */
   fractionPick: { wrongFeedbackMs: 560, fillMs: 180, successSettleMs: 800, livesOutDelayMs: 320 },
+  /**
+   * As word_build: a right word flies to its place over `flyMs`; a wrong one
+   * shakes for `wrongFeedbackMs`. The sentence stays `successSettleMs` once
+   * built, so the child reads it whole before the win.
+   */
+  sentenceBuild: { wrongFeedbackMs: 520, flyMs: 420, successSettleMs: 1100, livesOutDelayMs: 320 },
   mathEquation: {
     wrongFeedbackMs: 560,
     flyMs: 620,
@@ -8700,6 +8718,288 @@ export function layoutFractionPick(
   return (best as { score: number; layout: FractionPickLayout } | null)?.layout ?? null;
 }
 
+// --- sentence_build: a sentence put together from its words ------------------
+//
+// The twin of word_build one level up: a place for every word of a sentence,
+// the words on tiles mixed below among a few that do not belong, and the word
+// that comes next flying to its place. The sentence arrives already in the
+// language the game is played in; its end mark (. ? !) stands after the last
+// place from the start. Words are drawn by DrawnText.
+
+/** A sentence has at most this many words, and at most this many that do not belong lie among them. */
+export const SENTENCE_BUILD_WORDS_MAX = 10;
+export const SENTENCE_BUILD_EXTRA_MAX = 3;
+
+export type SentenceBuildTile = { id: string; word: string };
+
+export type SentenceBuildConfig = {
+  /** The sentence, a word a place, as written, without its end mark. */
+  words: string[];
+  /** The end mark after the last place: ".", "?", "!", or "". */
+  ending: string;
+  /** Its words and the ones that do not belong, mixed so that they do not already read as the sentence. */
+  tiles: SentenceBuildTile[];
+  /** A picture of what the sentence says; null when it has none. */
+  questionImage: string | null;
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+  /** The background and the picture: preload before the clock. */
+  imageUris: string[];
+};
+
+/** The words of a text, at its spaces. */
+function readSentenceWords(source: unknown): string[] {
+  if (Array.isArray(source)) {
+    return source.flatMap((item) => readSentenceWords(item));
+  }
+  return (extractText(source) ?? "").split(/[\s,;]+/).map((word) => word.trim()).filter(Boolean);
+}
+
+/** Two words are the same tile when they read the same, whatever their case. */
+function sameSentenceWord(a: string, b: string): boolean {
+  return a.toLocaleLowerCase() === b.toLocaleLowerCase();
+}
+
+/**
+ * The game as the players draw it. `sentence` arrives already in the language
+ * of the game; its end mark is cut off and stands after the last place.
+ * `extra_words` (a text, or a list) are the words that do not belong — none of
+ * them a word of the sentence. The tiles are mixed so that they do not
+ * already read as the sentence.
+ */
+export function normalizeSentenceBuildConfig(config: Record<string, unknown>): SentenceBuildConfig {
+  const text = (extractText(config.sentence) ?? "").replace(/\s+/g, " ").trim();
+  const endMatch = text.match(/[.?!…]+$/);
+  const ending = endMatch ? endMatch[0] : "";
+  const words = readSentenceWords(ending ? text.slice(0, -ending.length) : text).slice(0, SENTENCE_BUILD_WORDS_MAX);
+  const extra = readSentenceWords(config.extra_words)
+    .filter((word) => !words.some((own) => sameSentenceWord(own, word)))
+    .filter((word, index, all) => all.findIndex((other) => sameSentenceWord(other, word)) === index)
+    .slice(0, SENTENCE_BUILD_EXTRA_MAX);
+  const all = words.length > 1 ? [...words, ...extra] : [];
+
+  let order = shuffle(all.map((word, index) => ({ id: `word_${index + 1}`, word })));
+  // Mixed is mixed: a tray that reads as the sentence already gives it away.
+  for (let attempt = 0; attempt < 6 && all.length > 1 && order.slice(0, words.length).every((tile, index) => sameSentenceWord(tile.word, words[index])); attempt += 1) {
+    order = shuffle(order);
+  }
+
+  const questionImage = extractMediaUrl(config.question_image);
+  const bg = normalizeBackground(config);
+
+  return {
+    words: all.length > 0 ? words : [],
+    ending,
+    tiles: order,
+    questionImage,
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    imageUris: [bg, questionImage].filter((uri): uri is string => Boolean(uri)),
+  };
+}
+
+export type SentenceBuildTapResult =
+  /** The sentence is built already, the tile is in it, or the game does not have it. */
+  | { type: "ignored" }
+  /** The word that comes next: it goes to `slot`; `complete` when that was the last. */
+  | { type: "place"; slot: number; complete: boolean }
+  /** Not the word that comes next: a mistake. */
+  | { type: "wrong"; slot: number };
+
+/**
+ * What a tap on a tile does: the whole play rule, so both players follow it
+ * tap for tap. The sentence is built left to right; `placed` are the tiles in
+ * it so far, in order. Any tile of the right word is right.
+ */
+export function resolveSentenceBuildTap(
+  config: Pick<SentenceBuildConfig, "words" | "tiles">,
+  placed: readonly string[],
+  tileId: string,
+): SentenceBuildTapResult {
+  const slot = placed.length;
+  const tile = config.tiles.find((item) => item.id === tileId);
+
+  if (!tile || slot >= config.words.length || placed.includes(tileId)) {
+    return { type: "ignored" };
+  }
+
+  if (!sameSentenceWord(tile.word, config.words[slot])) {
+    return { type: "wrong", slot };
+  }
+
+  return { type: "place", slot, complete: slot + 1 === config.words.length };
+}
+
+/** Proportions of the sentence and its tiles. Shares are of a line of writing. */
+export const SENTENCE_BUILD_LAYOUT = {
+  /** A tile and a place: this tall for a line, and this much wider than its word. */
+  tileHeight: 1.7,
+  tilePadX: 0.7,
+  /** A line of writing is never taller than this, in px. */
+  maxLine: 46,
+  /** Under this a tile is hard for a small finger to hit, in px. */
+  minTile: 44,
+  /** Between tiles and between places, and round the sentence on its panel. */
+  gap: 0.35,
+  pad: 0.45,
+  /** The picture: a square this many tiles high at the panel's left. */
+  picture: 2.2,
+  /** The most of the free height the sentence's panel takes. */
+  maxPanelShare: 0.55,
+} as const;
+
+export type SentenceBuildLayout = {
+  /** The panel the sentence sits on, floating on the background. */
+  panel: BoardRect;
+  picture: BoardRect | null;
+  /** A place for every word, in order, as wide as its word. */
+  slots: BoardRect[];
+  /** The end mark after the last place, or null. */
+  ending: TextLineBox | null;
+  /** Around the tiles, and each tile in `tiles` order. */
+  tray: BoardRect;
+  tiles: BoardRect[];
+  /** The height of a line of writing on a tile or a place. */
+  line: number;
+};
+
+/** Items of the given widths in rows no wider than `maxWidth`, in order; null when one is wider. */
+function flowWidths(widths: readonly number[], maxWidth: number, gap: number): number[][] | null {
+  const rows: number[][] = [];
+  let used = 0;
+
+  for (let index = 0; index < widths.length; index++) {
+    if (widths[index] > maxWidth + 1e-6) {
+      return null;
+    }
+    const row = rows[rows.length - 1];
+    if (row && used + gap + widths[index] <= maxWidth + 1e-6) {
+      row.push(index);
+      used += gap + widths[index];
+    } else {
+      rows.push([index]);
+      used = widths[index];
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * Where everything of a sentence to build goes. The background covers the
+ * stage; the sentence's places sit on a panel above, in one row or more, its
+ * picture at their left when it has one; the tiles below, in rows. One size
+ * of writing for both — the biggest at which they fit — two safe areas a gap
+ * apart, inside the stage less `insets`.
+ */
+export function layoutSentenceBuild(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<SentenceBuildConfig, "words" | "tiles" | "ending" | "questionImage">,
+  insets: SceneInsets = {},
+): SentenceBuildLayout | null {
+  const L = SENTENCE_BUILD_LAYOUT;
+  const originX = insets.left ?? 0;
+  const originY = insets.top ?? 0;
+  const usableWidth = stageWidth - originX - (insets.right ?? 0);
+  const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+
+  if (usableWidth <= 0 || usableHeight <= 0 || config.words.length === 0 || config.tiles.length === 0) {
+    return null;
+  }
+
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const gap = sceneGap(stageWidth, stageHeight);
+  const area: BoardRect = {
+    left: originX + edge,
+    top: originY + edge,
+    width: Math.max(usableWidth - edge * 2, 1),
+    height: Math.max(usableHeight - edge * 2, 1),
+  };
+  const hasPicture = Boolean(config.questionImage);
+  const endUnits = config.ending ? textLineUnits(config.ending) : 0;
+  const widthOf = (word: string, line: number) => (textLineUnits(word) + L.tilePadX) * line;
+
+  // Everything at a line of `line` px, or null when it does not fit.
+  const place = (line: number): SentenceBuildLayout | null => {
+    const tile = line * L.tileHeight;
+    const between = line * L.gap;
+    const pad = line * L.pad;
+    const pictureSize = hasPicture ? tile * L.picture : 0;
+    const wordsWidth = area.width - pad * 2 - (hasPicture ? pictureSize + between : 0);
+    const slotWidths = config.words.map((word) => widthOf(word, line));
+    // The end mark rides after the last place, in its row.
+    const withEnding = endUnits > 0 ? [...slotWidths.slice(0, -1), slotWidths[slotWidths.length - 1] + endUnits * line] : slotWidths;
+    const slotRows = flowWidths(withEnding, wordsWidth, between);
+    const tileWidths = config.tiles.map((item) => widthOf(item.word, line));
+    const tileRows = flowWidths(tileWidths, area.width, between);
+    if (!slotRows || !tileRows) {
+      return null;
+    }
+
+    const wordsHeight = slotRows.length * tile + (slotRows.length - 1) * between;
+    const panelHeight = Math.max(pictureSize, wordsHeight) + pad * 2;
+    const trayHeight = tileRows.length * tile + (tileRows.length - 1) * between;
+    if (panelHeight > area.height * L.maxPanelShare + 1e-6 || panelHeight + gap + trayHeight > area.height + 1e-6) {
+      return null;
+    }
+
+    const rowWidth = (row: number[], widths: readonly number[]) => row.reduce((sum, index) => sum + widths[index], 0) + (row.length - 1) * between;
+    const widest = Math.max(...slotRows.map((row) => rowWidth(row, withEnding)));
+    const panelWidth = pad * 2 + (hasPicture ? pictureSize + between : 0) + widest;
+    const free = area.height - panelHeight - gap - trayHeight;
+    const panel: BoardRect = { left: area.left + (area.width - panelWidth) / 2, top: area.top + free * 0.4, width: panelWidth, height: panelHeight };
+    const picture: BoardRect | null = hasPicture
+      ? { left: panel.left + pad, top: panel.top + (panelHeight - pictureSize) / 2, width: pictureSize, height: pictureSize }
+      : null;
+    const wordsLeft = panel.left + pad + (hasPicture ? pictureSize + between : 0);
+    const wordsTop = panel.top + (panelHeight - wordsHeight) / 2;
+    const slots: BoardRect[] = [];
+    let ending: TextLineBox | null = null;
+    slotRows.forEach((row, rowIndex) => {
+      let left = wordsLeft + (widest - rowWidth(row, withEnding)) / 2;
+      const top = wordsTop + rowIndex * (tile + between);
+      row.forEach((index) => {
+        slots[index] = { left, top, width: slotWidths[index], height: tile };
+        if (index === slotWidths.length - 1 && endUnits > 0) {
+          ending = { text: config.ending, left: left + slotWidths[index], top: top + (tile - line) / 2, width: endUnits * line, height: line };
+        }
+        left += withEnding[index] + between;
+      });
+    });
+
+    const trayTop = panel.top + panelHeight + gap + free * 0.3;
+    const tiles: BoardRect[] = [];
+    tileRows.forEach((row, rowIndex) => {
+      let left = area.left + (area.width - rowWidth(row, tileWidths)) / 2;
+      row.forEach((index) => {
+        tiles[index] = { left, top: trayTop + rowIndex * (tile + between), width: tileWidths[index], height: tile };
+        left += tileWidths[index] + between;
+      });
+    });
+    const tray: BoardRect = {
+      left: Math.min(...tiles.map((rect) => rect.left)),
+      top: trayTop,
+      width: Math.max(...tiles.map((rect) => rect.left + rect.width)) - Math.min(...tiles.map((rect) => rect.left)),
+      height: trayHeight,
+    };
+
+    return { panel, picture, slots, ending, tray, tiles, line };
+  };
+
+  // The biggest writing at which everything fits, found by halving.
+  let low = 0;
+  let high: number = L.maxLine;
+  for (let step = 0; step < 18; step++) {
+    const middle = (low + high) / 2;
+    if (place(middle)) low = middle; else high = middle;
+  }
+
+  return low > 1 ? place(low) : null;
+}
+
 // --- Attempt metrics --------------------------------------------------------
 
 /**
@@ -8819,6 +9119,13 @@ export type FractionPickMetrics = BaseGameMetrics & {
   livesRemaining: number;
 };
 
+export type SentenceBuildMetrics = BaseGameMetrics & {
+  /** Words the sentence has, and how many of them stand in it. */
+  words: number;
+  placed: number;
+  livesRemaining: number;
+};
+
 export type TextChoiceMetrics = BaseGameMetrics & {
   /** Right answers the game has, and how many of them were found. */
   correct: number;
@@ -8899,6 +9206,7 @@ export const GAME_KIND_KEYS = {
   "money-pay": "moneyPay",
   "clock-set": "clockSet",
   "fraction-pick": "fractionPick",
+  "sentence-build": "sentenceBuild",
   "memory-cards": "memoryCards",
   "pattern-next": "patternNext",
   "select-option": "selectOption",
@@ -8931,6 +9239,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "money-pay": GAME_TIMINGS.moneyPay,
   "clock-set": GAME_TIMINGS.clockSet,
   "fraction-pick": GAME_TIMINGS.fractionPick,
+  "sentence-build": GAME_TIMINGS.sentenceBuild,
   "memory-cards": GAME_TIMINGS.memoryCards,
   "pattern-next": GAME_TIMINGS.patternNext,
   "select-option": GAME_TIMINGS.selectOption,
@@ -8970,6 +9279,7 @@ export const GAME_GESTURES = {
   "money-pay": "tap",
   "clock-set": "tap",
   "fraction-pick": "tap",
+  "sentence-build": "tap",
   "memory-cards": "tap",
   "pattern-next": "tap",
   "select-option": "tap",
@@ -9053,6 +9363,7 @@ export type GameMetricsByKind = {
   "money-pay": MoneyPayMetrics;
   "clock-set": ClockSetMetrics;
   "fraction-pick": FractionPickMetrics;
+  "sentence-build": SentenceBuildMetrics;
   "memory-cards": MemoryCardsMetrics;
   "pattern-next": PatternNextMetrics;
   "select-option": SelectOptionMetrics;
