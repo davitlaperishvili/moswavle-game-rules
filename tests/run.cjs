@@ -2699,6 +2699,12 @@ section('story_scene: a story told on a scene, the child helping along');
   const first = rules.layoutStoryScene(852, 393, config, 0, {});
   const second = rules.layoutStoryScene(852, 393, config, 1, {});
   check('the scene stays put from piece to piece; a short piece is written on its caption', JSON.stringify(first.sheet) === JSON.stringify(second.sheet) && second.lines.length > 0);
+  const tall = rules.layoutStoryScene(600, 800, config, 0, {});
+  check('on a wide stage the caption and its button stand beside the scene, which takes the whole height; on a tall one, under it',
+    first.caption.left >= first.sheet.left + first.sheet.width && first.next.left >= first.sheet.left + first.sheet.width
+      && first.sheet.height > 393 * 0.8 && tall.caption.top >= tall.sheet.top + tall.sheet.height);
+  check('every thing is drawn bigger round its own middle', Math.abs(first.things[0].width - first.sheet.width * 0.1 * rules.STORY_SCENE_LAYOUT.thingGrow) < 1e-6
+    && Math.abs(first.things[0].left + first.things[0].width / 2 - (first.sheet.left + first.sheet.width * 0.25)) < 1e-6);
   const lantern = first.things[0];
   check('a tap or a carry is read on the nearest thing grown to a fingertip', rules.storySceneThingAt(first, config.things, lantern.left + lantern.width / 2, lantern.top + lantern.height / 2) === 'thing_1'
     && rules.storySceneThingAt(first, config.things, first.sheet.left + first.sheet.width - 2, first.sheet.top + 2) === null);

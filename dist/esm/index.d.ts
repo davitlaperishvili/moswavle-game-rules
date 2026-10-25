@@ -3645,6 +3645,20 @@ export declare const STORY_SCENE_LAYOUT: {
     readonly sheetRim: 6;
     /** A carry lands on a place this far round its middle at least, in px; a tap too. */
     readonly minHit: 52;
+    /**
+     * Beside the scene, on a wide stage: the column of the caption and its button, a share of the
+     * width within these px. Chosen when it leaves the scene bigger than a band under it does
+     * (owner, 2026-10-25: the scene was small, blurred room all round it).
+     */
+    readonly sideShare: 0.23;
+    readonly minSide: 170;
+    readonly maxSide: 330;
+    /** The button under a side caption, a share of the height within these px. */
+    readonly sideNextShare: 0.24;
+    readonly minNext: 56;
+    readonly maxNext: 96;
+    /** Every thing drawn this much bigger round its own middle, kept inside the scene (owner, 2026-10-25). */
+    readonly thingGrow: 1.3;
 };
 export type StorySceneLayout = {
     /** The scene, whole and never cropped. */

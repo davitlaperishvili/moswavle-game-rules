@@ -11163,6 +11163,20 @@ export const STORY_SCENE_LAYOUT = {
   sheetRim: 6,
   /** A carry lands on a place this far round its middle at least, in px; a tap too. */
   minHit: 52,
+  /**
+   * Beside the scene, on a wide stage: the column of the caption and its button, a share of the
+   * width within these px. Chosen when it leaves the scene bigger than a band under it does
+   * (owner, 2026-10-25: the scene was small, blurred room all round it).
+   */
+  sideShare: 0.23,
+  minSide: 170,
+  maxSide: 330,
+  /** The button under a side caption, a share of the height within these px. */
+  sideNextShare: 0.24,
+  minNext: 56,
+  maxNext: 96,
+  /** Every thing drawn this much bigger round its own middle, kept inside the scene (owner, 2026-10-25). */
+  thingGrow: 1.3,
 } as const;
 
 export type StorySceneLayout = {
@@ -11207,19 +11221,40 @@ export function layoutStoryScene(
     return null;
   }
 
+  const fitIn = (width: number, height: number) =>
+    Math.max(0, Math.min((width - L.sheetRim * 2) / board.width, (height - L.sheetRim * 2) / board.height));
+
+  // Under the scene: a band of the caption with its button at the right.
   const band = Math.max(L.minCaption, Math.min(L.maxCaption, area.height * L.captionShare));
-  const room: BoardRect = { left: area.left, top: area.top, width: area.width, height: Math.max(area.height - band - gap, 1) };
-  const fit = Math.min((room.width - L.sheetRim * 2) / board.width, (room.height - L.sheetRim * 2) / board.height);
-  const sheet: BoardRect = {
-    left: room.left + (room.width - board.width * fit) / 2,
-    top: room.top + (room.height - board.height * fit) / 2,
-    width: board.width * fit,
-    height: board.height * fit,
-  };
-  const bandTop = area.top + area.height - band;
-  const next: BoardRect = { left: area.left + area.width - band * L.nextShare, top: bandTop, width: band * L.nextShare, height: band };
-  const captionWidth = Math.min(area.width - next.width - gap, Math.max(sheet.width, area.width * 0.6));
-  const caption: BoardRect = { left: area.left + (area.width - next.width - gap - captionWidth) / 2, top: bandTop, width: captionWidth, height: band };
+  const under = fitIn(area.width, Math.max(area.height - band - gap, 1));
+  // Beside it: a column of the caption over its button, the scene as tall as the stage.
+  const column = Math.max(L.minSide, Math.min(L.maxSide, area.width * L.sideShare));
+  const beside = area.width - column - gap > 0 ? fitIn(area.width - column - gap, area.height) : 0;
+
+  let sheet: BoardRect;
+  let caption: BoardRect;
+  let next: BoardRect;
+
+  if (beside > under) {
+    const sheetWidth = board.width * beside;
+    const left = area.left + (area.width - sheetWidth - gap - column) / 2;
+    const button = Math.max(L.minNext, Math.min(L.maxNext, area.height * L.sideNextShare));
+    sheet = { left, top: area.top + (area.height - board.height * beside) / 2, width: sheetWidth, height: board.height * beside };
+    const columnLeft = left + sheetWidth + gap;
+    next = { left: columnLeft + (column - button) / 2, top: area.top + area.height - button, width: button, height: button };
+    caption = { left: columnLeft, top: area.top, width: column, height: Math.max(area.height - button - gap, 1) };
+  } else {
+    sheet = {
+      left: area.left + (area.width - board.width * under) / 2,
+      top: area.top + (area.height - band - gap - board.height * under) / 2,
+      width: board.width * under,
+      height: board.height * under,
+    };
+    const bandTop = area.top + area.height - band;
+    next = { left: area.left + area.width - band * L.nextShare, top: bandTop, width: band * L.nextShare, height: band };
+    const captionWidth = Math.min(area.width - next.width - gap, Math.max(sheet.width, area.width * 0.6));
+    caption = { left: area.left + (area.width - next.width - gap - captionWidth) / 2, top: bandTop, width: captionWidth, height: band };
+  }
 
   let lines: TextLineBox[] = [];
   const words = told ?? piece.text;
@@ -11242,12 +11277,19 @@ export function layoutStoryScene(
 
   return {
     sheet,
-    things: config.things.map((thing) => ({
-      left: sheet.left + (thing.x / 100) * sheet.width,
-      top: sheet.top + (thing.y / 100) * sheet.height,
-      width: (thing.width / 100) * sheet.width,
-      height: (thing.height / 100) * sheet.height,
-    })),
+    // Bigger round its own middle, and moved back inside the scene where that took it over the edge.
+    things: config.things.map((thing) => {
+      const width = Math.min(sheet.width, (thing.width / 100) * sheet.width * L.thingGrow);
+      const height = Math.min(sheet.height, (thing.height / 100) * sheet.height * L.thingGrow);
+      const middleX = sheet.left + ((thing.x + thing.width / 2) / 100) * sheet.width;
+      const middleY = sheet.top + ((thing.y + thing.height / 2) / 100) * sheet.height;
+      return {
+        left: Math.min(Math.max(middleX - width / 2, sheet.left), sheet.left + sheet.width - width),
+        top: Math.min(Math.max(middleY - height / 2, sheet.top), sheet.top + sheet.height - height),
+        width,
+        height,
+      };
+    }),
     caption,
     lines,
     next,
