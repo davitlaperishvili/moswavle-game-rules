@@ -5,35 +5,23 @@ export { LETTER_SETS, OUTLINE_EM };
 // --- Letters drawn in code ---------------------------------------------------
 //
 // A letter is not a picture to fetch. Its outline is here (letterOutlines.ts,
-// taken once from FiraGO ExtraBold), and the players paint it light and bright
-// (owner, 2026-10-25, the look he chose of five): a body in the letter's own
-// colours, a thin white edge round it and a soft shadow under it — no dark
-// outline. The geometry is decided here, so "ა" is the same "ა" on the site
-// and in the app, on a card and in a word.
+// taken once from FiraGO ExtraBold), and the players paint it bright and light
+// (owner, 2026-10-25: look C of five, after he tried D): a body in the
+// letter's own saturated colours inside a thin outline of its own darker
+// colour — no thickness under it, no shine, no shadow. The geometry is decided
+// here, so "ა" is the same "ა" on the site and in the app, on a card and in a
+// word.
 
 export type LetterBox = { x: number; y: number; width: number; height: number };
 
-/**
- * A letter's colours: the body runs from `light` at its top to `deep` at its
- * foot. `outline` is its darker colour, for what is drawn beside the letter.
- */
+/** A letter's colours: the body runs from `light` at its top to `deep` at its foot, inside `outline`. */
 export type LetterTone = { light: string; deep: string; outline: string };
 
-/** The colours of every drawn letter's edge and shadow, whatever its own. */
-export const LETTER_LOOK = { edge: "#ffffff", shadow: "#1f344f", shadowOpacity: 0.2 } as const;
+/** How a letter is painted on a card: the `ring` of outline around the ink, in shares of its alphabet's box. */
+export const LETTER_ART = { ring: 0.02 } as const;
 
-/**
- * How a letter is painted on a card, in shares of the side of its alphabet's
- * box: the `ring` of white edge around the ink, and its shadow — the ink drawn
- * again `shadowY` lower, spread by `shadowRing` on each side.
- */
-export const LETTER_ART = { ring: 0.016, shadowY: 0.035, shadowRing: 0.035 } as const;
-
-/**
- * The same for a line of writing, in ems: the edge's stroke, how far down the
- * shadow is and how wide its stroke (it is spread by half of that each side).
- */
-export const TEXT_ART_LOOK = { edge: 0.03, shadowY: 0.045, shadowSpread: 0.07 } as const;
+/** The same for a line of writing: the outline's stroke, in ems (half of it on each side of the ink's edge). */
+export const TEXT_ART_LOOK = { outline: 0.04 } as const;
 
 export type LetterSetName = keyof typeof LETTER_SETS;
 
@@ -113,14 +101,10 @@ export type LetterArt = {
   ink: LetterBox;
   /** The alphabet's square, the same size for each of its letters, with this one in its middle. */
   box: LetterBox;
-  /** What is drawn — the square with the outline around it and the thickness under it. A square too. */
+  /** What is drawn — the square with the outline around it. A square too. */
   view: LetterBox;
-  /** The width of the line the white edge is stroked with: the ring on both sides of the ink's edge. */
+  /** The width of the line the outline is stroked with: the ring on both sides of the ink's edge. */
   outline: number;
-  /** How far down the shadow is drawn. */
-  depth: number;
-  /** The shadow's stroke: as wide as this, spread on both sides of the ink's edge. */
-  shadow: number;
 };
 
 /**
@@ -139,27 +123,21 @@ export function letterArt(char: string): LetterArt | null {
   const line = setLine(name);
   const side = line.side;
   const ring = side * LETTER_ART.ring;
-  const depth = side * LETTER_ART.shadowY;
-  const shadowRing = side * LETTER_ART.shadowRing;
-  // Room round the square for whichever reaches further, the edge or the shadow.
-  const reach = Math.max(ring, shadowRing);
   const box = {
     x: shape.box.x + shape.box.width / 2 - side / 2,
     y: (line.top + line.bottom) / 2 - side / 2,
     width: side,
     height: side,
   };
-  const viewSide = side + reach * 2 + depth;
+  const viewSide = side + ring * 2;
 
   return {
     char,
     path: shape.path,
     ink: shape.box,
     box,
-    view: { x: box.x - reach - depth / 2, y: box.y - reach, width: viewSide, height: viewSide },
+    view: { x: box.x - ring, y: box.y - ring, width: viewSide, height: viewSide },
     outline: ring * 2,
-    depth,
-    shadow: shadowRing * 2,
   };
 }
 
@@ -186,8 +164,7 @@ export function letterSvg(char: string, tone: LetterTone): string | null {
 
   const { view, ink } = art;
   const viewBox = [view.x, view.y, view.width, view.height].map(short).join(" ");
-  const edge = `fill="${LETTER_LOOK.edge}" stroke="${LETTER_LOOK.edge}" stroke-width="${short(art.outline)}" stroke-linejoin="round"`;
-  const shadow = `fill="${LETTER_LOOK.shadow}" stroke="${LETTER_LOOK.shadow}" stroke-width="${short(art.shadow)}" stroke-linejoin="round" opacity="${LETTER_LOOK.shadowOpacity}"`;
+  const edge = `fill="${tone.outline}" stroke="${tone.outline}" stroke-width="${short(art.outline)}" stroke-linejoin="round"`;
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${LETTER_PICTURE_PX}" height="${LETTER_PICTURE_PX}" viewBox="${viewBox}">` +
@@ -197,7 +174,6 @@ export function letterSvg(char: string, tone: LetterTone): string | null {
     `</linearGradient>` +
     `<path id="p" d="${art.path}"/>` +
     `</defs>` +
-    `<use href="#p" ${shadow} transform="translate(0 ${short(art.depth)})"/>` +
     `<use href="#p" ${edge}/>` +
     `<use href="#p" fill="url(#g)"/>` +
     `</svg>`

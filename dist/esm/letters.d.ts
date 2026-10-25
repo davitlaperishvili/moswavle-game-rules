@@ -6,39 +6,19 @@ export type LetterBox = {
     width: number;
     height: number;
 };
-/**
- * A letter's colours: the body runs from `light` at its top to `deep` at its
- * foot. `outline` is its darker colour, for what is drawn beside the letter.
- */
+/** A letter's colours: the body runs from `light` at its top to `deep` at its foot, inside `outline`. */
 export type LetterTone = {
     light: string;
     deep: string;
     outline: string;
 };
-/** The colours of every drawn letter's edge and shadow, whatever its own. */
-export declare const LETTER_LOOK: {
-    readonly edge: "#ffffff";
-    readonly shadow: "#1f344f";
-    readonly shadowOpacity: 0.2;
-};
-/**
- * How a letter is painted on a card, in shares of the side of its alphabet's
- * box: the `ring` of white edge around the ink, and its shadow — the ink drawn
- * again `shadowY` lower, spread by `shadowRing` on each side.
- */
+/** How a letter is painted on a card: the `ring` of outline around the ink, in shares of its alphabet's box. */
 export declare const LETTER_ART: {
-    readonly ring: 0.016;
-    readonly shadowY: 0.035;
-    readonly shadowRing: 0.035;
+    readonly ring: 0.02;
 };
-/**
- * The same for a line of writing, in ems: the edge's stroke, how far down the
- * shadow is and how wide its stroke (it is spread by half of that each side).
- */
+/** The same for a line of writing: the outline's stroke, in ems (half of it on each side of the ink's edge). */
 export declare const TEXT_ART_LOOK: {
-    readonly edge: 0.03;
-    readonly shadowY: 0.045;
-    readonly shadowSpread: 0.07;
+    readonly outline: 0.04;
 };
 export type LetterSetName = keyof typeof LETTER_SETS;
 /** What a character's outline says, by name. */
@@ -59,14 +39,10 @@ export type LetterArt = {
     ink: LetterBox;
     /** The alphabet's square, the same size for each of its letters, with this one in its middle. */
     box: LetterBox;
-    /** What is drawn — the square with the outline around it and the thickness under it. A square too. */
+    /** What is drawn — the square with the outline around it. A square too. */
     view: LetterBox;
-    /** The width of the line the white edge is stroked with: the ring on both sides of the ink's edge. */
+    /** The width of the line the outline is stroked with: the ring on both sides of the ink's edge. */
     outline: number;
-    /** How far down the shadow is drawn. */
-    depth: number;
-    /** The shadow's stroke: as wide as this, spread on both sides of the ink's edge. */
-    shadow: number;
 };
 /**
  * A letter as the players draw it on a card, or null for a character that is

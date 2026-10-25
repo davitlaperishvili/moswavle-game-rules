@@ -1502,15 +1502,14 @@ section('letters drawn in code: outlines, not pictures');
   const arts = letters.map((char) => rules.letterArt(char));
   check('every letter can be drawn on a card', arts.every(Boolean));
   check('what is drawn is a square, as a picture of the library is', arts.every((art) => Math.abs(art.view.width - art.view.height) < 1e-6 && Math.abs(art.box.width - art.box.height) < 1e-6));
-  check('the ink, its edge and its shadow are inside it', arts.every((art) => {
-    const ring = Math.max(art.outline, art.shadow) / 2;
+  check('the ink and its outline are inside it', arts.every((art) => {
+    const ring = art.outline / 2;
     return art.ink.x - ring >= art.view.x - 1e-6 && art.ink.y - ring >= art.view.y - 1e-6
       && art.ink.x + art.ink.width + ring <= art.view.x + art.view.width + 1e-6
-      && art.ink.y + art.ink.height + ring + art.depth <= art.view.y + art.view.height + 1e-6;
+      && art.ink.y + art.ink.height + ring <= art.view.y + art.view.height + 1e-6;
   }));
-  check('a letter is light: a thin white edge and a soft shadow, no dark outline (owner, 2026-10-25)', rules.LETTER_LOOK.edge === '#ffffff'
-    && arts.every((art) => art.outline < art.box.width * 0.05 && art.shadow > art.outline) && rules.LETTER_LOOK.shadowOpacity < 0.5
-    && rules.TEXT_ART_LOOK.edge < 0.05 && rules.TEXT_ART_LOOK.shadowSpread > rules.TEXT_ART_LOOK.edge);
+  check('a letter is light: a thin outline, no thickness under it (owner, 2026-10-25, look C)', arts.every((art) => art.outline < art.box.width * 0.05)
+    && rules.TEXT_ART_LOOK.outline < 0.06 && !('depth' in arts[0]));
   check('the letters of one alphabet are drawn at one scale: "ა" stays smaller than "ქ"', Object.keys(sets).every((name) => new Set([...sets[name]].map((char) => Math.round(rules.letterArt(char).view.width))).size === 1)
     && rules.letterArt('ა').ink.height < rules.letterArt('ქ').ink.height * 0.75);
   check('and on one line: a letter with a tail hangs under it', rules.letterArt('ა').box.y === rules.letterArt('ქ').box.y && rules.letterArt('р').box.y === rules.letterArt('а').box.y);
@@ -1519,7 +1518,7 @@ section('letters drawn in code: outlines, not pictures');
   check('a capital and its small letter are two drawings', rules.letterArt('Б').path !== rules.letterArt('б').path && rules.letterSetOf('Б') === 'ru' && rules.letterSetOf('б') === 'ruLower' && rules.letterSetOf('ბ') === 'ka');
 
   const svg = rules.letterSvg('ჭ', tone);
-  check('a letter is an SVG document in its colours', svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"') && svg.endsWith('</svg>') && svg.includes(tone.light) && svg.includes(tone.deep) && !svg.includes(tone.outline) && svg.includes(rules.LETTER_LOOK.edge) && svg.includes(rules.letterArt('ჭ').path));
+  check('a letter is an SVG document in its colours', svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"') && svg.endsWith('</svg>') && svg.includes(tone.light) && svg.includes(tone.deep) && svg.includes(tone.outline) && svg.includes(rules.letterArt('ჭ').path));
   const uri = rules.letterPictureUri('ჭ', tone);
   check('and the address of a picture that is fetched from nowhere', uri.startsWith(rules.LETTER_PICTURE_PREFIX) && decodeURIComponent(uri.slice(rules.LETTER_PICTURE_PREFIX.length)) === svg);
   check('safe inside a quoted attribute, a CSS url() and another SVG', letters.every((char) => !/["'()<>\s&]/.test(rules.letterPictureUri(char, tone))));

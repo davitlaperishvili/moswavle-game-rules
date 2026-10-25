@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TEXT_TRACKING = exports.TEXT_UNKNOWN_ADVANCE = exports.LETTER_PICTURE_PREFIX = exports.LETTER_PICTURE_PX = exports.TEXT_ART_LOOK = exports.LETTER_ART = exports.LETTER_LOOK = exports.OUTLINE_EM = exports.LETTER_SETS = void 0;
+exports.TEXT_TRACKING = exports.TEXT_UNKNOWN_ADVANCE = exports.LETTER_PICTURE_PREFIX = exports.LETTER_PICTURE_PX = exports.TEXT_ART_LOOK = exports.LETTER_ART = exports.OUTLINE_EM = exports.LETTER_SETS = void 0;
 exports.glyphShape = glyphShape;
 exports.letterSetOf = letterSetOf;
 exports.letterArt = letterArt;
@@ -11,19 +11,10 @@ exports.layoutTextLine = layoutTextLine;
 const letterOutlines_js_1 = require("./letterOutlines.js");
 Object.defineProperty(exports, "LETTER_SETS", { enumerable: true, get: function () { return letterOutlines_js_1.LETTER_SETS; } });
 Object.defineProperty(exports, "OUTLINE_EM", { enumerable: true, get: function () { return letterOutlines_js_1.OUTLINE_EM; } });
-/** The colours of every drawn letter's edge and shadow, whatever its own. */
-exports.LETTER_LOOK = { edge: "#ffffff", shadow: "#1f344f", shadowOpacity: 0.2 };
-/**
- * How a letter is painted on a card, in shares of the side of its alphabet's
- * box: the `ring` of white edge around the ink, and its shadow — the ink drawn
- * again `shadowY` lower, spread by `shadowRing` on each side.
- */
-exports.LETTER_ART = { ring: 0.016, shadowY: 0.035, shadowRing: 0.035 };
-/**
- * The same for a line of writing, in ems: the edge's stroke, how far down the
- * shadow is and how wide its stroke (it is spread by half of that each side).
- */
-exports.TEXT_ART_LOOK = { edge: 0.03, shadowY: 0.045, shadowSpread: 0.07 };
+/** How a letter is painted on a card: the `ring` of outline around the ink, in shares of its alphabet's box. */
+exports.LETTER_ART = { ring: 0.02 };
+/** The same for a line of writing: the outline's stroke, in ems (half of it on each side of the ink's edge). */
+exports.TEXT_ART_LOOK = { outline: 0.04 };
 /** The outline of a character — a letter, a digit, a mark — or null when it has none. */
 function glyphShape(char) {
     const outline = Object.prototype.hasOwnProperty.call(letterOutlines_js_1.GLYPH_OUTLINES, char)
@@ -88,26 +79,20 @@ function letterArt(char) {
     const line = setLine(name);
     const side = line.side;
     const ring = side * exports.LETTER_ART.ring;
-    const depth = side * exports.LETTER_ART.shadowY;
-    const shadowRing = side * exports.LETTER_ART.shadowRing;
-    // Room round the square for whichever reaches further, the edge or the shadow.
-    const reach = Math.max(ring, shadowRing);
     const box = {
         x: shape.box.x + shape.box.width / 2 - side / 2,
         y: (line.top + line.bottom) / 2 - side / 2,
         width: side,
         height: side,
     };
-    const viewSide = side + reach * 2 + depth;
+    const viewSide = side + ring * 2;
     return {
         char,
         path: shape.path,
         ink: shape.box,
         box,
-        view: { x: box.x - reach - depth / 2, y: box.y - reach, width: viewSide, height: viewSide },
+        view: { x: box.x - ring, y: box.y - ring, width: viewSide, height: viewSide },
         outline: ring * 2,
-        depth,
-        shadow: shadowRing * 2,
     };
 }
 const short = (value) => String(Math.round(value * 10) / 10);
@@ -130,8 +115,7 @@ function letterSvg(char, tone) {
     }
     const { view, ink } = art;
     const viewBox = [view.x, view.y, view.width, view.height].map(short).join(" ");
-    const edge = `fill="${exports.LETTER_LOOK.edge}" stroke="${exports.LETTER_LOOK.edge}" stroke-width="${short(art.outline)}" stroke-linejoin="round"`;
-    const shadow = `fill="${exports.LETTER_LOOK.shadow}" stroke="${exports.LETTER_LOOK.shadow}" stroke-width="${short(art.shadow)}" stroke-linejoin="round" opacity="${exports.LETTER_LOOK.shadowOpacity}"`;
+    const edge = `fill="${tone.outline}" stroke="${tone.outline}" stroke-width="${short(art.outline)}" stroke-linejoin="round"`;
     return (`<svg xmlns="http://www.w3.org/2000/svg" width="${exports.LETTER_PICTURE_PX}" height="${exports.LETTER_PICTURE_PX}" viewBox="${viewBox}">` +
         `<defs>` +
         `<linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="${short(ink.y)}" x2="0" y2="${short(ink.y + ink.height)}">` +
@@ -139,7 +123,6 @@ function letterSvg(char, tone) {
         `</linearGradient>` +
         `<path id="p" d="${art.path}"/>` +
         `</defs>` +
-        `<use href="#p" ${shadow} transform="translate(0 ${short(art.depth)})"/>` +
         `<use href="#p" ${edge}/>` +
         `<use href="#p" fill="url(#g)"/>` +
         `</svg>`);
