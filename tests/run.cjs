@@ -1609,6 +1609,17 @@ section('math_input: an example whose answer is typed');
   check('a phone on its side has two rows of six keys, big enough to hit', new Set(phone.keys.map((key) => Math.round(key.top))).size === 2 && phone.keys[0].height >= rules.MATH_INPUT_LAYOUT.minKey);
   const upright = rules.layoutMathInput(390, 700, times, { top: 60 });
   check('an upright stage has three columns', new Set(upright.keys.map((key) => Math.round(key.left))).size === 3);
+  // Read row by row, the digits come in their order and wiping and the tick after them all, on every pad.
+  const readOrder = (layout) => layout.keys.slice().sort((x, y) => Math.round(x.top) - Math.round(y.top) || x.left - y.left).map((key) => key.key);
+  const square = rules.layoutMathInput(1024, 768, times, {});
+  check('wiping never stands among the digits, whichever way the pad is laid out', [phone, upright, square].every((layout) => {
+    const order = readOrder(layout);
+    const columns = new Set(layout.keys.map((key) => Math.round(key.left))).size;
+    const last = order.slice(-columns);
+    return order.filter((key) => /\d/.test(key)).join('') === '1234567890'
+      && (columns === 6 ? order[5] === 'erase' : last.includes('erase')) && order[11] === 'enter';
+  }), JSON.stringify([phone, upright, square].map(readOrder)));
+  check('a phone\'s pad: 0 between wiping and the tick', readOrder(upright).slice(-3).join(' ') === 'erase 0 enter');
   const low = rules.layoutMathInput(667, 250, times, { top: 60 });
   check('where there is little height the example gives way and the keys stay hittable', low.keys[0].height >= rules.MATH_INPUT_LAYOUT.minKey - 1 && inside(low.pad, { left: 0, top: 60, width: 667, height: 190 }), JSON.stringify([low.row, low.keys[0].height]));
   const blankRect = phone.terms.find((rect) => rect.id === times.blankId);
@@ -1982,6 +1993,8 @@ section('word_problem: a problem in words, its answer typed');
   const phone = rules.layoutWordProblem(852, 393, russian, { top: 56, left: 59, right: 59, bottom: 21 });
   check('on a phone on its side the pad stands beside the problem', phone.arrangement === 'side' && phone.pad.left > phone.sheet.left + phone.sheet.width, phone.arrangement);
   check('and the problem is written big enough to read', phone.lines[0].height >= 18, String(phone.lines[0].height));
+  const padOrder = phone.keys.slice().sort((x, y) => Math.round(x.top) - Math.round(y.top) || x.left - y.left).map((key) => key.key).join(' ');
+  check('its pad of four columns reads the digits in order, wiping and the tick last', padOrder === '1 2 3 4 5 6 7 8 9 0 erase enter', padOrder);
   const upright = rules.layoutWordProblem(390, 700, russian, { top: 60 });
   check('an upright stage has them under it', upright.arrangement === 'stack' && upright.answer.top > upright.sheet.top + upright.sheet.height);
   check('no words, no game', rules.layoutWordProblem(852, 393, { text: '', unit: '', maxDigits: 2 }, {}) === null);

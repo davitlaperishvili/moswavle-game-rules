@@ -4216,6 +4216,21 @@ export const MATH_INPUT_KEYS = [
     "1", "2", "3", "4", "5", "erase",
     "6", "7", "8", "9", "0", "enter",
 ];
+/**
+ * Where each key stands on a pad of so many columns, read row by row: the digits
+ * in their order and wiping and the tick at the end, never wiping in the middle
+ * of the digits (owner, 2026-10-25). Two rows of six keep the order above; four
+ * rows of three are a phone's pad, with 0 between wiping and the tick.
+ */
+const MATH_INPUT_KEY_PLACES = {
+    4: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "erase", "enter"],
+    3: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "erase", "0", "enter"],
+};
+/** The place of `key` on a pad of `columns`, counted row by row from 0. */
+export function mathInputKeyPlace(key, columns) {
+    const order = MATH_INPUT_KEY_PLACES[columns] ?? MATH_INPUT_KEYS;
+    return Math.max(0, order.indexOf(key));
+}
 /** The place always has room for two digits at least, so a one-digit answer is not told by its width. */
 export const MATH_INPUT_DIGITS_MIN = 2;
 /**
@@ -4363,10 +4378,10 @@ export function layoutMathInput(stageWidth, stageHeight, config, insets = {}) {
         width: padWidth,
         height: padHeight,
     };
-    const keys = MATH_INPUT_KEYS.map((key, index) => ({
+    const keys = MATH_INPUT_KEYS.map((key) => ({
         key,
-        left: pad.left + (index % grid.columns) * (keyWidth + L.keyGap),
-        top: pad.top + Math.floor(index / grid.columns) * (keyHeight + L.keyGap),
+        left: pad.left + (mathInputKeyPlace(key, grid.columns) % grid.columns) * (keyWidth + L.keyGap),
+        top: pad.top + Math.floor(mathInputKeyPlace(key, grid.columns) / grid.columns) * (keyHeight + L.keyGap),
         width: keyWidth,
         height: keyHeight,
     }));
@@ -5251,10 +5266,10 @@ export function layoutWordProblem(stageWidth, stageHeight, config, insets = {}) 
             width: padWidth,
             height: padHeight,
         };
-        const keys = MATH_INPUT_KEYS.map((key, index) => ({
+        const keys = MATH_INPUT_KEYS.map((key) => ({
             key,
-            left: pad.left + (index % grid.columns) * (keyWidth + K.keyGap),
-            top: pad.top + Math.floor(index / grid.columns) * (keyHeight + K.keyGap),
+            left: pad.left + (mathInputKeyPlace(key, grid.columns) % grid.columns) * (keyWidth + K.keyGap),
+            top: pad.top + Math.floor(mathInputKeyPlace(key, grid.columns) / grid.columns) * (keyHeight + K.keyGap),
             width: keyWidth,
             height: keyHeight,
         }));

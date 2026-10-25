@@ -1803,6 +1803,8 @@ export declare function layoutTextChoice(stageWidth: number, stageHeight: number
 export type MathInputKey = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "erase" | "enter";
 /** Two rows of six read left to right: 1–5 and wipe, 6–0 and the tick. In three columns or four the same order runs on. */
 export declare const MATH_INPUT_KEYS: readonly MathInputKey[];
+/** The place of `key` on a pad of `columns`, counted row by row from 0. */
+export declare function mathInputKeyPlace(key: MathInputKey, columns: number): number;
 /** The place always has room for two digits at least, so a one-digit answer is not told by its width. */
 export declare const MATH_INPUT_DIGITS_MIN = 2;
 export type MathInputConfig = {
