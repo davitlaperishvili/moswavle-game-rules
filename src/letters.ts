@@ -5,23 +5,35 @@ export { LETTER_SETS, OUTLINE_EM };
 // --- Letters drawn in code ---------------------------------------------------
 //
 // A letter is not a picture to fetch. Its outline is here (letterOutlines.ts,
-// taken once from FiraGO ExtraBold), and the players paint it as they paint a
-// digit: a thick outline with some thickness under it, a body in the letter's
-// own colours and a shine. The geometry is decided here, so "ა" is the same
-// "ა" on the site and in the app, on a card and in a word.
+// taken once from FiraGO ExtraBold), and the players paint it light and bright
+// (owner, 2026-10-25, the look he chose of five): a body in the letter's own
+// colours, a thin white edge round it and a soft shadow under it — no dark
+// outline. The geometry is decided here, so "ა" is the same "ა" on the site
+// and in the app, on a card and in a word.
 
 export type LetterBox = { x: number; y: number; width: number; height: number };
 
-/** A letter's colours: the body runs from `light` at its top to `deep` at its foot, inside `outline`. */
+/**
+ * A letter's colours: the body runs from `light` at its top to `deep` at its
+ * foot. `outline` is its darker colour, for what is drawn beside the letter.
+ */
 export type LetterTone = { light: string; deep: string; outline: string };
 
+/** The colours of every drawn letter's edge and shadow, whatever its own. */
+export const LETTER_LOOK = { edge: "#ffffff", shadow: "#1f344f", shadowOpacity: 0.2 } as const;
+
 /**
- * How a letter is painted, in shares of the side of its alphabet's box: the
- * `ring` of outline around the ink, the `depth` of the thickness under it, and
- * the shine — the part of the ink that its own copy moved by `shineX`,
- * `shineY` does not cover, in white at `shineOpacity`.
+ * How a letter is painted on a card, in shares of the side of its alphabet's
+ * box: the `ring` of white edge around the ink, and its shadow — the ink drawn
+ * again `shadowY` lower, spread by `shadowRing` on each side.
  */
-export const LETTER_ART = { ring: 0.05, depth: 0.045, shineX: 0.02, shineY: 0.028, shineOpacity: 0.6 } as const;
+export const LETTER_ART = { ring: 0.016, shadowY: 0.035, shadowRing: 0.035 } as const;
+
+/**
+ * The same for a line of writing, in ems: the edge's stroke, how far down the
+ * shadow is and how wide its stroke (it is spread by half of that each side).
+ */
+export const TEXT_ART_LOOK = { edge: 0.03, shadowY: 0.045, shadowSpread: 0.07 } as const;
 
 export type LetterSetName = keyof typeof LETTER_SETS;
 
@@ -103,12 +115,12 @@ export type LetterArt = {
   box: LetterBox;
   /** What is drawn — the square with the outline around it and the thickness under it. A square too. */
   view: LetterBox;
-  /** The width of the line the outline is stroked with: the ring on both sides of the ink's edge. */
+  /** The width of the line the white edge is stroked with: the ring on both sides of the ink's edge. */
   outline: number;
-  /** How far down the outline is drawn again, as the letter's thickness. */
+  /** How far down the shadow is drawn. */
   depth: number;
-  /** How far the copy that cuts the shine is moved. */
-  shine: { x: number; y: number; opacity: number };
+  /** The shadow's stroke: as wide as this, spread on both sides of the ink's edge. */
+  shadow: number;
 };
 
 /**
@@ -127,24 +139,27 @@ export function letterArt(char: string): LetterArt | null {
   const line = setLine(name);
   const side = line.side;
   const ring = side * LETTER_ART.ring;
-  const depth = side * LETTER_ART.depth;
+  const depth = side * LETTER_ART.shadowY;
+  const shadowRing = side * LETTER_ART.shadowRing;
+  // Room round the square for whichever reaches further, the edge or the shadow.
+  const reach = Math.max(ring, shadowRing);
   const box = {
     x: shape.box.x + shape.box.width / 2 - side / 2,
     y: (line.top + line.bottom) / 2 - side / 2,
     width: side,
     height: side,
   };
-  const viewSide = side + ring * 2 + depth;
+  const viewSide = side + reach * 2 + depth;
 
   return {
     char,
     path: shape.path,
     ink: shape.box,
     box,
-    view: { x: box.x - ring - depth / 2, y: box.y - ring, width: viewSide, height: viewSide },
+    view: { x: box.x - reach - depth / 2, y: box.y - reach, width: viewSide, height: viewSide },
     outline: ring * 2,
     depth,
-    shine: { x: side * LETTER_ART.shineX, y: side * LETTER_ART.shineY, opacity: LETTER_ART.shineOpacity },
+    shadow: shadowRing * 2,
   };
 }
 
@@ -171,8 +186,8 @@ export function letterSvg(char: string, tone: LetterTone): string | null {
 
   const { view, ink } = art;
   const viewBox = [view.x, view.y, view.width, view.height].map(short).join(" ");
-  const edge = `fill="${tone.outline}" stroke="${tone.outline}" stroke-width="${short(art.outline)}" stroke-linejoin="round"`;
-  const frame = `x="${short(view.x)}" y="${short(view.y)}" width="${short(view.width)}" height="${short(view.height)}"`;
+  const edge = `fill="${LETTER_LOOK.edge}" stroke="${LETTER_LOOK.edge}" stroke-width="${short(art.outline)}" stroke-linejoin="round"`;
+  const shadow = `fill="${LETTER_LOOK.shadow}" stroke="${LETTER_LOOK.shadow}" stroke-width="${short(art.shadow)}" stroke-linejoin="round" opacity="${LETTER_LOOK.shadowOpacity}"`;
 
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${LETTER_PICTURE_PX}" height="${LETTER_PICTURE_PX}" viewBox="${viewBox}">` +
@@ -181,14 +196,10 @@ export function letterSvg(char: string, tone: LetterTone): string | null {
     `<stop offset="0" stop-color="${tone.light}"/><stop offset="1" stop-color="${tone.deep}"/>` +
     `</linearGradient>` +
     `<path id="p" d="${art.path}"/>` +
-    `<mask id="m" maskUnits="userSpaceOnUse" ${frame}>` +
-    `<use href="#p" fill="#fff"/><use href="#p" fill="#000" transform="translate(${short(art.shine.x)} ${short(art.shine.y)})"/>` +
-    `</mask>` +
     `</defs>` +
-    `<use href="#p" ${edge} transform="translate(0 ${short(art.depth)})"/>` +
+    `<use href="#p" ${shadow} transform="translate(0 ${short(art.depth)})"/>` +
     `<use href="#p" ${edge}/>` +
     `<use href="#p" fill="url(#g)"/>` +
-    `<rect ${frame} fill="#fff" opacity="${art.shine.opacity}" mask="url(#m)"/>` +
     `</svg>`
   );
 }

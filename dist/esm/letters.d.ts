@@ -6,24 +6,39 @@ export type LetterBox = {
     width: number;
     height: number;
 };
-/** A letter's colours: the body runs from `light` at its top to `deep` at its foot, inside `outline`. */
+/**
+ * A letter's colours: the body runs from `light` at its top to `deep` at its
+ * foot. `outline` is its darker colour, for what is drawn beside the letter.
+ */
 export type LetterTone = {
     light: string;
     deep: string;
     outline: string;
 };
+/** The colours of every drawn letter's edge and shadow, whatever its own. */
+export declare const LETTER_LOOK: {
+    readonly edge: "#ffffff";
+    readonly shadow: "#1f344f";
+    readonly shadowOpacity: 0.2;
+};
 /**
- * How a letter is painted, in shares of the side of its alphabet's box: the
- * `ring` of outline around the ink, the `depth` of the thickness under it, and
- * the shine — the part of the ink that its own copy moved by `shineX`,
- * `shineY` does not cover, in white at `shineOpacity`.
+ * How a letter is painted on a card, in shares of the side of its alphabet's
+ * box: the `ring` of white edge around the ink, and its shadow — the ink drawn
+ * again `shadowY` lower, spread by `shadowRing` on each side.
  */
 export declare const LETTER_ART: {
-    readonly ring: 0.05;
-    readonly depth: 0.045;
-    readonly shineX: 0.02;
-    readonly shineY: 0.028;
-    readonly shineOpacity: 0.6;
+    readonly ring: 0.016;
+    readonly shadowY: 0.035;
+    readonly shadowRing: 0.035;
+};
+/**
+ * The same for a line of writing, in ems: the edge's stroke, how far down the
+ * shadow is and how wide its stroke (it is spread by half of that each side).
+ */
+export declare const TEXT_ART_LOOK: {
+    readonly edge: 0.03;
+    readonly shadowY: 0.045;
+    readonly shadowSpread: 0.07;
 };
 export type LetterSetName = keyof typeof LETTER_SETS;
 /** What a character's outline says, by name. */
@@ -46,16 +61,12 @@ export type LetterArt = {
     box: LetterBox;
     /** What is drawn — the square with the outline around it and the thickness under it. A square too. */
     view: LetterBox;
-    /** The width of the line the outline is stroked with: the ring on both sides of the ink's edge. */
+    /** The width of the line the white edge is stroked with: the ring on both sides of the ink's edge. */
     outline: number;
-    /** How far down the outline is drawn again, as the letter's thickness. */
+    /** How far down the shadow is drawn. */
     depth: number;
-    /** How far the copy that cuts the shine is moved. */
-    shine: {
-        x: number;
-        y: number;
-        opacity: number;
-    };
+    /** The shadow's stroke: as wide as this, spread on both sides of the ink's edge. */
+    shadow: number;
 };
 /**
  * A letter as the players draw it on a card, or null for a character that is
