@@ -84,6 +84,7 @@ export type RuntimeGameKind =
   | "find-in-scene"
   | "map-place"
   | "story-scene"
+  | "hidden-light"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -1546,6 +1547,15 @@ export function resolveGameKind(
     "tell_story",
   ].includes(normalizedType)) {
     return "story-scene";
+  }
+
+  if ([
+    "hidden_light",
+    "hiddenlight",
+    "light_under_answer",
+    "find_the_light",
+  ].includes(normalizedType)) {
+    return "hidden-light";
   }
 
   if ([
@@ -4702,6 +4712,8 @@ export const GAME_TIMINGS = {
    * to its place over `carryMs`. Nothing is wrong in a story, and it has no lives.
    */
   storyScene: { stepMs: 700, carryMs: 320, successSettleMs: 1000, livesOutDelayMs: 320 },
+  /** The card lifts, the light flies to its place in the row, the next question comes. */
+  hiddenLight: { wrongFeedbackMs: 560, revealMs: 650, flyMs: 700, nextQuestionMs: 500, successSettleMs: 900, livesOutDelayMs: 320 },
   mathEquation: {
     wrongFeedbackMs: 560,
     flyMs: 620,
@@ -11260,6 +11272,191 @@ export function storySceneThingAt(layout: Pick<StorySceneLayout, "things">, thin
   return (best as { id: string; distance: number } | null)?.id ?? null;
 }
 
+// --- hidden_light: a light found under the right answer ----------------------
+//
+// The journeys' catch (owner, 2026-10-25: "a light should be caught by
+// answering — the child finds it under the right answer"). Tsitsina's lights
+// are scattered, and one hides under the right answer to each question about
+// the story: a question the child reads and hears, two or three answers in
+// words on cards. The right card is lifted and the light under it flies up to
+// the row of lights found; a wrong card is empty, crossed out, and costs a
+// life. Everything written arrives in the language the game is played in.
+
+export const HIDDEN_LIGHT_QUESTIONS = { min: 1, max: 5 } as const;
+export const HIDDEN_LIGHT_ANSWERS = { min: 2, max: 3 } as const;
+
+export type HiddenLightQuestion = {
+  id: string;
+  /** The question as the child reads it. */
+  question: string;
+  /** Its own clip, said as it is asked; null with none. */
+  voice: string | null;
+  /** Shuffled once here: the light is not always under the first card. */
+  answers: TextChoiceOption[];
+  correctId: string;
+};
+
+export type HiddenLightConfig = {
+  /** In the order they are asked: one light under each. */
+  questions: HiddenLightQuestion[];
+  /** The picture of a light; null draws Tsitsina's light in code. */
+  light: string | null;
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+  /** The background and the light: preload before the clock. */
+  imageUris: string[];
+};
+
+/**
+ * The game as the players draw it. A question with no text, no right answer or
+ * fewer than two answers is dropped; of several marked right only the first is
+ * kept right. No more than `HIDDEN_LIGHT_QUESTIONS.max` questions and
+ * `HIDDEN_LIGHT_ANSWERS.max` answers to each, the right one always among them.
+ */
+export function normalizeHiddenLightConfig(game: AuthoredGame, config: Record<string, unknown>): HiddenLightConfig {
+  const rawQuestions = Array.isArray(config.questions) ? config.questions : [];
+  const questions = rawQuestions
+    .map((raw, questionIndex): HiddenLightQuestion | null => {
+      const record = asRecord(raw);
+      if (!record) return null;
+
+      const question = (extractText(record.question) ?? extractText(record.text) ?? "").replace(/\s+/g, " ").trim();
+      const id = extractText(record.id) ?? `${game.id}-light-${questionIndex}`;
+      const answers = (Array.isArray(record.answers) ? record.answers : [])
+        .map((answer, index): TextChoiceOption | null => {
+          const item = asRecord(answer);
+          const text = (item ? extractText(item.text) ?? extractText(item.label) : extractText(answer))?.trim();
+          if (!text) return null;
+          return {
+            id: item ? extractText(item.id) ?? `${id}-answer-${index}` : `${id}-answer-${index}`,
+            text,
+            isCorrect: item ? extractBoolean(item.is_correct) ?? extractBoolean(item.correct) ?? false : false,
+          };
+        })
+        .filter((answer): answer is TextChoiceOption => Boolean(answer));
+      const right = answers.find((answer) => answer.isCorrect);
+
+      if (question === "" || !right) return null;
+
+      const kept = [right, ...answers.filter((answer) => !answer.isCorrect)].slice(0, HIDDEN_LIGHT_ANSWERS.max);
+      if (kept.length < HIDDEN_LIGHT_ANSWERS.min) return null;
+
+      const voice = extractText(record.voice)?.trim();
+      return { id, question, voice: voice ? voice : null, answers: shuffle(kept), correctId: right.id };
+    })
+    .filter((question): question is HiddenLightQuestion => Boolean(question))
+    .slice(0, HIDDEN_LIGHT_QUESTIONS.max);
+  const bg = normalizeBackground(config);
+  const light = extractText(config.light)?.trim() || null;
+
+  return {
+    questions,
+    light,
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    imageUris: [bg, light].filter((uri): uri is string => Boolean(uri)),
+  };
+}
+
+export type HiddenLightTapResult =
+  /** A card already crossed out, one of another question, or a question already answered. */
+  | { type: "ignored" }
+  /** The light was under it; `complete` when it was the last question. */
+  | { type: "found"; complete: boolean }
+  /** Nothing under it: crossed out, and a life is lost. */
+  | { type: "empty" };
+
+/**
+ * What a tap on a card does: the whole play rule, so both players follow it tap
+ * for tap. `step` is the question asked now, `crossed` its empty cards so far.
+ */
+export function resolveHiddenLightTap(
+  config: Pick<HiddenLightConfig, "questions">,
+  step: number,
+  crossed: readonly string[],
+  answerId: string,
+): HiddenLightTapResult {
+  const question = config.questions[step];
+  const answer = question?.answers.find((item) => item.id === answerId);
+
+  if (!question || !answer || crossed.includes(answerId)) {
+    return { type: "ignored" };
+  }
+
+  if (answer.id !== question.correctId) {
+    return { type: "empty" };
+  }
+
+  return { type: "found", complete: step >= config.questions.length - 1 };
+}
+
+export const HIDDEN_LIGHT_LAYOUT = {
+  /** The row of lights found, along the top: its height as a share of the stage's, within these px. */
+  rowShare: 0.13,
+  rowMin: 30,
+  rowMax: 56,
+  /** Room between the row and the question. */
+  gap: 8,
+  /** A light found in the row, as a share of the row's height. */
+  slot: 0.84,
+  /** The light lifted from under a card, as a share of the card's shorter side. */
+  revealed: 0.72,
+} as const;
+
+export type HiddenLightLayout = {
+  /** The row of lights along the top, and a place in it for every question's light, in order. */
+  row: BoardRect;
+  slots: BoardRect[];
+  /** The question asked now and its cards: the text game's own layout, under the row. */
+  step: TextChoiceLayout;
+};
+
+/**
+ * Where everything of a hidden light goes on its stage: the row of lights found
+ * along the top, and under it the question asked now with its cards, laid out
+ * as a text question (`layoutTextChoice`) — the background covering the whole
+ * stage, everything inside it less `insets`.
+ */
+export function layoutHiddenLight(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<HiddenLightConfig, "questions">,
+  step: number,
+  insets: SceneInsets = {},
+): HiddenLightLayout | null {
+  const question = config.questions[step];
+  if (!question || stageWidth <= 0 || stageHeight <= 0) return null;
+
+  const L = HIDDEN_LIGHT_LAYOUT;
+  const left = insets.left ?? 0;
+  const right = insets.right ?? 0;
+  const top = insets.top ?? 0;
+  const rowHeight = Math.round(Math.min(L.rowMax, Math.max(L.rowMin, stageHeight * L.rowShare)));
+  const usable = stageWidth - left - right;
+  const slot = rowHeight * L.slot;
+  const count = config.questions.length;
+  const spacing = Math.min(slot * 1.25, usable / Math.max(1, count));
+  const rowWidth = spacing * count;
+  const row: BoardRect = { left: left + (usable - rowWidth) / 2, top: top + 4, width: rowWidth, height: rowHeight };
+  const slots = config.questions.map((_question, index) => ({
+    left: row.left + index * spacing + (spacing - slot) / 2,
+    top: row.top + (rowHeight - slot) / 2,
+    width: slot,
+    height: slot,
+  }));
+
+  const stepLayout = layoutTextChoice(
+    stageWidth,
+    stageHeight,
+    { question: question.question, questionImage: null, answers: question.answers },
+    { ...insets, top: top + 4 + rowHeight + L.gap },
+  );
+
+  return stepLayout ? { row, slots, step: stepLayout } : null;
+}
+
 // --- Attempt metrics --------------------------------------------------------
 
 /**
@@ -11444,6 +11641,14 @@ export type StorySceneMetrics = BaseGameMetrics & {
   strayTaps: number;
 };
 
+export type HiddenLightMetrics = BaseGameMetrics & {
+  /** Questions asked, lights found, and how many on the first card tapped. */
+  questions: number;
+  lights: number;
+  firstTry: number;
+  livesRemaining: number;
+};
+
 export type TextChoiceMetrics = BaseGameMetrics & {
   /** Right answers the game has, and how many of them were found. */
   correct: number;
@@ -11533,6 +11738,7 @@ export const GAME_KIND_KEYS = {
   "find-in-scene": "findInScene",
   "map-place": "mapPlace",
   "story-scene": "storyScene",
+  "hidden-light": "hiddenLight",
   "memory-cards": "memoryCards",
   "pattern-next": "patternNext",
   "select-option": "selectOption",
@@ -11574,6 +11780,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "find-in-scene": GAME_TIMINGS.findInScene,
   "map-place": GAME_TIMINGS.mapPlace,
   "story-scene": GAME_TIMINGS.storyScene,
+  "hidden-light": GAME_TIMINGS.hiddenLight,
   "memory-cards": GAME_TIMINGS.memoryCards,
   "pattern-next": GAME_TIMINGS.patternNext,
   "select-option": GAME_TIMINGS.selectOption,
@@ -11622,6 +11829,7 @@ export const GAME_GESTURES = {
   "find-in-scene": "tap",
   "map-place": "drag",
   "story-scene": "tap",
+  "hidden-light": "tap",
   "memory-cards": "tap",
   "pattern-next": "tap",
   "select-option": "tap",
@@ -11714,6 +11922,7 @@ export type GameMetricsByKind = {
   "find-in-scene": FindInSceneMetrics;
   "map-place": MapPlaceMetrics;
   "story-scene": StorySceneMetrics;
+  "hidden-light": HiddenLightMetrics;
   "memory-cards": MemoryCardsMetrics;
   "pattern-next": PatternNextMetrics;
   "select-option": SelectOptionMetrics;

@@ -26,7 +26,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -182,6 +182,9 @@ exports.normalizeStorySceneConfig = normalizeStorySceneConfig;
 exports.resolveStorySceneStep = resolveStorySceneStep;
 exports.layoutStoryScene = layoutStoryScene;
 exports.storySceneThingAt = storySceneThingAt;
+exports.normalizeHiddenLightConfig = normalizeHiddenLightConfig;
+exports.resolveHiddenLightTap = resolveHiddenLightTap;
+exports.layoutHiddenLight = layoutHiddenLight;
 exports.gestureHintTapStops = gestureHintTapStops;
 exports.gestureHintDragEnd = gestureHintDragEnd;
 const letters_js_1 = require("./letters.js");
@@ -1037,6 +1040,14 @@ function resolveGameKind(type, config) {
         "tell_story",
     ].includes(normalizedType)) {
         return "story-scene";
+    }
+    if ([
+        "hidden_light",
+        "hiddenlight",
+        "light_under_answer",
+        "find_the_light",
+    ].includes(normalizedType)) {
+        return "hidden-light";
     }
     if ([
         "memory_cards",
@@ -3354,6 +3365,8 @@ exports.GAME_TIMINGS = {
      * to its place over `carryMs`. Nothing is wrong in a story, and it has no lives.
      */
     storyScene: { stepMs: 700, carryMs: 320, successSettleMs: 1000, livesOutDelayMs: 320 },
+    /** The card lifts, the light flies to its place in the row, the next question comes. */
+    hiddenLight: { wrongFeedbackMs: 560, revealMs: 650, flyMs: 700, nextQuestionMs: 500, successSettleMs: 900, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -8225,6 +8238,124 @@ function storySceneThingAt(layout, things, x, y) {
     });
     return best?.id ?? null;
 }
+// --- hidden_light: a light found under the right answer ----------------------
+//
+// The journeys' catch (owner, 2026-10-25: "a light should be caught by
+// answering — the child finds it under the right answer"). Tsitsina's lights
+// are scattered, and one hides under the right answer to each question about
+// the story: a question the child reads and hears, two or three answers in
+// words on cards. The right card is lifted and the light under it flies up to
+// the row of lights found; a wrong card is empty, crossed out, and costs a
+// life. Everything written arrives in the language the game is played in.
+exports.HIDDEN_LIGHT_QUESTIONS = { min: 1, max: 5 };
+exports.HIDDEN_LIGHT_ANSWERS = { min: 2, max: 3 };
+/**
+ * The game as the players draw it. A question with no text, no right answer or
+ * fewer than two answers is dropped; of several marked right only the first is
+ * kept right. No more than `HIDDEN_LIGHT_QUESTIONS.max` questions and
+ * `HIDDEN_LIGHT_ANSWERS.max` answers to each, the right one always among them.
+ */
+function normalizeHiddenLightConfig(game, config) {
+    const rawQuestions = Array.isArray(config.questions) ? config.questions : [];
+    const questions = rawQuestions
+        .map((raw, questionIndex) => {
+        const record = asRecord(raw);
+        if (!record)
+            return null;
+        const question = (extractText(record.question) ?? extractText(record.text) ?? "").replace(/\s+/g, " ").trim();
+        const id = extractText(record.id) ?? `${game.id}-light-${questionIndex}`;
+        const answers = (Array.isArray(record.answers) ? record.answers : [])
+            .map((answer, index) => {
+            const item = asRecord(answer);
+            const text = (item ? extractText(item.text) ?? extractText(item.label) : extractText(answer))?.trim();
+            if (!text)
+                return null;
+            return {
+                id: item ? extractText(item.id) ?? `${id}-answer-${index}` : `${id}-answer-${index}`,
+                text,
+                isCorrect: item ? extractBoolean(item.is_correct) ?? extractBoolean(item.correct) ?? false : false,
+            };
+        })
+            .filter((answer) => Boolean(answer));
+        const right = answers.find((answer) => answer.isCorrect);
+        if (question === "" || !right)
+            return null;
+        const kept = [right, ...answers.filter((answer) => !answer.isCorrect)].slice(0, exports.HIDDEN_LIGHT_ANSWERS.max);
+        if (kept.length < exports.HIDDEN_LIGHT_ANSWERS.min)
+            return null;
+        const voice = extractText(record.voice)?.trim();
+        return { id, question, voice: voice ? voice : null, answers: shuffle(kept), correctId: right.id };
+    })
+        .filter((question) => Boolean(question))
+        .slice(0, exports.HIDDEN_LIGHT_QUESTIONS.max);
+    const bg = normalizeBackground(config);
+    const light = extractText(config.light)?.trim() || null;
+    return {
+        questions,
+        light,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [bg, light].filter((uri) => Boolean(uri)),
+    };
+}
+/**
+ * What a tap on a card does: the whole play rule, so both players follow it tap
+ * for tap. `step` is the question asked now, `crossed` its empty cards so far.
+ */
+function resolveHiddenLightTap(config, step, crossed, answerId) {
+    const question = config.questions[step];
+    const answer = question?.answers.find((item) => item.id === answerId);
+    if (!question || !answer || crossed.includes(answerId)) {
+        return { type: "ignored" };
+    }
+    if (answer.id !== question.correctId) {
+        return { type: "empty" };
+    }
+    return { type: "found", complete: step >= config.questions.length - 1 };
+}
+exports.HIDDEN_LIGHT_LAYOUT = {
+    /** The row of lights found, along the top: its height as a share of the stage's, within these px. */
+    rowShare: 0.13,
+    rowMin: 30,
+    rowMax: 56,
+    /** Room between the row and the question. */
+    gap: 8,
+    /** A light found in the row, as a share of the row's height. */
+    slot: 0.84,
+    /** The light lifted from under a card, as a share of the card's shorter side. */
+    revealed: 0.72,
+};
+/**
+ * Where everything of a hidden light goes on its stage: the row of lights found
+ * along the top, and under it the question asked now with its cards, laid out
+ * as a text question (`layoutTextChoice`) — the background covering the whole
+ * stage, everything inside it less `insets`.
+ */
+function layoutHiddenLight(stageWidth, stageHeight, config, step, insets = {}) {
+    const question = config.questions[step];
+    if (!question || stageWidth <= 0 || stageHeight <= 0)
+        return null;
+    const L = exports.HIDDEN_LIGHT_LAYOUT;
+    const left = insets.left ?? 0;
+    const right = insets.right ?? 0;
+    const top = insets.top ?? 0;
+    const rowHeight = Math.round(Math.min(L.rowMax, Math.max(L.rowMin, stageHeight * L.rowShare)));
+    const usable = stageWidth - left - right;
+    const slot = rowHeight * L.slot;
+    const count = config.questions.length;
+    const spacing = Math.min(slot * 1.25, usable / Math.max(1, count));
+    const rowWidth = spacing * count;
+    const row = { left: left + (usable - rowWidth) / 2, top: top + 4, width: rowWidth, height: rowHeight };
+    const slots = config.questions.map((_question, index) => ({
+        left: row.left + index * spacing + (spacing - slot) / 2,
+        top: row.top + (rowHeight - slot) / 2,
+        width: slot,
+        height: slot,
+    }));
+    const stepLayout = layoutTextChoice(stageWidth, stageHeight, { question: question.question, questionImage: null, answers: question.answers }, { ...insets, top: top + 4 + rowHeight + L.gap });
+    return stepLayout ? { row, slots, step: stepLayout } : null;
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -8258,6 +8389,7 @@ exports.GAME_KIND_KEYS = {
     "find-in-scene": "findInScene",
     "map-place": "mapPlace",
     "story-scene": "storyScene",
+    "hidden-light": "hiddenLight",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -8294,6 +8426,7 @@ exports.GAME_TIMINGS_BY_KIND = {
     "find-in-scene": exports.GAME_TIMINGS.findInScene,
     "map-place": exports.GAME_TIMINGS.mapPlace,
     "story-scene": exports.GAME_TIMINGS.storyScene,
+    "hidden-light": exports.GAME_TIMINGS.hiddenLight,
     "memory-cards": exports.GAME_TIMINGS.memoryCards,
     "pattern-next": exports.GAME_TIMINGS.patternNext,
     "select-option": exports.GAME_TIMINGS.selectOption,
@@ -8336,6 +8469,7 @@ exports.GAME_GESTURES = {
     "find-in-scene": "tap",
     "map-place": "drag",
     "story-scene": "tap",
+    "hidden-light": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",

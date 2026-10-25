@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "story-scene" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "story-scene" | "hidden-light" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1402,6 +1402,15 @@ export declare const GAME_TIMINGS: {
         readonly stepMs: 700;
         readonly carryMs: 320;
         readonly successSettleMs: 1000;
+        readonly livesOutDelayMs: 320;
+    };
+    /** The card lifts, the light flies to its place in the row, the next question comes. */
+    readonly hiddenLight: {
+        readonly wrongFeedbackMs: 560;
+        readonly revealMs: 650;
+        readonly flyMs: 700;
+        readonly nextQuestionMs: 500;
+        readonly successSettleMs: 900;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -3658,6 +3667,87 @@ export declare function layoutStoryScene(stageWidth: number, stageHeight: number
 told?: string): StorySceneLayout | null;
 /** The thing whose box, grown to a fingertip, holds (`x`, `y`) on the stage — the nearest middle of several; null over none. */
 export declare function storySceneThingAt(layout: Pick<StorySceneLayout, "things">, things: readonly StorySceneThing[], x: number, y: number): string | null;
+export declare const HIDDEN_LIGHT_QUESTIONS: {
+    readonly min: 1;
+    readonly max: 5;
+};
+export declare const HIDDEN_LIGHT_ANSWERS: {
+    readonly min: 2;
+    readonly max: 3;
+};
+export type HiddenLightQuestion = {
+    id: string;
+    /** The question as the child reads it. */
+    question: string;
+    /** Its own clip, said as it is asked; null with none. */
+    voice: string | null;
+    /** Shuffled once here: the light is not always under the first card. */
+    answers: TextChoiceOption[];
+    correctId: string;
+};
+export type HiddenLightConfig = {
+    /** In the order they are asked: one light under each. */
+    questions: HiddenLightQuestion[];
+    /** The picture of a light; null draws Tsitsina's light in code. */
+    light: string | null;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background and the light: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. A question with no text, no right answer or
+ * fewer than two answers is dropped; of several marked right only the first is
+ * kept right. No more than `HIDDEN_LIGHT_QUESTIONS.max` questions and
+ * `HIDDEN_LIGHT_ANSWERS.max` answers to each, the right one always among them.
+ */
+export declare function normalizeHiddenLightConfig(game: AuthoredGame, config: Record<string, unknown>): HiddenLightConfig;
+export type HiddenLightTapResult = 
+/** A card already crossed out, one of another question, or a question already answered. */
+{
+    type: "ignored";
+}
+/** The light was under it; `complete` when it was the last question. */
+ | {
+    type: "found";
+    complete: boolean;
+}
+/** Nothing under it: crossed out, and a life is lost. */
+ | {
+    type: "empty";
+};
+/**
+ * What a tap on a card does: the whole play rule, so both players follow it tap
+ * for tap. `step` is the question asked now, `crossed` its empty cards so far.
+ */
+export declare function resolveHiddenLightTap(config: Pick<HiddenLightConfig, "questions">, step: number, crossed: readonly string[], answerId: string): HiddenLightTapResult;
+export declare const HIDDEN_LIGHT_LAYOUT: {
+    /** The row of lights found, along the top: its height as a share of the stage's, within these px. */
+    readonly rowShare: 0.13;
+    readonly rowMin: 30;
+    readonly rowMax: 56;
+    /** Room between the row and the question. */
+    readonly gap: 8;
+    /** A light found in the row, as a share of the row's height. */
+    readonly slot: 0.84;
+    /** The light lifted from under a card, as a share of the card's shorter side. */
+    readonly revealed: 0.72;
+};
+export type HiddenLightLayout = {
+    /** The row of lights along the top, and a place in it for every question's light, in order. */
+    row: BoardRect;
+    slots: BoardRect[];
+    /** The question asked now and its cards: the text game's own layout, under the row. */
+    step: TextChoiceLayout;
+};
+/**
+ * Where everything of a hidden light goes on its stage: the row of lights found
+ * along the top, and under it the question asked now with its cards, laid out
+ * as a text question (`layoutTextChoice`) — the background covering the whole
+ * stage, everything inside it less `insets`.
+ */
+export declare function layoutHiddenLight(stageWidth: number, stageHeight: number, config: Pick<HiddenLightConfig, "questions">, step: number, insets?: SceneInsets): HiddenLightLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -3815,6 +3905,13 @@ export type StorySceneMetrics = BaseGameMetrics & {
     pieces: number;
     strayTaps: number;
 };
+export type HiddenLightMetrics = BaseGameMetrics & {
+    /** Questions asked, lights found, and how many on the first card tapped. */
+    questions: number;
+    lights: number;
+    firstTry: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -3892,6 +3989,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "find-in-scene": "findInScene";
     readonly "map-place": "mapPlace";
     readonly "story-scene": "storyScene";
+    readonly "hidden-light": "hiddenLight";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -3940,6 +4038,7 @@ export declare const GAME_GESTURES: {
     readonly "find-in-scene": "tap";
     readonly "map-place": "drag";
     readonly "story-scene": "tap";
+    readonly "hidden-light": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -4014,6 +4113,7 @@ export type GameMetricsByKind = {
     "find-in-scene": FindInSceneMetrics;
     "map-place": MapPlaceMetrics;
     "story-scene": StorySceneMetrics;
+    "hidden-light": HiddenLightMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

@@ -2741,5 +2741,51 @@ section('story_scene: a choice of the way, its reply its own');
   check('the caption tells the reply once chosen, the scene where it was', reply.lines.map((line) => line.text).join(' ') === 'A hat: the sun is high.' && JSON.stringify(own.sheet) === JSON.stringify(reply.sheet));
 }
 
+section('hidden_light: a light found under the right answer');
+
+{
+  ['hidden_light', 'find_the_light', 'Hidden Light'].forEach((type) => {
+    check(`${type} resolves to hidden-light`, rules.resolveGameKind(type, {}) === 'hidden-light');
+  });
+
+  const config = rules.normalizeHiddenLightConfig({ id: 9 }, {
+    bg_image: 'https://x/vineyard.webp',
+    light: 'https://x/light.webp',
+    lives: 3,
+    questions: [
+      { question: 'რა არის ქვევრი?', voice: 'https://x/q1.mp3', answers: [
+        { text: 'თიხის დიდი ქოთანი', is_correct: true }, { text: 'ხის ყუთი' }, { text: 'რკინის ქვაბი' }, { text: 'მეოთხე' },
+      ] },
+      { question: 'როდის არის რთველი?', answers: [{ text: 'შემოდგომაზე', is_correct: true }, { text: 'ზამთარში' }] },
+      { question: 'უპასუხოდ', answers: [{ text: 'ერთი' }, { text: 'ორი' }] },
+      { question: '', answers: [{ text: 'ერთი', is_correct: true }, { text: 'ორი' }] },
+    ],
+  });
+
+  check('a question with no right answer or no words is dropped; three cards at most, the right one kept', config.questions.length === 2
+    && config.questions[0].answers.length === 3 && config.questions[0].answers.some((answer) => answer.id === config.questions[0].correctId)
+    && config.questions[0].voice === 'https://x/q1.mp3' && config.questions[1].voice === null);
+  check('the background and the light are fetched before the clock', JSON.stringify(config.imageUris) === JSON.stringify(['https://x/vineyard.webp', 'https://x/light.webp']));
+
+  const tap = rules.resolveHiddenLightTap;
+  const right = config.questions[0].correctId;
+  const empty = config.questions[0].answers.find((answer) => answer.id !== right).id;
+  check('the light is under the right card; an empty one costs a life once; the last light ends the game',
+    tap(config, 0, [], right).type === 'found' && tap(config, 0, [], right).complete === false
+    && tap(config, 0, [], empty).type === 'empty' && tap(config, 0, [empty], empty).type === 'ignored'
+    && tap(config, 1, [], config.questions[1].correctId).complete === true && tap(config, 2, [], right).type === 'ignored');
+
+  const fits = (w, h, insets) => {
+    const layout = rules.layoutHiddenLight(w, h, config, 0, insets);
+    const inside = (box) => box.left >= (insets.left || 0) - 0.5 && box.top >= (insets.top || 0) - 0.5
+      && box.left + box.width <= w - (insets.right || 0) + 0.5 && box.top + box.height <= h - (insets.bottom || 0) + 0.5;
+    return layout && layout.slots.length === 2 && inside(layout.row) && layout.step.cards.length === 3
+      && layout.step.cards.every(inside) && layout.step.cards.every((card) => card.top > layout.row.top + layout.row.height);
+  };
+  check('the row of lights along the top, the question and its cards under it, inside the stage and its edges',
+    fits(852, 393, { left: 59, right: 59, bottom: 21 }) && fits(1024, 768, {}) && fits(640, 480, { top: 10 }));
+  check('no layout for a question that is not there', rules.layoutHiddenLight(852, 393, config, 5, {}) === null);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
