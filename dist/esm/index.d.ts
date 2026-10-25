@@ -3653,12 +3653,18 @@ export declare const STORY_SCENE_LAYOUT: {
     readonly sideShare: 0.23;
     readonly minSide: 170;
     readonly maxSide: 330;
+    /** The column takes the width the scene leaves, up to this share: no empty sides beside the two. */
+    readonly maxSideShare: 0.4;
     /** The button under a side caption, a share of the height within these px. */
     readonly sideNextShare: 0.24;
     readonly minNext: 56;
     readonly maxNext: 96;
-    /** Every thing drawn this much bigger round its own middle, kept inside the scene (owner, 2026-10-25). */
+    /**
+     * Every thing drawn up to this much bigger round its own middle, inside the scene and never
+     * nearer another than `thingGap` px (owner, 2026-10-25: bigger, and things must not touch).
+     */
     readonly thingGrow: 1.3;
+    readonly thingGap: 8;
 };
 export type StorySceneLayout = {
     /** The scene, whole and never cropped. */
@@ -3671,6 +3677,8 @@ export type StorySceneLayout = {
     /** The go-on button of a piece only listened to. */
     next: BoardRect;
 };
+/** Tsitsina's own picture in the library (`tsitsina-happy.webp`…): the player's corner shows her. */
+export declare function isTsitsinaPicture(uri: string | null): boolean;
 /**
  * Where everything of the piece `index` goes: the scene as big as it can be
  * over a caption band, the go-on button at the band's right. The band is the

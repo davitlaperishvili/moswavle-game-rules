@@ -7983,13 +7983,23 @@ export const STORY_SCENE_LAYOUT = {
     sideShare: 0.23,
     minSide: 170,
     maxSide: 330,
+    /** The column takes the width the scene leaves, up to this share: no empty sides beside the two. */
+    maxSideShare: 0.4,
     /** The button under a side caption, a share of the height within these px. */
     sideNextShare: 0.24,
     minNext: 56,
     maxNext: 96,
-    /** Every thing drawn this much bigger round its own middle, kept inside the scene (owner, 2026-10-25). */
+    /**
+     * Every thing drawn up to this much bigger round its own middle, inside the scene and never
+     * nearer another than `thingGap` px (owner, 2026-10-25: bigger, and things must not touch).
+     */
     thingGrow: 1.3,
+    thingGap: 8,
 };
+/** Tsitsina's own picture in the library (`tsitsina-happy.webp`…): the player's corner shows her. */
+export function isTsitsinaPicture(uri) {
+    return uri !== null && /(^|\/)tsitsina[-_][^/]*$/i.test(uri.split(/[?#]/)[0]);
+}
 /**
  * Where everything of the piece `index` goes: the scene as big as it can be
  * over a caption band, the go-on button at the band's right. The band is the
@@ -8017,13 +8027,15 @@ told) {
     const band = Math.max(L.minCaption, Math.min(L.maxCaption, area.height * L.captionShare));
     const under = fitIn(area.width, Math.max(area.height - band - gap, 1));
     // Beside it: a column of the caption over its button, the scene as tall as the stage.
-    const column = Math.max(L.minSide, Math.min(L.maxSide, area.width * L.sideShare));
-    const beside = area.width - column - gap > 0 ? fitIn(area.width - column - gap, area.height) : 0;
+    const narrowest = Math.max(L.minSide, Math.min(L.maxSide, area.width * L.sideShare));
+    const beside = area.width - narrowest - gap > 0 ? fitIn(area.width - narrowest - gap, area.height) : 0;
     let sheet;
     let caption;
     let next;
     if (beside > under) {
         const sheetWidth = board.width * beside;
+        // The column takes what the scene leaves of the width, so neither stands in empty room.
+        const column = Math.max(L.minSide, Math.min(area.width * L.maxSideShare, area.width - sheetWidth - gap));
         const left = area.left + (area.width - sheetWidth - gap - column) / 2;
         const button = Math.max(L.minNext, Math.min(L.maxNext, area.height * L.sideNextShare));
         sheet = { left, top: area.top + (area.height - board.height * beside) / 2, width: sheetWidth, height: board.height * beside };
@@ -8043,6 +8055,54 @@ told) {
         const captionWidth = Math.min(area.width - next.width - gap, Math.max(sheet.width, area.width * 0.6));
         caption = { left: area.left + (area.width - next.width - gap - captionWidth) / 2, top: bandTop, width: captionWidth, height: band };
     }
+    // Each thing as it was placed; Tsitsina's own picture (a `tsitsina-…` file) has no room:
+    // she tells the story from the player's corner and is not shown twice (owner, 2026-10-25).
+    const placed = config.things.map((thing) => isTsitsinaPicture(thing.image)
+        ? null
+        : {
+            left: sheet.left + (thing.x / 100) * sheet.width,
+            top: sheet.top + (thing.y / 100) * sheet.height,
+            width: (thing.width / 100) * sheet.width,
+            height: (thing.height / 100) * sheet.height,
+        });
+    const grownBy = (box, by) => {
+        const width = Math.min(sheet.width, box.width * by);
+        const height = Math.min(sheet.height, box.height * by);
+        return {
+            left: Math.min(Math.max(box.left + box.width / 2 - width / 2, sheet.left), sheet.left + sheet.width - width),
+            top: Math.min(Math.max(box.top + box.height / 2 - height / 2, sheet.top), sheet.top + sheet.height - height),
+            width,
+            height,
+        };
+    };
+    const clear = (box, others) => others.every((other) => !other || other === box
+        || box.left + box.width + L.thingGap <= other.left || other.left + other.width + L.thingGap <= box.left
+        || box.top + box.height + L.thingGap <= other.top || other.top + other.height + L.thingGap <= box.top);
+    // In turn, each as big as it goes, up to thingGrow, while it keeps its gap from the rest.
+    const boxes = placed.slice();
+    boxes.forEach((box, index) => {
+        if (!box)
+            return;
+        const others = boxes.filter((_other, other) => other !== index);
+        if (!clear(box, others))
+            return;
+        let low = 1;
+        let high = L.thingGrow;
+        if (clear(grownBy(box, high), others)) {
+            low = high;
+        }
+        else {
+            for (let step = 0; step < 12; step += 1) {
+                const middle = (low + high) / 2;
+                if (clear(grownBy(box, middle), others))
+                    low = middle;
+                else
+                    high = middle;
+            }
+        }
+        boxes[index] = grownBy(box, low);
+    });
+    const things = boxes.map((box) => box ?? { left: sheet.left, top: sheet.top, width: 0, height: 0 });
     let lines = [];
     const words = told ?? piece.text;
     if (words !== "") {
@@ -8063,19 +8123,7 @@ told) {
     }
     return {
         sheet,
-        // Bigger round its own middle, and moved back inside the scene where that took it over the edge.
-        things: config.things.map((thing) => {
-            const width = Math.min(sheet.width, (thing.width / 100) * sheet.width * L.thingGrow);
-            const height = Math.min(sheet.height, (thing.height / 100) * sheet.height * L.thingGrow);
-            const middleX = sheet.left + ((thing.x + thing.width / 2) / 100) * sheet.width;
-            const middleY = sheet.top + ((thing.y + thing.height / 2) / 100) * sheet.height;
-            return {
-                left: Math.min(Math.max(middleX - width / 2, sheet.left), sheet.left + sheet.width - width),
-                top: Math.min(Math.max(middleY - height / 2, sheet.top), sheet.top + sheet.height - height),
-                width,
-                height,
-            };
-        }),
+        things,
         caption,
         lines,
         next,

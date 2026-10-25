@@ -2705,6 +2705,26 @@ section('story_scene: a story told on a scene, the child helping along');
       && first.sheet.height > 393 * 0.8 && tall.caption.top >= tall.sheet.top + tall.sheet.height);
   check('every thing is drawn bigger round its own middle', Math.abs(first.things[0].width - first.sheet.width * 0.1 * rules.STORY_SCENE_LAYOUT.thingGrow) < 1e-6
     && Math.abs(first.things[0].left + first.things[0].width / 2 - (first.sheet.left + first.sheet.width * 0.25)) < 1e-6);
+  const crowded = rules.normalizeStorySceneConfig({
+    bg_image: 'https://x/tbilisi.webp',
+    board_width: 1600,
+    board_height: 900,
+    placements: [
+      { image: 'https://x/landmark-narikala.webp', x: 5, y: 55, width: 29, height: 30 },
+      { image: 'https://x/landmark-sulfur-baths.webp', x: 35, y: 52, width: 32, height: 35 },
+      { image: 'https://x/uploads/tsitsina-surprised.webp?v=2', x: 70, y: 40, width: 22, height: 50 },
+    ],
+    pieces: [{ text: 'Hi.', action: 'listen' }],
+  });
+  const desk = rules.layoutStoryScene(1430, 660, crowded, 0, { top: 70 });
+  const [fortress, baths, guide] = desk.things;
+  const apart = (a, b) => a.left + a.width + 8 - 1e-6 <= b.left || b.left + b.width + 8 - 1e-6 <= a.left || a.top + a.height + 8 - 1e-6 <= b.top || b.top + b.height + 8 - 1e-6 <= a.top;
+  check('Tsitsina\'s own picture is not drawn on the scene: she tells the story from the corner', guide.width === 0 && rules.isTsitsinaPicture('https://x/uploads/tsitsina-happy.webp?v=1') && !rules.isTsitsinaPicture('https://x/firefly.webp'));
+  check('things grow only while they keep their gap from one another', apart(fortress, baths) && fortress.width > 1430 * 0.1);
+  check('on a wide window the caption\'s column takes the width the scene leaves: no empty sides',
+    Math.abs(desk.sheet.left - (desk.caption.left + desk.caption.width - (desk.sheet.width + desk.caption.width + (desk.caption.left - desk.sheet.left - desk.sheet.width)))) < 1e-6
+      && desk.caption.left + desk.caption.width > 1430 - 60 && desk.sheet.left < 60,
+    JSON.stringify({ sheet: desk.sheet, caption: desk.caption }));
   const lantern = first.things[0];
   check('a tap or a carry is read on the nearest thing grown to a fingertip', rules.storySceneThingAt(first, config.things, lantern.left + lantern.width / 2, lantern.top + lantern.height / 2) === 'thing_1'
     && rules.storySceneThingAt(first, config.things, first.sheet.left + first.sheet.width - 2, first.sheet.top + 2) === null);
