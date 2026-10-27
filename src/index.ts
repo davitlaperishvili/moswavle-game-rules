@@ -85,6 +85,7 @@ export type RuntimeGameKind =
   | "map-place"
   | "story-scene"
   | "hidden-light"
+  | "sound-match"
   | "generic";
 
 export type AnswerChoiceOption = {
@@ -1556,6 +1557,17 @@ export function resolveGameKind(
     "find_the_light",
   ].includes(normalizedType)) {
     return "hidden-light";
+  }
+
+  if ([
+    "sound_match",
+    "soundmatch",
+    "first_sound",
+    "rhyme",
+    "rhyme_match",
+    "sounds_of_words",
+  ].includes(normalizedType)) {
+    return "sound-match";
   }
 
   if ([
@@ -4714,6 +4726,11 @@ export const GAME_TIMINGS = {
   storyScene: { stepMs: 700, carryMs: 320, successSettleMs: 1000, livesOutDelayMs: 320 },
   /** The card lifts, the light flies to its place in the row, the next question comes. */
   hiddenLight: { wrongFeedbackMs: 560, revealMs: 650, flyMs: 700, nextQuestionMs: 500, successSettleMs: 900, livesOutDelayMs: 320 },
+  /**
+   * A card whose name does not sound so shakes for `wrongFeedbackMs` and stays
+   * crossed out. The last right one stays lit `successSettleMs` before the win.
+   */
+  soundMatch: { wrongFeedbackMs: 560, successSettleMs: 700, livesOutDelayMs: 320 },
   mathEquation: {
     wrongFeedbackMs: 560,
     flyMs: 620,
@@ -11564,6 +11581,247 @@ export function layoutHiddenLight(
   return stepLayout ? { row, slots, step: stepLayout } : null;
 }
 
+// --- sound_match: what starts like a word, or rhymes with it ------------------
+//
+// The ear before reading (owner, 2026-10-27: "a game on rhyme and the first
+// sound"): the voice says a word — "find what starts like мама", "find what
+// rhymes with кот" — and the child taps every picture whose name does. Nothing
+// is written: the word is heard, the answers are pictures, and the child names
+// them to itself. A picture's name is a word of one language, so each language
+// has its own word and its own pictures; the server sends the set of the
+// language the game is played in, and these are its rules.
+
+export type SoundMatchMode = "first_sound" | "rhyme";
+
+/** Cards on the stage: at least one right and two that are not. */
+export const SOUND_MATCH_ANSWERS = { min: 3, max: 6 } as const;
+export const SOUND_MATCH_RIGHT = { min: 1, max: 3 } as const;
+
+export type SoundMatchOption = {
+  id: string;
+  image: string;
+  /** What the child calls the picture, in the game's language: said by nobody, read by a screen reader. */
+  name: string;
+  isCorrect: boolean;
+};
+
+export type SoundMatchConfig = {
+  mode: SoundMatchMode;
+  /** The word the voice compares with, in the game's language; for the screen reader alone. */
+  word: string;
+  /** A picture of that word, standing apart from the answers; null when it is only heard. */
+  wordImage: string | null;
+  /** Shuffled once here: the right ones are not always the first cards. */
+  answers: SoundMatchOption[];
+  correctOptionIds: string[];
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+  /** The background, the word's picture and every card: preload before the clock. */
+  imageUris: string[];
+};
+
+/**
+ * The game as the players draw it, in the language the server chose. A card
+ * with no picture is dropped; no more than `SOUND_MATCH_RIGHT.max` right ones
+ * and `SOUND_MATCH_ANSWERS.max` cards are kept, the right ones first, so a
+ * game never loses its answer to the limit.
+ */
+export function normalizeSoundMatchConfig(game: AuthoredGame, config: Record<string, unknown>): SoundMatchConfig {
+  const rawAnswers = Array.isArray(config.answers) ? config.answers : [];
+  const all = rawAnswers
+    .map((answer, index): SoundMatchOption | null => {
+      const record = asRecord(answer);
+      const image = record ? extractMediaUrl(record.image) : extractMediaUrl(answer);
+      if (!image) return null;
+
+      return {
+        id: record ? extractText(record.id) ?? `${game.id}-sound-${index}` : `${game.id}-sound-${index}`,
+        image,
+        name: (record ? extractText(record.name) ?? "" : "").toLowerCase(),
+        isCorrect: record
+          ? extractBoolean(record.right) ?? extractBoolean(record.is_correct) ?? extractBoolean(record.correct) ?? false
+          : false,
+      };
+    })
+    .filter((answer): answer is SoundMatchOption => Boolean(answer));
+  const right = all.filter((answer) => answer.isCorrect).slice(0, SOUND_MATCH_RIGHT.max);
+  const answers = shuffle([...right, ...all.filter((answer) => !answer.isCorrect)].slice(0, SOUND_MATCH_ANSWERS.max));
+  const bg = normalizeBackground(config);
+  const wordImage = extractMediaUrl(config.word_image) ?? extractMediaUrl(config.wordImage);
+
+  return {
+    mode: extractText(config.mode) === "rhyme" ? "rhyme" : "first_sound",
+    word: (extractText(config.word) ?? "").toLowerCase(),
+    wordImage,
+    answers,
+    correctOptionIds: answers.filter((answer) => answer.isCorrect).map((answer) => answer.id),
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    imageUris: [bg, wordImage, ...answers.map((answer) => answer.image)].filter((uri): uri is string => Boolean(uri)),
+  };
+}
+
+export type SoundMatchTapResult =
+  /** A card already found or already crossed out, or one the game does not have. */
+  | { type: "ignored" }
+  /** A right card; `complete` when it was the last one to find. */
+  | { type: "right"; complete: boolean }
+  /** A card whose name does not sound so: it is crossed out, and a life is lost. */
+  | { type: "wrong" };
+
+/**
+ * What a tap on a card does: the whole play rule, so both players follow it
+ * tap for tap. `found` are the right cards tapped so far, `crossed` the wrong
+ * ones. The game is passed once every right card is found.
+ */
+export function resolveSoundMatchTap(
+  config: Pick<SoundMatchConfig, "answers" | "correctOptionIds">,
+  found: readonly string[],
+  crossed: readonly string[],
+  optionId: string,
+): SoundMatchTapResult {
+  const option = config.answers.find((answer) => answer.id === optionId);
+
+  if (!option || found.includes(optionId) || crossed.includes(optionId)) {
+    return { type: "ignored" };
+  }
+
+  if (!option.isCorrect) {
+    return { type: "wrong" };
+  }
+
+  const left = config.correctOptionIds.filter((id) => id !== optionId && !found.includes(id));
+  return { type: "right", complete: left.length === 0 };
+}
+
+export const SOUND_MATCH_LAYOUT = {
+  /** The word's picture is this much bigger than a card: it is what the cards are held against. */
+  wordScale: 1.25,
+  /** A card never grows past this, in px, however big the stage. */
+  maxCard: 230,
+  /** Between cards, as a share of a card's side, within these px. */
+  cardGapShare: 0.1,
+  minCardGap: 10,
+  maxCardGap: 20,
+} as const;
+
+export type SoundMatchLayout = {
+  /** The word's picture, apart from the cards; null when the game has none. */
+  word: BoardRect | null;
+  /** In `answers` order. Every card is a square of one size. */
+  cards: Array<BoardRect & { id: string }>;
+};
+
+/**
+ * Where the word's picture and the cards go on the stage. The background covers
+ * the whole stage; the word's picture and the cards are two safe areas a gap
+ * apart, inside the stage less `insets` and an edge margin. The picture stands
+ * at the left of the cards or above them, and the cards in however many
+ * columns — whichever makes them biggest; of two as big, fewer rows. Everything
+ * is centred in the room left over.
+ */
+export function layoutSoundMatch(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<SoundMatchConfig, "answers" | "wordImage">,
+  insets: SceneInsets = {},
+): SoundMatchLayout | null {
+  const L = SOUND_MATCH_LAYOUT;
+  const originX = insets.left ?? 0;
+  const originY = insets.top ?? 0;
+  const usableWidth = stageWidth - originX - (insets.right ?? 0);
+  const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+  const count = config.answers.length;
+
+  if (usableWidth <= 0 || usableHeight <= 0 || count === 0) {
+    return null;
+  }
+
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const gap = sceneGap(stageWidth, stageHeight);
+  const areaWidth = Math.max(usableWidth - edge * 2, 1);
+  const areaHeight = Math.max(usableHeight - edge * 2, 1);
+  const hasWord = Boolean(config.wordImage);
+  // The gap between cards follows their size; one guess of it is close enough to size them by.
+  const cardGapFor = (side: number) => Math.min(L.maxCardGap, Math.max(L.minCardGap, side * L.cardGapShare));
+  const places: Array<"left" | "top" | "none"> = hasWord ? ["left", "top"] : ["none"];
+  let best: { side: number; columns: number; rows: number; place: "left" | "top" | "none" } | null = null;
+
+  for (const place of places) {
+    for (let columns = 1; columns <= count; columns += 1) {
+      const rows = Math.ceil(count / columns);
+      let side: number = L.maxCard;
+
+      // Twice: the gap depends on the side, the side on the gap.
+      for (let pass = 0; pass < 2; pass += 1) {
+        const cardGap = cardGapFor(side);
+        const gridWidthRoom = place === "left" ? areaWidth - gap : areaWidth;
+        const gridHeightRoom = place === "top" ? areaHeight - gap : areaHeight;
+        // The word's picture takes `wordScale` sides of the room beside or above the grid.
+        const widthUnits = columns + (place === "left" ? L.wordScale : 0);
+        const heightUnits = rows + (place === "top" ? L.wordScale : 0);
+
+        side = Math.min(
+          (gridWidthRoom - cardGap * (columns - 1)) / widthUnits,
+          (gridHeightRoom - cardGap * (rows - 1)) / heightUnits,
+          // The picture alone fits across, or down.
+          place === "top" ? areaWidth / L.wordScale : Infinity,
+          place === "left" ? areaHeight / L.wordScale : Infinity,
+          L.maxCard,
+        );
+      }
+
+      if (
+        !best || side > best.side + 0.5
+        || (Math.abs(side - best.side) <= 0.5 && rows < best.rows)
+      ) {
+        best = { side, columns, rows, place };
+      }
+    }
+  }
+
+  if (!best || best.side <= 0) {
+    return null;
+  }
+
+  const side = Math.floor(best.side);
+  const cardGap = cardGapFor(side);
+  const wordSide = hasWord ? Math.floor(side * L.wordScale) : 0;
+  const gridWidth = best.columns * side + cardGap * (best.columns - 1);
+  const gridHeight = best.rows * side + cardGap * (best.rows - 1);
+  const groupWidth = best.place === "left" ? wordSide + gap + gridWidth : Math.max(gridWidth, wordSide);
+  const groupHeight = best.place === "top" ? wordSide + gap + gridHeight : Math.max(gridHeight, wordSide);
+  const groupLeft = originX + edge + (areaWidth - groupWidth) / 2;
+  const groupTop = originY + edge + (areaHeight - groupHeight) / 2;
+
+  const word: BoardRect | null = !hasWord
+    ? null
+    : best.place === "left"
+      ? { left: groupLeft, top: groupTop + (groupHeight - wordSide) / 2, width: wordSide, height: wordSide }
+      : { left: groupLeft + (groupWidth - wordSide) / 2, top: groupTop, width: wordSide, height: wordSide };
+  const gridLeft = best.place === "left" ? groupLeft + wordSide + gap : groupLeft + (groupWidth - gridWidth) / 2;
+  const gridTop = best.place === "top" ? groupTop + wordSide + gap : groupTop + (groupHeight - gridHeight) / 2;
+
+  const cards = config.answers.map((answer, index) => {
+    const row = Math.floor(index / best.columns);
+    // The last row may hold fewer cards: it is centred like the others.
+    const inRow = Math.min(best.columns, count - row * best.columns);
+    const rowWidth = inRow * side + cardGap * (inRow - 1);
+
+    return {
+      id: answer.id,
+      left: gridLeft + (gridWidth - rowWidth) / 2 + (index - row * best.columns) * (side + cardGap),
+      top: gridTop + row * (side + cardGap),
+      width: side,
+      height: side,
+    };
+  });
+
+  return { word, cards };
+}
+
 // --- Attempt metrics --------------------------------------------------------
 
 /**
@@ -11756,6 +12014,14 @@ export type HiddenLightMetrics = BaseGameMetrics & {
   livesRemaining: number;
 };
 
+export type SoundMatchMetrics = BaseGameMetrics & {
+  /** Right cards the game has, and how many of them were found. */
+  correct: number;
+  found: number;
+  totalOptions: number;
+  livesRemaining: number;
+};
+
 export type TextChoiceMetrics = BaseGameMetrics & {
   /** Right answers the game has, and how many of them were found. */
   correct: number;
@@ -11846,6 +12112,7 @@ export const GAME_KIND_KEYS = {
   "map-place": "mapPlace",
   "story-scene": "storyScene",
   "hidden-light": "hiddenLight",
+  "sound-match": "soundMatch",
   "memory-cards": "memoryCards",
   "pattern-next": "patternNext",
   "select-option": "selectOption",
@@ -11888,6 +12155,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "map-place": GAME_TIMINGS.mapPlace,
   "story-scene": GAME_TIMINGS.storyScene,
   "hidden-light": GAME_TIMINGS.hiddenLight,
+  "sound-match": GAME_TIMINGS.soundMatch,
   "memory-cards": GAME_TIMINGS.memoryCards,
   "pattern-next": GAME_TIMINGS.patternNext,
   "select-option": GAME_TIMINGS.selectOption,
@@ -11937,6 +12205,7 @@ export const GAME_GESTURES = {
   "map-place": "drag",
   "story-scene": "tap",
   "hidden-light": "tap",
+  "sound-match": "tap",
   "memory-cards": "tap",
   "pattern-next": "tap",
   "select-option": "tap",
@@ -12030,6 +12299,7 @@ export type GameMetricsByKind = {
   "map-place": MapPlaceMetrics;
   "story-scene": StorySceneMetrics;
   "hidden-light": HiddenLightMetrics;
+  "sound-match": SoundMatchMetrics;
   "memory-cards": MemoryCardsMetrics;
   "pattern-next": PatternNextMetrics;
   "select-option": SelectOptionMetrics;

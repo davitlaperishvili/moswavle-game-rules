@@ -26,7 +26,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -187,6 +187,9 @@ exports.storySceneThingAt = storySceneThingAt;
 exports.normalizeHiddenLightConfig = normalizeHiddenLightConfig;
 exports.resolveHiddenLightTap = resolveHiddenLightTap;
 exports.layoutHiddenLight = layoutHiddenLight;
+exports.normalizeSoundMatchConfig = normalizeSoundMatchConfig;
+exports.resolveSoundMatchTap = resolveSoundMatchTap;
+exports.layoutSoundMatch = layoutSoundMatch;
 exports.gestureHintTapStops = gestureHintTapStops;
 exports.gestureHintDragEnd = gestureHintDragEnd;
 const letters_js_1 = require("./letters.js");
@@ -1050,6 +1053,16 @@ function resolveGameKind(type, config) {
         "find_the_light",
     ].includes(normalizedType)) {
         return "hidden-light";
+    }
+    if ([
+        "sound_match",
+        "soundmatch",
+        "first_sound",
+        "rhyme",
+        "rhyme_match",
+        "sounds_of_words",
+    ].includes(normalizedType)) {
+        return "sound-match";
     }
     if ([
         "memory_cards",
@@ -3369,6 +3382,11 @@ exports.GAME_TIMINGS = {
     storyScene: { stepMs: 700, carryMs: 320, successSettleMs: 1000, livesOutDelayMs: 320 },
     /** The card lifts, the light flies to its place in the row, the next question comes. */
     hiddenLight: { wrongFeedbackMs: 560, revealMs: 650, flyMs: 700, nextQuestionMs: 500, successSettleMs: 900, livesOutDelayMs: 320 },
+    /**
+     * A card whose name does not sound so shakes for `wrongFeedbackMs` and stays
+     * crossed out. The last right one stays lit `successSettleMs` before the win.
+     */
+    soundMatch: { wrongFeedbackMs: 560, successSettleMs: 700, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -8460,6 +8478,158 @@ function layoutHiddenLight(stageWidth, stageHeight, config, step, insets = {}) {
     const stepLayout = layoutTextChoice(stageWidth, stageHeight, { question: question.question, questionImage: null, answers: question.answers }, { ...insets, top: top + 4 + rowHeight + L.gap });
     return stepLayout ? { row, slots, step: stepLayout } : null;
 }
+/** Cards on the stage: at least one right and two that are not. */
+exports.SOUND_MATCH_ANSWERS = { min: 3, max: 6 };
+exports.SOUND_MATCH_RIGHT = { min: 1, max: 3 };
+/**
+ * The game as the players draw it, in the language the server chose. A card
+ * with no picture is dropped; no more than `SOUND_MATCH_RIGHT.max` right ones
+ * and `SOUND_MATCH_ANSWERS.max` cards are kept, the right ones first, so a
+ * game never loses its answer to the limit.
+ */
+function normalizeSoundMatchConfig(game, config) {
+    const rawAnswers = Array.isArray(config.answers) ? config.answers : [];
+    const all = rawAnswers
+        .map((answer, index) => {
+        const record = asRecord(answer);
+        const image = record ? extractMediaUrl(record.image) : extractMediaUrl(answer);
+        if (!image)
+            return null;
+        return {
+            id: record ? extractText(record.id) ?? `${game.id}-sound-${index}` : `${game.id}-sound-${index}`,
+            image,
+            name: (record ? extractText(record.name) ?? "" : "").toLowerCase(),
+            isCorrect: record
+                ? extractBoolean(record.right) ?? extractBoolean(record.is_correct) ?? extractBoolean(record.correct) ?? false
+                : false,
+        };
+    })
+        .filter((answer) => Boolean(answer));
+    const right = all.filter((answer) => answer.isCorrect).slice(0, exports.SOUND_MATCH_RIGHT.max);
+    const answers = shuffle([...right, ...all.filter((answer) => !answer.isCorrect)].slice(0, exports.SOUND_MATCH_ANSWERS.max));
+    const bg = normalizeBackground(config);
+    const wordImage = extractMediaUrl(config.word_image) ?? extractMediaUrl(config.wordImage);
+    return {
+        mode: extractText(config.mode) === "rhyme" ? "rhyme" : "first_sound",
+        word: (extractText(config.word) ?? "").toLowerCase(),
+        wordImage,
+        answers,
+        correctOptionIds: answers.filter((answer) => answer.isCorrect).map((answer) => answer.id),
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [bg, wordImage, ...answers.map((answer) => answer.image)].filter((uri) => Boolean(uri)),
+    };
+}
+/**
+ * What a tap on a card does: the whole play rule, so both players follow it
+ * tap for tap. `found` are the right cards tapped so far, `crossed` the wrong
+ * ones. The game is passed once every right card is found.
+ */
+function resolveSoundMatchTap(config, found, crossed, optionId) {
+    const option = config.answers.find((answer) => answer.id === optionId);
+    if (!option || found.includes(optionId) || crossed.includes(optionId)) {
+        return { type: "ignored" };
+    }
+    if (!option.isCorrect) {
+        return { type: "wrong" };
+    }
+    const left = config.correctOptionIds.filter((id) => id !== optionId && !found.includes(id));
+    return { type: "right", complete: left.length === 0 };
+}
+exports.SOUND_MATCH_LAYOUT = {
+    /** The word's picture is this much bigger than a card: it is what the cards are held against. */
+    wordScale: 1.25,
+    /** A card never grows past this, in px, however big the stage. */
+    maxCard: 230,
+    /** Between cards, as a share of a card's side, within these px. */
+    cardGapShare: 0.1,
+    minCardGap: 10,
+    maxCardGap: 20,
+};
+/**
+ * Where the word's picture and the cards go on the stage. The background covers
+ * the whole stage; the word's picture and the cards are two safe areas a gap
+ * apart, inside the stage less `insets` and an edge margin. The picture stands
+ * at the left of the cards or above them, and the cards in however many
+ * columns — whichever makes them biggest; of two as big, fewer rows. Everything
+ * is centred in the room left over.
+ */
+function layoutSoundMatch(stageWidth, stageHeight, config, insets = {}) {
+    const L = exports.SOUND_MATCH_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    const count = config.answers.length;
+    if (usableWidth <= 0 || usableHeight <= 0 || count === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const areaWidth = Math.max(usableWidth - edge * 2, 1);
+    const areaHeight = Math.max(usableHeight - edge * 2, 1);
+    const hasWord = Boolean(config.wordImage);
+    // The gap between cards follows their size; one guess of it is close enough to size them by.
+    const cardGapFor = (side) => Math.min(L.maxCardGap, Math.max(L.minCardGap, side * L.cardGapShare));
+    const places = hasWord ? ["left", "top"] : ["none"];
+    let best = null;
+    for (const place of places) {
+        for (let columns = 1; columns <= count; columns += 1) {
+            const rows = Math.ceil(count / columns);
+            let side = L.maxCard;
+            // Twice: the gap depends on the side, the side on the gap.
+            for (let pass = 0; pass < 2; pass += 1) {
+                const cardGap = cardGapFor(side);
+                const gridWidthRoom = place === "left" ? areaWidth - gap : areaWidth;
+                const gridHeightRoom = place === "top" ? areaHeight - gap : areaHeight;
+                // The word's picture takes `wordScale` sides of the room beside or above the grid.
+                const widthUnits = columns + (place === "left" ? L.wordScale : 0);
+                const heightUnits = rows + (place === "top" ? L.wordScale : 0);
+                side = Math.min((gridWidthRoom - cardGap * (columns - 1)) / widthUnits, (gridHeightRoom - cardGap * (rows - 1)) / heightUnits, 
+                // The picture alone fits across, or down.
+                place === "top" ? areaWidth / L.wordScale : Infinity, place === "left" ? areaHeight / L.wordScale : Infinity, L.maxCard);
+            }
+            if (!best || side > best.side + 0.5
+                || (Math.abs(side - best.side) <= 0.5 && rows < best.rows)) {
+                best = { side, columns, rows, place };
+            }
+        }
+    }
+    if (!best || best.side <= 0) {
+        return null;
+    }
+    const side = Math.floor(best.side);
+    const cardGap = cardGapFor(side);
+    const wordSide = hasWord ? Math.floor(side * L.wordScale) : 0;
+    const gridWidth = best.columns * side + cardGap * (best.columns - 1);
+    const gridHeight = best.rows * side + cardGap * (best.rows - 1);
+    const groupWidth = best.place === "left" ? wordSide + gap + gridWidth : Math.max(gridWidth, wordSide);
+    const groupHeight = best.place === "top" ? wordSide + gap + gridHeight : Math.max(gridHeight, wordSide);
+    const groupLeft = originX + edge + (areaWidth - groupWidth) / 2;
+    const groupTop = originY + edge + (areaHeight - groupHeight) / 2;
+    const word = !hasWord
+        ? null
+        : best.place === "left"
+            ? { left: groupLeft, top: groupTop + (groupHeight - wordSide) / 2, width: wordSide, height: wordSide }
+            : { left: groupLeft + (groupWidth - wordSide) / 2, top: groupTop, width: wordSide, height: wordSide };
+    const gridLeft = best.place === "left" ? groupLeft + wordSide + gap : groupLeft + (groupWidth - gridWidth) / 2;
+    const gridTop = best.place === "top" ? groupTop + wordSide + gap : groupTop + (groupHeight - gridHeight) / 2;
+    const cards = config.answers.map((answer, index) => {
+        const row = Math.floor(index / best.columns);
+        // The last row may hold fewer cards: it is centred like the others.
+        const inRow = Math.min(best.columns, count - row * best.columns);
+        const rowWidth = inRow * side + cardGap * (inRow - 1);
+        return {
+            id: answer.id,
+            left: gridLeft + (gridWidth - rowWidth) / 2 + (index - row * best.columns) * (side + cardGap),
+            top: gridTop + row * (side + cardGap),
+            width: side,
+            height: side,
+        };
+    });
+    return { word, cards };
+}
 /**
  * Kind → the camelCase key used in `GAME_TIMINGS`. Adding a kind to
  * `RuntimeGameKind` without adding it here is a compile error, and so is a
@@ -8494,6 +8664,7 @@ exports.GAME_KIND_KEYS = {
     "map-place": "mapPlace",
     "story-scene": "storyScene",
     "hidden-light": "hiddenLight",
+    "sound-match": "soundMatch",
     "memory-cards": "memoryCards",
     "pattern-next": "patternNext",
     "select-option": "selectOption",
@@ -8531,6 +8702,7 @@ exports.GAME_TIMINGS_BY_KIND = {
     "map-place": exports.GAME_TIMINGS.mapPlace,
     "story-scene": exports.GAME_TIMINGS.storyScene,
     "hidden-light": exports.GAME_TIMINGS.hiddenLight,
+    "sound-match": exports.GAME_TIMINGS.soundMatch,
     "memory-cards": exports.GAME_TIMINGS.memoryCards,
     "pattern-next": exports.GAME_TIMINGS.patternNext,
     "select-option": exports.GAME_TIMINGS.selectOption,
@@ -8574,6 +8746,7 @@ exports.GAME_GESTURES = {
     "map-place": "drag",
     "story-scene": "tap",
     "hidden-light": "tap",
+    "sound-match": "tap",
     "memory-cards": "tap",
     "pattern-next": "tap",
     "select-option": "tap",

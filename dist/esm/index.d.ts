@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "story-scene" | "hidden-light" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "story-scene" | "hidden-light" | "sound-match" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1411,6 +1411,15 @@ export declare const GAME_TIMINGS: {
         readonly flyMs: 700;
         readonly nextQuestionMs: 500;
         readonly successSettleMs: 900;
+        readonly livesOutDelayMs: 320;
+    };
+    /**
+     * A card whose name does not sound so shakes for `wrongFeedbackMs` and stays
+     * crossed out. The last right one stays lit `successSettleMs` before the win.
+     */
+    readonly soundMatch: {
+        readonly wrongFeedbackMs: 560;
+        readonly successSettleMs: 700;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -3772,6 +3781,92 @@ export type HiddenLightLayout = {
  * stage, everything inside it less `insets`.
  */
 export declare function layoutHiddenLight(stageWidth: number, stageHeight: number, config: Pick<HiddenLightConfig, "questions">, step: number, insets?: SceneInsets): HiddenLightLayout | null;
+export type SoundMatchMode = "first_sound" | "rhyme";
+/** Cards on the stage: at least one right and two that are not. */
+export declare const SOUND_MATCH_ANSWERS: {
+    readonly min: 3;
+    readonly max: 6;
+};
+export declare const SOUND_MATCH_RIGHT: {
+    readonly min: 1;
+    readonly max: 3;
+};
+export type SoundMatchOption = {
+    id: string;
+    image: string;
+    /** What the child calls the picture, in the game's language: said by nobody, read by a screen reader. */
+    name: string;
+    isCorrect: boolean;
+};
+export type SoundMatchConfig = {
+    mode: SoundMatchMode;
+    /** The word the voice compares with, in the game's language; for the screen reader alone. */
+    word: string;
+    /** A picture of that word, standing apart from the answers; null when it is only heard. */
+    wordImage: string | null;
+    /** Shuffled once here: the right ones are not always the first cards. */
+    answers: SoundMatchOption[];
+    correctOptionIds: string[];
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background, the word's picture and every card: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it, in the language the server chose. A card
+ * with no picture is dropped; no more than `SOUND_MATCH_RIGHT.max` right ones
+ * and `SOUND_MATCH_ANSWERS.max` cards are kept, the right ones first, so a
+ * game never loses its answer to the limit.
+ */
+export declare function normalizeSoundMatchConfig(game: AuthoredGame, config: Record<string, unknown>): SoundMatchConfig;
+export type SoundMatchTapResult = 
+/** A card already found or already crossed out, or one the game does not have. */
+{
+    type: "ignored";
+}
+/** A right card; `complete` when it was the last one to find. */
+ | {
+    type: "right";
+    complete: boolean;
+}
+/** A card whose name does not sound so: it is crossed out, and a life is lost. */
+ | {
+    type: "wrong";
+};
+/**
+ * What a tap on a card does: the whole play rule, so both players follow it
+ * tap for tap. `found` are the right cards tapped so far, `crossed` the wrong
+ * ones. The game is passed once every right card is found.
+ */
+export declare function resolveSoundMatchTap(config: Pick<SoundMatchConfig, "answers" | "correctOptionIds">, found: readonly string[], crossed: readonly string[], optionId: string): SoundMatchTapResult;
+export declare const SOUND_MATCH_LAYOUT: {
+    /** The word's picture is this much bigger than a card: it is what the cards are held against. */
+    readonly wordScale: 1.25;
+    /** A card never grows past this, in px, however big the stage. */
+    readonly maxCard: 230;
+    /** Between cards, as a share of a card's side, within these px. */
+    readonly cardGapShare: 0.1;
+    readonly minCardGap: 10;
+    readonly maxCardGap: 20;
+};
+export type SoundMatchLayout = {
+    /** The word's picture, apart from the cards; null when the game has none. */
+    word: BoardRect | null;
+    /** In `answers` order. Every card is a square of one size. */
+    cards: Array<BoardRect & {
+        id: string;
+    }>;
+};
+/**
+ * Where the word's picture and the cards go on the stage. The background covers
+ * the whole stage; the word's picture and the cards are two safe areas a gap
+ * apart, inside the stage less `insets` and an edge margin. The picture stands
+ * at the left of the cards or above them, and the cards in however many
+ * columns — whichever makes them biggest; of two as big, fewer rows. Everything
+ * is centred in the room left over.
+ */
+export declare function layoutSoundMatch(stageWidth: number, stageHeight: number, config: Pick<SoundMatchConfig, "answers" | "wordImage">, insets?: SceneInsets): SoundMatchLayout | null;
 /**
  * What every game reports with its result, on both platforms.
  *
@@ -3936,6 +4031,13 @@ export type HiddenLightMetrics = BaseGameMetrics & {
     firstTry: number;
     livesRemaining: number;
 };
+export type SoundMatchMetrics = BaseGameMetrics & {
+    /** Right cards the game has, and how many of them were found. */
+    correct: number;
+    found: number;
+    totalOptions: number;
+    livesRemaining: number;
+};
 export type TextChoiceMetrics = BaseGameMetrics & {
     /** Right answers the game has, and how many of them were found. */
     correct: number;
@@ -4014,6 +4116,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "map-place": "mapPlace";
     readonly "story-scene": "storyScene";
     readonly "hidden-light": "hiddenLight";
+    readonly "sound-match": "soundMatch";
     readonly "memory-cards": "memoryCards";
     readonly "pattern-next": "patternNext";
     readonly "select-option": "selectOption";
@@ -4063,6 +4166,7 @@ export declare const GAME_GESTURES: {
     readonly "map-place": "drag";
     readonly "story-scene": "tap";
     readonly "hidden-light": "tap";
+    readonly "sound-match": "tap";
     readonly "memory-cards": "tap";
     readonly "pattern-next": "tap";
     readonly "select-option": "tap";
@@ -4138,6 +4242,7 @@ export type GameMetricsByKind = {
     "map-place": MapPlaceMetrics;
     "story-scene": StorySceneMetrics;
     "hidden-light": HiddenLightMetrics;
+    "sound-match": SoundMatchMetrics;
     "memory-cards": MemoryCardsMetrics;
     "pattern-next": PatternNextMetrics;
     "select-option": SelectOptionMetrics;

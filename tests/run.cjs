@@ -2828,5 +2828,73 @@ section('hidden_light: a light found under the right answer');
   check('no layout for a question that is not there', rules.layoutHiddenLight(852, 393, config, 5, {}) === null);
 }
 
+section('sound_match: what starts like a word, or rhymes with it');
+{
+  ['sound_match', 'rhyme', 'first_sound', 'Sound Match'].forEach((type) => {
+    check(`${type} resolves to sound-match`, rules.resolveGameKind(type, {}) === 'sound-match');
+  });
+  check('it is tapped, and has its timings', rules.GAME_GESTURES['sound-match'] === 'tap'
+    && rules.GAME_TIMINGS_BY_KIND['sound-match'].wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['sound-match'].successSettleMs > 0);
+
+  const config = rules.normalizeSoundMatchConfig({ id: 7 }, {
+    mode: 'rhyme',
+    word: 'Кот',
+    word_image: 'https://x/cat.webp',
+    bg_image: 'https://x/room.webp',
+    lives: 2,
+    answers: [
+      { image: 'https://x/mole.webp', name: 'КрОт', right: true },
+      { image: 'https://x/mouth.webp', name: 'рот', right: true },
+      { image: 'https://x/hippo.webp', name: 'бегемот', right: true },
+      { image: 'https://x/hedgehog.webp', name: 'ёж', right: true },
+      { image: 'https://x/house.webp', name: 'дом', right: false },
+      { image: '', name: 'нет картинки', right: false },
+      { image: 'https://x/ball.webp', name: 'мяч', right: false },
+      { image: 'https://x/fish.webp', name: 'рыба', right: false },
+      { image: 'https://x/car.webp', name: 'машина', right: false },
+    ],
+  });
+  const rights = config.answers.filter((answer) => answer.isCorrect);
+  check('three right cards at most and six in all, the right ones kept first; a card with no picture is dropped',
+    config.answers.length === 6 && rights.length === 3 && config.correctOptionIds.length === 3
+    && !config.answers.some((answer) => answer.name === 'нет картинки') && !config.answers.some((answer) => answer.name === 'ёж'));
+  check('the mode, the word and the names in small letters; a mode it does not know is the first sound',
+    config.mode === 'rhyme' && config.word === 'кот' && rights.some((answer) => answer.name === 'крот')
+    && rules.normalizeSoundMatchConfig({ id: 1 }, { mode: 'odd' }).mode === 'first_sound');
+  check('the background, the word\'s picture and every card are fetched before the clock',
+    config.imageUris.length === 8 && config.imageUris[0] === 'https://x/room.webp' && config.imageUris[1] === 'https://x/cat.webp');
+  check('lives as authored', config.lives === 2 && rules.normalizeSoundMatchConfig({ id: 1 }, {}).lives === 3);
+
+  const tap = rules.resolveSoundMatchTap;
+  const [first, second, third] = config.correctOptionIds;
+  const wrong = config.answers.find((answer) => !answer.isCorrect).id;
+  check('every right card must be found; a wrong one costs a life once; a card found is not found twice',
+    tap(config, [], [], first).type === 'right' && tap(config, [], [], first).complete === false
+    && tap(config, [first, second], [], third).complete === true
+    && tap(config, [], [], wrong).type === 'wrong' && tap(config, [], [wrong], wrong).type === 'ignored'
+    && tap(config, [first], [], first).type === 'ignored' && tap(config, [], [], 'nobody').type === 'ignored');
+
+  const fits = (w, h, insets, cfg) => {
+    const layout = rules.layoutSoundMatch(w, h, cfg, insets);
+    const inside = (box) => box.left >= (insets.left || 0) - 0.5 && box.top >= (insets.top || 0) - 0.5
+      && box.left + box.width <= w - (insets.right || 0) + 0.5 && box.top + box.height <= h - (insets.bottom || 0) + 0.5;
+    const apart = (a, b) => a.left + a.width <= b.left + 0.5 || b.left + b.width <= a.left + 0.5
+      || a.top + a.height <= b.top + 0.5 || b.top + b.height <= a.top + 0.5;
+    const boxes = [...(layout && layout.word ? [layout.word] : []), ...(layout ? layout.cards : [])];
+    return Boolean(layout) && layout.cards.length === cfg.answers.length && boxes.every(inside)
+      && boxes.every((box, i) => boxes.every((other, j) => i === j || apart(box, other)))
+      && layout.cards.every((card) => card.width === layout.cards[0].width && card.width === card.height);
+  };
+  const bare = { ...config, wordImage: null };
+  check('the word\'s picture and the cards stand apart, inside the stage and its edges, every card one square size',
+    fits(852, 393, { left: 59, right: 59, bottom: 21 }, config) && fits(1024, 768, {}, config) && fits(640, 480, { top: 10 }, config)
+    && fits(852, 393, { left: 59, right: 59, bottom: 21 }, bare) && fits(390, 844, {}, config));
+  const wide = rules.layoutSoundMatch(852, 393, config, {});
+  check('on a wide stage the word\'s picture stands at the left of the cards, bigger than one',
+    wide.word.left + wide.word.width < Math.min(...wide.cards.map((card) => card.left)) && wide.word.width > wide.cards[0].width);
+  check('no layout with no cards or no room', rules.layoutSoundMatch(852, 393, { answers: [], wordImage: null }, {}) === null
+    && rules.layoutSoundMatch(100, 100, config, { left: 60, right: 60 }) === null);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
