@@ -4265,3 +4265,4 @@ export type GameOutcome<K extends PlayableGameKind = PlayableGameKind> = {
 };
 export * from "./theme.js";
 export * from "./letters.js";
+export * from "./coloring.js";

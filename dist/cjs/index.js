@@ -8802,3 +8802,5 @@ function gestureHintDragEnd(from, towards) {
 __exportStar(require("./theme.js"), exports);
 // The letters drawn in code: their outlines and how a letter and a line are laid out.
 __exportStar(require("./letters.js"), exports);
+// The coloring pages: the crayons, what a drawing is and how the screen is divided.
+__exportStar(require("./coloring.js"), exports);

@@ -8619,3 +8619,5 @@ export function gestureHintDragEnd(from, towards) {
 export * from "./theme.js";
 // The letters drawn in code: their outlines and how a letter and a line are laid out.
 export * from "./letters.js";
+// The coloring pages: the crayons, what a drawing is and how the screen is divided.
+export * from "./coloring.js";

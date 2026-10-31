@@ -2896,5 +2896,60 @@ section('sound_match: what starts like a word, or rhymes with it');
     && rules.layoutSoundMatch(100, 100, config, { left: 60, right: 60 }) === null);
 }
 
+section('coloring pages');
+
+{
+  const stroke = (c, p, extra = {}) => ({ t: 's', c, w: 12, p, ...extra });
+  const ops = [
+    { t: 'f', a: 3, c: 1 },
+    stroke(2, [100, 100, 110, 104, 90, 120]),
+    { t: 'x' },
+    { t: 'f', a: 5, c: 18 },
+    stroke(0, [10, 10, 12, 14]),
+    stroke(0, [12, 14, 20, 30], { j: 1 }),
+    stroke(0, [20, 30, 25, 31], { j: 1 }),
+  ];
+
+  check('20 crayons: 18 colours, the rainbow and the glitter', rules.COLORING_CRAYON_COUNT === 20 && rules.COLORING_RAINBOW === 18 && rules.COLORING_GLITTER === 19);
+  check('what came before a clean sheet is not kept', JSON.stringify(rules.compactColoringOps(ops)) === JSON.stringify(ops.slice(3)));
+  check('a drawing with no clean sheet is kept whole', rules.compactColoringOps(ops.slice(0, 2)).length === 2);
+  check('back takes a scribble of many pieces whole', rules.undoColoringOp(ops).length === 4);
+  check('back takes one action otherwise', rules.undoColoringOp(ops.slice(0, 3)).length === 2 && rules.undoColoringOp([]).length === 0);
+  check('back over a clean sheet brings the drawing back', rules.undoColoringOp(ops.slice(0, 3)).at(-1).t === 's');
+
+  const packed = rules.packColoringOps(ops);
+  check('a stroke is kept as steps from its first point', JSON.stringify(packed[1].p) === JSON.stringify([100, 100, 10, 4, -20, 16]));
+  check('packing changes nothing it is given', ops[1].p[2] === 110);
+  check('unpacked, a drawing is what it was', JSON.stringify(rules.unpackColoringOps(packed)) === JSON.stringify(ops));
+  check('what is saved starts after the clean sheet, packed', JSON.stringify(rules.coloringSavedOps(ops)) === JSON.stringify(rules.packColoringOps(ops.slice(3))));
+
+  const scribble = [];
+  for (let s = 0; s < 6000; s++) {
+    const p = [];
+    for (let i = 0; i < 300; i++) p.push(500 + (i % 7), 300 + (i % 11) * 3);
+    scribble.push(stroke(s % 18, p));
+  }
+  const kept = rules.coloringSavedOps(scribble);
+  check('hours of scribbling still fit what is kept', JSON.stringify(kept).length <= rules.COLORING_SAVE_MAX_CHARS, String(JSON.stringify(kept).length));
+  check('thinned, no stroke is lost and each ends where it ended',
+    kept.length === scribble.length && rules.unpackColoringOps(kept)[0].p.slice(-2).join() === scribble[0].p.slice(-2).join());
+
+  const inside = (layout, width, height) => [layout.tools, layout.box, layout.paper].every((rect) => rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= width + 0.01 && rect.y + rect.height <= height + 0.01);
+  const page = { w: 1024, h: 768 };
+  const phone = rules.layoutColoringScreen(800, 370, page);
+  check('on a phone on its side the sheet is nearly as tall as the screen', phone.paper.height >= 330, String(phone.paper.height));
+  check('the sheet keeps its shape', Math.abs(phone.paper.width / phone.paper.height - 4 / 3) < 0.01);
+  check('the sheet stands between the toys and the box',
+    phone.paper.x >= phone.tools.x + phone.tools.width && phone.paper.x + phone.paper.width <= phone.box.x);
+  check('everything is on the screen, on a small phone, a big one, a tablet and a desktop',
+    [[640, 360], [800, 370], [852, 393], [1024, 768], [768, 1024], [1920, 1080]].every(([w, h]) => inside(rules.layoutColoringScreen(w, h, page), w, h)));
+  const edges = { left: 59, right: 59, top: 0, bottom: 21 };
+  const notched = rules.layoutColoringScreen(852, 393, page, edges);
+  check('nothing a child touches lies under the phone\'s edges',
+    notched.tools.x >= 59 && notched.box.x + notched.box.width <= 852 - 59 && notched.tools.y + notched.tools.height <= 393 - 21);
+  check('the toys stop growing on a big screen', rules.layoutColoringScreen(3840, 2160, page).unit === 1.8);
+  check('a screen not measured yet breaks nothing', rules.layoutColoringScreen(0, 0, page).paper.width === 0);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
