@@ -2899,7 +2899,8 @@ export function layoutPatternNext(width, height, rowCount, choiceCount, counting
         return { item: 0, perLine: count, itemGap: 0, choice: 0, choiceGap: 0, rowGap: 0 };
     }
     const rowGap = clampNumber(height * 0.09, 10, 44);
-    const itemGap = clampNumber(width * 0.014, 6, 18);
+    // Whole from the start: a gap rounded up afterwards made a row that filled the width a few pixels too wide for it.
+    const itemGap = Math.round(clampNumber(width * 0.014, 6, 18));
     const choiceGap = clampNumber(width * 0.022, 10, 28);
     const widestChoice = Math.max(0, (width - (cards - 1) * choiceGap) / cards);
     const tallestChoice = Math.min(height * (counting ? 0.46 : 0.42), counting ? 260 : 220, widestChoice);
@@ -2918,7 +2919,7 @@ export function layoutPatternNext(width, height, rowCount, choiceCount, counting
     return {
         item: Math.floor(row.item),
         perLine: row.perLine,
-        itemGap: Math.round(itemGap),
+        itemGap,
         // A card is the bigger of the two, but not out of scale with the row.
         choice: Math.floor(Math.min(tallestChoice, row.item * 1.35)),
         choiceGap: Math.round(choiceGap),

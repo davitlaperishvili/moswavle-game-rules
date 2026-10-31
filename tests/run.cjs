@@ -512,6 +512,16 @@ section('Pattern Next: the row and the cards fill the room');
   check('and still fits', tall(long, 2) <= 292 && 7 * long.item + 6 * long.itemGap <= 614);
   check('its cards stay in scale with it', long.choice <= long.item * 1.35 + 1);
 
+  // 751 wide, nine boxes: 74 each and a gap of 10.5 rounded up left the "?" alone on a line.
+  let wider = 0;
+  for (let w = 320; w <= 1400; w += 7) {
+    for (let count = 3; count <= 15; count += 1) {
+      const l = rules.layoutPatternNext(w + 0.36, 292, count, 3);
+      if (l.perLine * l.item + (l.perLine - 1) * l.itemGap > w + 0.36) wider += 1;
+    }
+  }
+  check('a row is never wider than its room', wider === 0, String(wider));
+
   const counts = rules.layoutPatternNext(614, 292, 5, 2, true);
   check('a pattern of counts is drawn bigger', counts.item > phone.item && counts.choice > phone.choice, JSON.stringify(counts));
   check('and fits too', tall(counts, 1) <= 292);
