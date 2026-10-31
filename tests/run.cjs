@@ -270,13 +270,46 @@ const pattern = rules.normalizePatternNextConfig({
 check('the run is expanded from the unit', pattern.sequence.length === 6);
 check('it alternates', pattern.sequence[0].image === 'a.webp' && pattern.sequence[1].image === 'b.webp' && pattern.sequence[4].image === 'a.webp');
 
-// The run always stops at the end of a repeat, so what comes next is
-// answerable rather than a guess.
 check('the answer continues the unit', pattern.answer.image === 'a.webp', JSON.stringify(pattern.answer));
 check('the choices are the unit itself, so nothing extra is drawn', pattern.choices.length === 2);
 
 const short = rules.normalizePatternNextConfig({ pattern: [{ image: 'a.webp' }] });
 check('one picture is not a pattern', short.sequence.length === 0 && short.answer === null);
+
+{
+  const unit = [{ id: 'a', image: 'a.webp' }, { id: 'b', image: 'b.webp' }, { id: 'c', image: 'c.webp' }];
+  const rowOf = (config) => rules.normalizePatternNextConfig(config).sequence.map((item) => item.image[0]).join('');
+
+  const inside = rules.normalizePatternNextConfig({ pattern: unit, repeats: 2, tail: 1 });
+  check('a tail stops the row inside the next repeat', rowOf({ pattern: unit, repeats: 2, tail: 1 }) === 'abcabca');
+  check('and the answer is the picture after it, not the unit\'s first', inside.answer.id === 'b', JSON.stringify(inside.answer));
+  check('two pictures of the tail ask for the unit\'s last',
+    rules.normalizePatternNextConfig({ pattern: unit, repeats: 2, tail: 2 }).answer.id === 'c');
+  check('a row with no tail ends on a whole unit, as before',
+    rowOf({ pattern: unit, repeats: 2 }) === 'abcabc' && rules.normalizePatternNextConfig({ pattern: unit, repeats: 2 }).answer.id === 'a');
+  check('a tail is never a whole unit: the row keeps to the repeats it was given',
+    rowOf({ pattern: unit, repeats: 2, tail: 9 }) === 'abcabcab' && rowOf({ pattern: unit, repeats: 2, tail: -1 }) === 'abcabc');
+  check('the server sends a number or its text alike',
+    rules.normalizePatternNextConfig({ pattern: unit, repeats: '2', tail: '1' }).answer.id === 'b');
+  check('the longest row keeps its tail', rowOf({ pattern: unit, repeats: 4, tail: 2 }).length === 14
+    && rules.normalizePatternNextConfig({ pattern: unit, repeats: 4, tail: 2 }).answer.id === 'c');
+
+  const twice = [{ id: 'a1', image: 'a.webp' }, { id: 'a2', image: 'a.webp' }, { id: 'b', image: 'b.webp' }];
+  for (const tail of [0, 1, 2]) {
+    const game = rules.normalizePatternNextConfig({ pattern: twice, repeats: 2, tail });
+    check(`A A B, tail ${tail}: one card for a picture`, game.choices.length === 2
+      && new Set(game.choices.map((card) => card.image)).size === 2, JSON.stringify(game.choices));
+    check(`A A B, tail ${tail}: the answer is a card there is`, game.choices.some((card) => card.id === game.answer.id));
+    check(`A A B, tail ${tail}: and the picture that comes next`, game.answer.image === (tail === 2 ? 'b.webp' : 'a.webp'));
+  }
+
+  const counted = rules.normalizePatternNextConfig({
+    pattern: [{ id: 'x2', image: 'a.webp', copies: 2 }, { id: 'x2b', image: 'a.webp', copies: 2 }, { id: 'x1', image: 'a.webp', copies: 1 }],
+    repeats: 2,
+    tail: 2,
+  });
+  check('the same picture at another count is another card', counted.choices.length === 2 && counted.answer.id === 'x1', JSON.stringify(counted.choices));
+}
 
 section('sorting puts many things into few bins');
 

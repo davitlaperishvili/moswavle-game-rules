@@ -288,9 +288,9 @@ export type PatternNextConfig = {
   pattern: PatternItem[];
   /** The run shown to the child, already expanded from the pattern. */
   sequence: PatternItem[];
-  /** The one that comes next. */
+  /** The one that comes next: one of `choices`. */
   answer: PatternItem | null;
-  /** The pattern's own items, shuffled, as the things to choose between. */
+  /** The pattern's own pictures, each once, shuffled, as the things to choose between. */
   choices: PatternItem[];
   bg_image: string | null;
   time_limit: number | null;
@@ -2840,9 +2840,14 @@ export function arrangeSvgAssembleScene(
  * games, and the answer is always one of the pattern's own pictures, so there
  * is nothing else to draw.
  *
- * The run is cut so that it always stops mid-unit or at its end, never partway
- * into a repeat that has not started: a child who has seen A-B-A-B is being
- * asked something answerable, one who has seen A-B-A is not.
+ * The run is the whole repeats, at least two, and then `tail` pictures of the
+ * next one: A-B-A-B-A asks for B. With no tail a row ends on a whole unit and
+ * the answer is its first picture, game after game, which a child can tap
+ * without looking at the row. The tail is the author's to say, not the rules':
+ * a voice that says the row aloud has to stop where the row stops.
+ *
+ * A unit can hold one picture twice (A-A-B), and a card shows it once: of two
+ * cards alike one was the right one and the other a lost life.
  */
 export function normalizePatternNextConfig(
   config: Record<string, unknown>,
@@ -2892,7 +2897,8 @@ export function normalizePatternNextConfig(
 
   // At least two full repeats, or there is no pattern to have noticed.
   const repeats = Math.max(2, Math.min(4, Math.floor(extractNumber(config.repeats) ?? 2)));
-  const length = Math.min(pattern.length * repeats, 12);
+  const tail = Math.max(0, Math.min(pattern.length - 1, Math.floor(extractNumber(config.tail) ?? 0)));
+  const length = Math.min(pattern.length * repeats, 12) + tail;
 
   const sequence: PatternItem[] = [];
   for (let index = 0; index < length; index += 1) {
@@ -2900,13 +2906,17 @@ export function normalizePatternNextConfig(
     sequence.push({ id: `${source.id}-${index + 1}`, image: source.image, copies: source.copies });
   }
 
-  const answer = pattern[length % pattern.length];
+  const looksTheSame = (one: PatternItem, other: PatternItem) =>
+    one.image === other.image && (one.copies ?? 1) === (other.copies ?? 1);
+  const cards = pattern.filter((item, index) => pattern.findIndex((other) => looksTheSame(other, item)) === index);
+  const next = pattern[length % pattern.length];
+  const answer = cards.find((card) => looksTheSame(card, next)) ?? next;
 
   return {
     pattern,
     sequence,
     answer,
-    choices: shuffle(pattern),
+    choices: shuffle(cards),
     bg_image: extractMediaUrl(config.bg_image),
     time_limit: extractNumber(config.time_limit),
     lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
