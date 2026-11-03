@@ -4135,51 +4135,65 @@ export type GameTimingKey = (typeof GAME_KIND_KEYS)[PlayableGameKind];
 export declare const GAME_TIMINGS_BY_KIND: {
     [K in PlayableGameKind]: (typeof GAME_TIMINGS)[(typeof GAME_KIND_KEYS)[K]];
 };
-/** How a child answers in a game: by tapping a thing, or by carrying it somewhere. */
-export type GameGesture = "tap" | "drag";
 /**
- * What the hand of the hint shows in each game. A game that can be played both
- * ways (carry a card to its place, or tap the card and then the place) is
- * shown carried: a tap on the card alone looks as if nothing happened.
- * Exhaustive by construction, like the timings.
+ * How a child answers in a game: by picking one of the answers shown — a
+ * card, a key, a part of a picture — where a tap is the answer on the spot
+ * and nothing goes anywhere; by tapping a thing that then goes to a place (a
+ * letter to its slot, a coin to the purse) or joins another, which a child may
+ * try to do by carrying; or by carrying it somewhere.
+ */
+export type GameGesture = "pick" | "tap" | "drag";
+/** The gestures the hand of the hint shows. */
+export type HintGesture = Exclude<GameGesture, "pick">;
+/**
+ * How each game is played. A game that can be played both ways (carry a card
+ * to its place, or tap the card and then the place) is shown carried: a tap on
+ * the card alone looks as if nothing happened. Exhaustive by construction,
+ * like the timings.
  */
 export declare const GAME_GESTURES: {
-    readonly "answer-choice": "tap";
-    readonly "catch-correct": "tap";
+    readonly "answer-choice": "pick";
+    readonly "catch-correct": "pick";
     readonly "connect-pairs": "tap";
-    readonly "count-pick": "tap";
+    readonly "count-pick": "pick";
     readonly "drag-drop-match": "drag";
     readonly images_order: "tap";
     readonly jigsaw: "drag";
     readonly "math-equation": "tap";
-    readonly "text-choice": "tap";
-    readonly "math-input": "tap";
+    readonly "text-choice": "pick";
+    readonly "math-input": "pick";
     readonly "word-build": "tap";
     readonly "label-diagram": "tap";
-    readonly "reading-text": "tap";
-    readonly "word-problem": "tap";
+    readonly "reading-text": "pick";
+    readonly "word-problem": "pick";
     readonly "money-pay": "tap";
     readonly "clock-set": "tap";
-    readonly "fraction-pick": "tap";
+    readonly "fraction-pick": "pick";
     readonly "sentence-build": "tap";
     readonly "word-sort": "tap";
     readonly "number-line": "tap";
-    readonly "true-false": "tap";
+    readonly "true-false": "pick";
     readonly "grid-route": "tap";
-    readonly "chart-read": "tap";
-    readonly "find-in-scene": "tap";
+    readonly "chart-read": "pick";
+    readonly "find-in-scene": "pick";
     readonly "map-place": "drag";
     readonly "story-scene": "tap";
-    readonly "hidden-light": "tap";
-    readonly "sound-match": "tap";
-    readonly "memory-cards": "tap";
-    readonly "pattern-next": "tap";
-    readonly "select-option": "tap";
+    readonly "hidden-light": "pick";
+    readonly "sound-match": "pick";
+    readonly "memory-cards": "pick";
+    readonly "pattern-next": "pick";
+    readonly "select-option": "pick";
     readonly "shadow-match": "drag";
     readonly "size-order": "drag";
     readonly "sort-bins": "drag";
     readonly "svg-assemble": "tap";
 };
+/**
+ * What the hand of the hint shows in a game, or nothing: where the child only
+ * picks one of the answers shown there is nothing else to do but tap, and a
+ * hand over the cards says nothing a child does not know (owner, 2026-11-03).
+ */
+export declare function gestureHintOf(kind: PlayableGameKind): HintGesture | null;
 /**
  * The hint itself: a hand that shows the gesture and never the answer. It
  * waits `delayMs` after the game is ready — a child who is already playing

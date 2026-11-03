@@ -1420,8 +1420,12 @@ section('the hint of how a game is played shows the gesture, never the answer');
   check('every playable kind has its gesture', kindsWithGesture === Object.keys(rules.GAME_TIMINGS_BY_KIND).sort().join());
   check('a game played only by carrying is shown carried', rules.GAME_GESTURES['shadow-match'] === 'drag');
   check('a game played either way is shown carried too', rules.GAME_GESTURES['drag-drop-match'] === 'drag' && rules.GAME_GESTURES['sort-bins'] === 'drag');
-  check('a game of cards to tap is shown tapped', rules.GAME_GESTURES['answer-choice'] === 'tap' && rules.GAME_GESTURES['memory-cards'] === 'tap');
-  check('pictures put in order are tapped, not carried', rules.GAME_GESTURES.images_order === 'tap');
+  check('a game of cards to tap is picked, with no hand', rules.GAME_GESTURES['answer-choice'] === 'pick' && rules.GAME_GESTURES['memory-cards'] === 'pick'
+    && rules.gestureHintOf('answer-choice') === null && rules.gestureHintOf('memory-cards') === null);
+  check('pictures put in order are tapped, not carried, and the hand shows it', rules.GAME_GESTURES.images_order === 'tap' && rules.gestureHintOf('images_order') === 'tap');
+  check('a thing tapped into its place is shown tapped', ['word-build', 'sentence-build', 'math-equation', 'money-pay', 'svg-assemble', 'word-sort'].every((kind) => rules.gestureHintOf(kind) === 'tap'));
+  check('a game carried is shown carried', rules.gestureHintOf('shadow-match') === 'drag' && rules.gestureHintOf('sort-bins') === 'drag');
+  check('no answer game gets a hand', ['answer-choice', 'select-option', 'text-choice', 'true-false', 'pattern-next', 'sound-match', 'count-pick', 'catch-correct'].every((kind) => rules.gestureHintOf(kind) === null));
 
   check('a few things are all visited, in order', rules.gestureHintTapStops(3).join() === '0,1,2');
   check('nothing to tap, nothing to visit', rules.gestureHintTapStops(0).length === 0);
@@ -1556,7 +1560,7 @@ section('text_choice: a question to read and answers in words');
   const phone = rules.layoutTextChoice(852, 393, quiz, { top: 56 });
   check('a line is drawn in a box as wide as its letters ask', phone.cards.every((card) => card.lines.every((line) => line.width <= rules.textLineUnits(line.text) * line.height + 1e-6)));
   check('no answers, no game', rules.layoutTextChoice(852, 393, make({ answers: [] }), {}) === null);
-  check('the timings and the gesture are there', rules.GAME_TIMINGS.textChoice.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['text-choice'] === rules.GAME_TIMINGS.textChoice && rules.GAME_GESTURES['text-choice'] === 'tap');
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.textChoice.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['text-choice'] === rules.GAME_TIMINGS.textChoice && rules.GAME_GESTURES['text-choice'] === 'pick');
 }
 
 section('letters drawn in code: outlines, not pictures');
@@ -1700,7 +1704,7 @@ section('math_input: an example whose answer is typed');
   const blankRect = phone.terms.find((rect) => rect.id === times.blankId);
   check('the place is as wide as the digits it takes', Math.abs(blankRect.units - times.maxDigits * rules.MATH_EQUATION_LAYOUT.digit) < 1e-9);
   check('no example, no game', rules.layoutMathInput(852, 393, make([]), {}) === null);
-  check('the timings and the gesture are there', rules.GAME_TIMINGS.mathInput.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['math-input'] === rules.GAME_TIMINGS.mathInput && rules.GAME_GESTURES['math-input'] === 'tap');
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.mathInput.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['math-input'] === rules.GAME_TIMINGS.mathInput && rules.GAME_GESTURES['math-input'] === 'pick');
 }
 
 section('word_build: a word put together from its letters');
@@ -2013,7 +2017,7 @@ section('reading_text: a text to read and questions about it');
   check('the lines of the text start at one edge', new Set(phone.lines.map((line) => Math.round(line.left))).size === 1);
   check('no text or no question, no game', rules.layoutReadingText(852, 393, { text: '', questions: game.questions }, {}) === null
     && rules.layoutReadingText(852, 393, { text: story, questions: [] }, {}) === null);
-  check('the timings and the gesture are there', rules.GAME_TIMINGS.readingText.nextQuestionMs > 0 && rules.GAME_TIMINGS_BY_KIND['reading-text'] === rules.GAME_TIMINGS.readingText && rules.GAME_GESTURES['reading-text'] === 'tap');
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.readingText.nextQuestionMs > 0 && rules.GAME_TIMINGS_BY_KIND['reading-text'] === rules.GAME_TIMINGS.readingText && rules.GAME_GESTURES['reading-text'] === 'pick');
 }
 
 section('word_problem: a problem in words, its answer typed');
@@ -2073,7 +2077,7 @@ section('word_problem: a problem in words, its answer typed');
   const upright = rules.layoutWordProblem(390, 700, russian, { top: 60 });
   check('an upright stage has them under it', upright.arrangement === 'stack' && upright.answer.top > upright.sheet.top + upright.sheet.height);
   check('no words, no game', rules.layoutWordProblem(852, 393, { text: '', unit: '', maxDigits: 2 }, {}) === null);
-  check('the timings and the gesture are there', rules.GAME_TIMINGS.wordProblem.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-problem'] === rules.GAME_TIMINGS.wordProblem && rules.GAME_GESTURES['word-problem'] === 'tap');
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.wordProblem.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-problem'] === rules.GAME_TIMINGS.wordProblem && rules.GAME_GESTURES['word-problem'] === 'pick');
 }
 
 section('money_pay: pay a price, or give the change, with lari');
@@ -2276,7 +2280,7 @@ section('fraction_pick: shade a fraction of a shape, or pick the shape that show
   }));
   check('on every stage the fraction, the shape and its tick, or the shapes to pick, are whole, apart, inside the safe area and big enough', whole, detail);
   check('no fraction, no layout', rules.layoutFractionPick(852, 393, { mode: 'shade', shape: 'circle', fraction: null, options: [] }, {}) === null);
-  check('the timings and the gesture are there', rules.GAME_TIMINGS.fractionPick.fillMs > 0 && rules.GAME_TIMINGS_BY_KIND['fraction-pick'] === rules.GAME_TIMINGS.fractionPick && rules.GAME_GESTURES['fraction-pick'] === 'tap');
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.fractionPick.fillMs > 0 && rules.GAME_TIMINGS_BY_KIND['fraction-pick'] === rules.GAME_TIMINGS.fractionPick && rules.GAME_GESTURES['fraction-pick'] === 'pick');
 }
 
 section('sentence_build: a sentence put together from its words');
@@ -2487,7 +2491,7 @@ section('true_false: a series of statements, each true or not');
   })));
   check('on every stage the statement, its picture and the two buttons are whole, apart, inside the safe area; nothing moves but the writing', whole, detail);
   check('no statements, no layout', rules.layoutTrueFalse(852, 393, { statements: [] }, 0, {}) === null);
-  check('the timings and the gesture are there', rules.GAME_TIMINGS.trueFalse.nextMs > 0 && rules.GAME_TIMINGS_BY_KIND['true-false'] === rules.GAME_TIMINGS.trueFalse && rules.GAME_GESTURES['true-false'] === 'tap');
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.trueFalse.nextMs > 0 && rules.GAME_TIMINGS_BY_KIND['true-false'] === rules.GAME_TIMINGS.trueFalse && rules.GAME_GESTURES['true-false'] === 'pick');
 }
 
 section('grid_route: a hero steered across a grid, or a route followed');
@@ -2611,7 +2615,7 @@ section('chart_read: a chart read, and questions about it');
     const floor = first.plot.top + first.plot.height;
     return bars.every((bar) => Math.abs(bar.top + bar.height - floor) < 1e-6) && Math.abs(bars[2].height / bars[1].height - 9 / 4) < 1e-6;
   })());
-  check('the timings and the gesture are there', rules.GAME_TIMINGS.chartRead.nextQuestionMs > 0 && rules.GAME_TIMINGS_BY_KIND['chart-read'] === rules.GAME_TIMINGS.chartRead && rules.GAME_GESTURES['chart-read'] === 'tap');
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.chartRead.nextQuestionMs > 0 && rules.GAME_TIMINGS_BY_KIND['chart-read'] === rules.GAME_TIMINGS.chartRead && rules.GAME_GESTURES['chart-read'] === 'pick');
 }
 
 section('find_in_scene: every one of a kind found on a big picture');
@@ -2665,7 +2669,7 @@ section('find_in_scene: every one of a kind found on a big picture');
   const layout = rules.layoutFindInScene(852, 393, config, {});
   const point = rules.findInScenePoint(layout, layout.things[0].left + 2, layout.things[0].top + 2);
   check('a point of the stage is read in percent of the picture', Math.abs(point.x - (10 + (2 / layout.sheet.width) * 100)) < 1e-6 && tap(config, [], point, layout.slop).type === 'found');
-  check('the timings and the gesture are there', rules.GAME_TIMINGS.findInScene.successSettleMs > 0 && rules.GAME_TIMINGS_BY_KIND['find-in-scene'] === rules.GAME_TIMINGS.findInScene && rules.GAME_GESTURES['find-in-scene'] === 'tap');
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.findInScene.successSettleMs > 0 && rules.GAME_TIMINGS_BY_KIND['find-in-scene'] === rules.GAME_TIMINGS.findInScene && rules.GAME_GESTURES['find-in-scene'] === 'pick');
 }
 
 section('map_place: pictures put on their places on a map');
@@ -2906,7 +2910,7 @@ section('sound_match: what starts like a word, or rhymes with it');
   ['sound_match', 'rhyme', 'first_sound', 'Sound Match'].forEach((type) => {
     check(`${type} resolves to sound-match`, rules.resolveGameKind(type, {}) === 'sound-match');
   });
-  check('it is tapped, and has its timings', rules.GAME_GESTURES['sound-match'] === 'tap'
+  check('it is picked, and has its timings', rules.GAME_GESTURES['sound-match'] === 'pick'
     && rules.GAME_TIMINGS_BY_KIND['sound-match'].wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['sound-match'].successSettleMs > 0);
 
   const config = rules.normalizeSoundMatchConfig({ id: 7 }, {

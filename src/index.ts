@@ -12181,53 +12181,74 @@ export const GAME_TIMINGS_BY_KIND: {
 
 // --- The hint of how a game is played ---------------------------------------
 
-/** How a child answers in a game: by tapping a thing, or by carrying it somewhere. */
-export type GameGesture = "tap" | "drag";
+/**
+ * How a child answers in a game: by picking one of the answers shown — a
+ * card, a key, a part of a picture — where a tap is the answer on the spot
+ * and nothing goes anywhere; by tapping a thing that then goes to a place (a
+ * letter to its slot, a coin to the purse) or joins another, which a child may
+ * try to do by carrying; or by carrying it somewhere.
+ */
+export type GameGesture = "pick" | "tap" | "drag";
+
+/** The gestures the hand of the hint shows. */
+export type HintGesture = Exclude<GameGesture, "pick">;
 
 /**
- * What the hand of the hint shows in each game. A game that can be played both
- * ways (carry a card to its place, or tap the card and then the place) is
- * shown carried: a tap on the card alone looks as if nothing happened.
- * Exhaustive by construction, like the timings.
+ * How each game is played. A game that can be played both ways (carry a card
+ * to its place, or tap the card and then the place) is shown carried: a tap on
+ * the card alone looks as if nothing happened. Exhaustive by construction,
+ * like the timings.
  */
 export const GAME_GESTURES = {
-  "answer-choice": "tap",
-  "catch-correct": "tap",
+  "answer-choice": "pick",
+  "catch-correct": "pick",
   "connect-pairs": "tap",
-  "count-pick": "tap",
+  "count-pick": "pick",
   "drag-drop-match": "drag",
   // Played by tapping alone: a picture tapped goes to the first free place.
   images_order: "tap",
   jigsaw: "drag",
   "math-equation": "tap",
-  "text-choice": "tap",
-  "math-input": "tap",
+  "text-choice": "pick",
+  "math-input": "pick",
   "word-build": "tap",
+  // The name is tapped and stays, but names beside pins look like things to carry.
   "label-diagram": "tap",
-  "reading-text": "tap",
-  "word-problem": "tap",
+  "reading-text": "pick",
+  "word-problem": "pick",
   "money-pay": "tap",
   "clock-set": "tap",
-  "fraction-pick": "tap",
+  "fraction-pick": "pick",
   "sentence-build": "tap",
   "word-sort": "tap",
   "number-line": "tap",
-  "true-false": "tap",
+  "true-false": "pick",
   "grid-route": "tap",
-  "chart-read": "tap",
-  "find-in-scene": "tap",
+  "chart-read": "pick",
+  "find-in-scene": "pick",
   "map-place": "drag",
   "story-scene": "tap",
-  "hidden-light": "tap",
-  "sound-match": "tap",
-  "memory-cards": "tap",
-  "pattern-next": "tap",
-  "select-option": "tap",
+  "hidden-light": "pick",
+  "sound-match": "pick",
+  "memory-cards": "pick",
+  "pattern-next": "pick",
+  "select-option": "pick",
   "shadow-match": "drag",
   "size-order": "drag",
   "sort-bins": "drag",
   "svg-assemble": "tap",
 } as const satisfies Record<PlayableGameKind, GameGesture>;
+
+/**
+ * What the hand of the hint shows in a game, or nothing: where the child only
+ * picks one of the answers shown there is nothing else to do but tap, and a
+ * hand over the cards says nothing a child does not know (owner, 2026-11-03).
+ */
+export function gestureHintOf(kind: PlayableGameKind): HintGesture | null {
+  const gesture: GameGesture = GAME_GESTURES[kind];
+
+  return gesture === "pick" ? null : gesture;
+}
 
 /**
  * The hint itself: a hand that shows the gesture and never the answer. It
