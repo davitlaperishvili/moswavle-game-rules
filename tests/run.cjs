@@ -253,6 +253,16 @@ section('counting comes before the digits');
   check('the hint waits a moment, and comes back when the child stalls',
     rules.GAME_TIMINGS.countPick.hintDelayMs > 0 && rules.GAME_TIMINGS.countPick.hintIdleMs > rules.GAME_TIMINGS.countPick.hintDelayMs);
 
+  // The cards ask to be tapped: at once after the counting, after a stall when counted by eye, never with no card.
+  const invite = rules.GAME_TIMINGS.countPick;
+  check('the cards ask for a tap soon after the last picture is counted',
+    rules.countPickInviteDelayMs('tap_dots') === invite.inviteDelayMs && invite.inviteDelayMs < invite.hintIdleMs);
+  check('counted by eye, the cards ask only once the child stalls',
+    rules.countPickInviteDelayMs('digits') === invite.hintIdleMs);
+  check('counted by tapping alone, no card asks for anything', rules.countPickInviteDelayMs('tap') === null);
+  check('a wave of four cards ends before the next one starts',
+    3 * invite.inviteStaggerMs + invite.inviteMoveMs < invite.inviteEveryMs);
+
   check('counted by tapping alone, the game has no lives; where a card is chosen it has',
     rules.countPickUsesLives('tap') === false && rules.countPickUsesLives('tap_dots') === true && rules.countPickUsesLives('digits') === true);
 

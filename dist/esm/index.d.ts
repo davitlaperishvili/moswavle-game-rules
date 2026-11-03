@@ -573,6 +573,14 @@ export declare function resolveCountPickTap(tap: {
  */
 export declare function countPickUsesLives(mode: CountPickMode): boolean;
 /**
+ * How long after its cards can be tapped the row starts asking for a tap.
+ * Counted by tapping, the cards open as the last picture is counted, and the
+ * answer is due at once (owner, 2026-11-03: a child who had counted four sheep
+ * did not know to tap a card). Counted by eye, the child counts first, so the
+ * cards ask only after it has stalled. `null` where no card is shown.
+ */
+export declare function countPickInviteDelayMs(mode: CountPickMode): number | null;
+/**
  * Which picture the hand points at, counted by tapping: the first thing to
  * count that has not been counted — one picture, never one to ignore, so the
  * hint shows what to do without giving the count away. `null` once there is
@@ -1177,6 +1185,13 @@ export declare const GAME_TIMINGS: {
      * after the game starts, on one thing to count, and taps it once every
      * `hintBeatMs`. Any tap sends it away; it comes back when nothing has been
      * tapped for `hintIdleMs` and something is still to count.
+     *
+     * The answer cards ask to be tapped once they can be (`countPickInviteDelayMs`
+     * says when): every card hops and wiggles, one after another `inviteStaggerMs`
+     * apart, each for `inviteMoveMs`, and the row does it again every
+     * `inviteEveryMs` — all alike, so none is favoured. A tap on a card stops it;
+     * it comes back after `hintIdleMs` with no card tapped. A card tapped sinks
+     * in and springs back over `pressMs`.
      */
     readonly countPick: {
         readonly wrongFeedbackMs: 600;
@@ -1185,6 +1200,11 @@ export declare const GAME_TIMINGS: {
         readonly hintDelayMs: 1200;
         readonly hintBeatMs: 1100;
         readonly hintIdleMs: 6000;
+        readonly inviteDelayMs: 600;
+        readonly inviteEveryMs: 2400;
+        readonly inviteStaggerMs: 140;
+        readonly inviteMoveMs: 720;
+        readonly pressMs: 340;
     };
     readonly dragDropMatch: {
         readonly wrongFeedbackMs: 420;

@@ -1282,6 +1282,19 @@ export function countPickUsesLives(mode) {
     return mode !== "tap";
 }
 /**
+ * How long after its cards can be tapped the row starts asking for a tap.
+ * Counted by tapping, the cards open as the last picture is counted, and the
+ * answer is due at once (owner, 2026-11-03: a child who had counted four sheep
+ * did not know to tap a card). Counted by eye, the child counts first, so the
+ * cards ask only after it has stalled. `null` where no card is shown.
+ */
+export function countPickInviteDelayMs(mode) {
+    if (mode === "tap") {
+        return null;
+    }
+    return mode === "tap_dots" ? GAME_TIMINGS.countPick.inviteDelayMs : GAME_TIMINGS.countPick.hintIdleMs;
+}
+/**
  * Which picture the hand points at, counted by tapping: the first thing to
  * count that has not been counted — one picture, never one to ignore, so the
  * hint shows what to do without giving the count away. `null` once there is
@@ -3086,6 +3099,13 @@ export const GAME_TIMINGS = {
      * after the game starts, on one thing to count, and taps it once every
      * `hintBeatMs`. Any tap sends it away; it comes back when nothing has been
      * tapped for `hintIdleMs` and something is still to count.
+     *
+     * The answer cards ask to be tapped once they can be (`countPickInviteDelayMs`
+     * says when): every card hops and wiggles, one after another `inviteStaggerMs`
+     * apart, each for `inviteMoveMs`, and the row does it again every
+     * `inviteEveryMs` — all alike, so none is favoured. A tap on a card stops it;
+     * it comes back after `hintIdleMs` with no card tapped. A card tapped sinks
+     * in and springs back over `pressMs`.
      */
     countPick: {
         wrongFeedbackMs: 600,
@@ -3094,6 +3114,11 @@ export const GAME_TIMINGS = {
         hintDelayMs: 1200,
         hintBeatMs: 1100,
         hintIdleMs: 6000,
+        inviteDelayMs: 600,
+        inviteEveryMs: 2400,
+        inviteStaggerMs: 140,
+        inviteMoveMs: 720,
+        pressMs: 340,
     },
     dragDropMatch: { wrongFeedbackMs: 420, successSettleMs: 140 },
     imagesOrder: { wrongFillFeedbackMs: 900 },
