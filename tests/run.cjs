@@ -84,7 +84,7 @@ const multiple = rules.normalizeAnswerChoiceConfig(
 );
 
 check('two correct answers mean multi select', multiple.selectionMode === 'multiple');
-check('both correct answers are listed', multiple.correctOptionIds.join() === 'a,b');
+check('both correct answers are listed', [...multiple.correctOptionIds].sort().join() === 'a,b');
 
 const imageless = rules.normalizeAnswerChoiceConfig(
   game('answer_choice'),
@@ -92,6 +92,36 @@ const imageless = rules.normalizeAnswerChoiceConfig(
 );
 
 check('an answer with no image is not playable', imageless.answers.length === 0);
+
+section('answer choice: the cards are shuffled, the right one is not always first');
+
+{
+  const authored = rules.getRuntimeConfig({
+    answers: [
+      { image: 'right.png', is_correct: true },
+      { image: 'b.png' },
+      { image: 'c.png' },
+    ],
+  });
+  const places = new Set();
+  let keepsItself = true;
+
+  for (let run = 0; run < 200; run += 1) {
+    const config = rules.normalizeAnswerChoiceConfig(game('answer_choice'), authored);
+    const right = config.answers.findIndex((answer) => answer.isCorrect);
+    places.add(right);
+    keepsItself =
+      keepsItself &&
+      config.answers.length === 3 &&
+      config.correctOptionIds.join() === config.answers[right].id &&
+      config.answers[right].image === 'right.png' &&
+      config.answers.find((answer) => answer.id === 'g1-answer-0') === config.answers[right] &&
+      config.answers.map((answer) => answer.id).sort().join() === 'g1-answer-0,g1-answer-1,g1-answer-2';
+  }
+
+  check('over 200 games the right card stands in every place', places.size === 3);
+  check('an answer keeps its id, picture and rightness when it moves', keepsItself);
+}
 
 section('lives and timers fall back the same way everywhere');
 
@@ -1072,7 +1102,7 @@ section('several copies of one picture on a card');
     { image: 'https://x/cat.png', copies: 2 },
     { image: 'https://x/cat.png' },
   ] });
-  check('an answer card carries its copies', answers.answers.map((answer) => answer.copies).join(',') === '3,2,1');
+  check('an answer card carries its copies', answers.answers.find((answer) => answer.isCorrect).copies === 3 && answers.answers.map((answer) => answer.copies).sort().join(',') === '1,2,3');
 
   const order = rules.normalizeImageOrderConfig({ items: [
     { image: 'https://x/apple.png', copies: 1 },

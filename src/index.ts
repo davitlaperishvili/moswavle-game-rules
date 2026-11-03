@@ -1083,7 +1083,10 @@ export function normalizeAnswerChoiceConfig(
   const rawAnswers = Array.isArray(config.answers)
     ? config.answers
     : extractOptionsSource(config);
-  const answers = rawAnswers
+  // Shuffled: an author writes the right card first, and a child learns to tap
+  // the first card (72% of the games on 2026-11-03, 92% of a 2-3 course). An
+  // answer's id comes from its authored place, so it holds across a shuffle.
+  const answers = shuffle(rawAnswers
     .map((answer, index): AnswerChoiceOption | null => {
       const record = asRecord(answer);
       const image = record
@@ -1108,7 +1111,7 @@ export function normalizeAnswerChoiceConfig(
         copies: record ? normalizePictureCopies(record.copies) : 1,
       };
     })
-    .filter((answer): answer is AnswerChoiceOption => Boolean(answer));
+    .filter((answer): answer is AnswerChoiceOption => Boolean(answer)));
   const correctOptionIds = answers
     .filter((answer) => answer.isCorrect)
     .map((answer) => answer.id);
