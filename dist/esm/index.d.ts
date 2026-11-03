@@ -849,7 +849,7 @@ export type GameFailureReason = "timeout" | "lives_out" | "wrong_catch" | "moves
 export declare const FAILURE_REASON: {
     readonly timeout: "timeout";
     readonly livesOut: "lives_out";
-    /** Catch Correct only: the last life went on a wrong catch. */
+    /** Catch Correct only: the last life went on a wrong catch (on a right item let fall it is `livesOut`). */
     readonly wrongCatch: "wrong_catch";
     readonly movesOut: "moves_out";
 };
@@ -870,13 +870,18 @@ export declare function isImageReference(value: unknown): value is string;
 export declare const CATCH_CORRECT_MIN_FREQUENCY_MS = 500;
 /** Fall duration bounds: faster is unplayable, slower is boring. */
 export declare const CATCH_CORRECT_MIN_FALL_MS = 2400;
-export declare const CATCH_CORRECT_MAX_FALL_MS = 7600;
+export declare const CATCH_CORRECT_MAX_FALL_MS = 6840;
 /** Demo items for a game authored without any, so it is still playable. */
 export declare const DEFAULT_CATCH_CORRECT_ITEMS: ReadonlyArray<{
     label: string;
     correct: boolean;
 }>;
-/** How long one item takes to cross the stage, from the authored `speed`. */
+/**
+ * How long one item takes to cross the stage, from the authored `speed`: a
+ * tenth quicker than it was, the slowest fall too (owner, 2026-11-03, "совсем
+ * чуть-чуть"). A right item that falls past costs a life in both players, as a
+ * wrong catch does; the last life lost so ends the game as `livesOut`.
+ */
 export declare function catchCorrectFallDurationMs(speed: number): number;
 export type SquaresFit = {
     side: number;

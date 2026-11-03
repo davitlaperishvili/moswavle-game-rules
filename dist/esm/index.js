@@ -2582,7 +2582,7 @@ function clampNumber(value, min, max) {
 export const FAILURE_REASON = {
     timeout: "timeout",
     livesOut: "lives_out",
-    /** Catch Correct only: the last life went on a wrong catch. */
+    /** Catch Correct only: the last life went on a wrong catch (on a right item let fall it is `livesOut`). */
     wrongCatch: "wrong_catch",
     movesOut: "moves_out",
 };
@@ -2619,7 +2619,7 @@ export function isImageReference(value) {
 export const CATCH_CORRECT_MIN_FREQUENCY_MS = 500;
 /** Fall duration bounds: faster is unplayable, slower is boring. */
 export const CATCH_CORRECT_MIN_FALL_MS = 2400;
-export const CATCH_CORRECT_MAX_FALL_MS = 7600;
+export const CATCH_CORRECT_MAX_FALL_MS = 6840;
 /** Demo items for a game authored without any, so it is still playable. */
 export const DEFAULT_CATCH_CORRECT_ITEMS = [
     { label: "🍎", correct: true },
@@ -2627,10 +2627,15 @@ export const DEFAULT_CATCH_CORRECT_ITEMS = [
     { label: "👟", correct: false },
     { label: "🚗", correct: false },
 ];
-/** How long one item takes to cross the stage, from the authored `speed`. */
+/**
+ * How long one item takes to cross the stage, from the authored `speed`: a
+ * tenth quicker than it was, the slowest fall too (owner, 2026-11-03, "совсем
+ * чуть-чуть"). A right item that falls past costs a life in both players, as a
+ * wrong catch does; the last life lost so ends the game as `livesOut`.
+ */
 export function catchCorrectFallDurationMs(speed) {
     const safeSpeed = Number.isFinite(speed) && speed > 0 ? speed : 120;
-    return Math.round(clampNumber((100000 / safeSpeed) * 5, CATCH_CORRECT_MIN_FALL_MS, CATCH_CORRECT_MAX_FALL_MS));
+    return Math.round(clampNumber((100000 / safeSpeed) * 4.5, CATCH_CORRECT_MIN_FALL_MS, CATCH_CORRECT_MAX_FALL_MS));
 }
 /**
  * The biggest squares `count` things can be in a box, `gap` apart: the grid
