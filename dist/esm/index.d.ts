@@ -3457,13 +3457,14 @@ export declare const FIND_IN_SCENE_LAYOUT: {
     readonly stripPad: 0.12;
     readonly dotShare: 0.56;
     /**
-     * A slot of the strip, of its height: a square with a dot in its middle,
-     * where a thing found lands in place of the dot — bigger than the dot, so it
-     * is not shrunk into it (owner, 2026-11-04).
+     * A slot of the strip is a square as big as the picture of what to find,
+     * with a dot in its middle: a thing found lands there in place of the dot,
+     * as big as the example, not shrunk into the dot (owner, 2026-11-04). From
+     * the picture to a slot and from slot to slot, this much of the strip's
+     * height. A strip short of width is made lower, so the slots stay the
+     * example's size.
      */
-    readonly slotShare: 1;
-    /** The least a dot is smaller than its slot, when the strip is short of width. */
-    readonly dotOfSlot: 0.8;
+    readonly slotGap: 0.06;
     /** In px: the white rim the players draw round a picture shown whole; the layout leaves it room. */
     readonly sheetRim: 6;
     /** A thing is hit this far round its middle at least, in px. */
@@ -3487,9 +3488,10 @@ export type FindInSceneLayout = {
     icon: BoardRect;
     dots: BoardRect[];
     /**
-     * A slot for each dot, in the order things are found: a square of the
-     * strip's height round its dot. A picture found flies from the scene into
-     * the next slot and stands there in the dot's place (owner, 2026-11-04).
+     * A slot for each dot, in the order things are found: a square as big as
+     * `icon` round its dot. A picture found flies from the scene into the next
+     * slot and stands there in the dot's place, the example's size (owner,
+     * 2026-11-04).
      */
     slots: BoardRect[];
     /** What `resolveFindInSceneTap` grows a thing by, in percent of the picture. */

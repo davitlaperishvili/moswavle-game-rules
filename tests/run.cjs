@@ -2673,10 +2673,11 @@ section('find_in_scene: every one of a kind found on a big picture');
     && inside(layout.icon, layout.card) && layout.icon.width >= 40 && layout.dots.length === count
     && layout.dots.every((dot) => inside(dot, layout.card) && dot.width >= 16 && !overlap(dot, layout.icon))
     && layout.dots.every((a, i) => layout.dots.every((b, j) => i === j || !overlap(a, b)))
-    // A slot round each dot, where a thing found lands: bigger than its dot, inside the strip, apart from the rest.
+    // A slot round each dot, where a thing found lands: the example's size, inside the strip, apart from the rest.
     && layout.slots.length === count
     && layout.slots.every((slot, i) => inside(slot, layout.card) && inside(layout.dots[i], slot) && !overlap(slot, layout.icon)
-      && slot.width >= layout.dots[i].width * 1.2 && Math.abs(slot.width - slot.height) < 1e-6
+      && Math.abs(slot.width - layout.icon.width) < 1e-6 && Math.abs(slot.height - layout.icon.height) < 1e-6
+      && Math.abs(slot.top - layout.icon.top) < 1e-6 && slot.width >= layout.dots[i].width * 1.2
       && Math.abs(slot.left + slot.width / 2 - (layout.dots[i].left + layout.dots[i].width / 2)) < 1e-6)
     && layout.slots.every((a, i) => layout.slots.every((b, j) => i === j || !overlap(a, b)));
   const covers = (sheet, w, h) => sheet.left <= 1e-6 && sheet.top <= 1e-6 && sheet.left + sheet.width >= w - 1e-6 && sheet.top + sheet.height >= h - 1e-6;
@@ -2760,12 +2761,13 @@ section('find_in_scene: every one of a kind found on a big picture');
   check('the rings of things side by side never run into one another; a small one is a fingertip', ringsApart
     && Math.abs(lone[0].width - rules.FIND_IN_SCENE_LAYOUT.minHit) < 1e-6, detail);
 
-  // A slot is as tall as the strip where there is width; eight on a narrow stage still fit, smaller.
+  // A slot is the example's size; eight on a narrow stage still fit, the strip made lower so they stay so.
   const roomy = rules.layoutFindInScene(1250, 750, beach, {});
   const narrow = rules.layoutFindInScene(420, 700, eight, {});
-  check('a slot is the strip\'s height where the width lets it be, and eight fit a narrow stage', roomy && Math.abs(roomy.slots[0].height - roomy.card.height) < 1e-6
+  check('a slot is the size of the picture of what to find, and eight fit a narrow stage at that size', roomy
+    && roomy.slots.every((slot) => Math.abs(slot.width - roomy.icon.width) < 1e-6 && Math.abs(slot.height - roomy.icon.height) < 1e-6)
     && narrow && narrow.slots.length === 8 && inside(narrow.card, { left: 0, top: 0, width: 420, height: 700 })
-    && narrow.slots.every((slot, i) => inside(slot, narrow.card) && inside(narrow.dots[i], slot)));
+    && narrow.slots.every((slot, i) => inside(slot, narrow.card) && inside(narrow.dots[i], slot) && Math.abs(slot.width - narrow.icon.width) < 1e-6));
   const flight = rules.findInSceneFlight({ left: 100, top: 300, width: 80, height: 160 }, { left: 400, top: 10, width: 64, height: 64 });
   check('a thing flies from its middle on the scene to its slot\'s, its longer side the slot\'s', Math.abs(flight.dx - (140 - 432)) < 1e-6
     && Math.abs(flight.dy - (380 - 42)) < 1e-6 && Math.abs(flight.scale - 160 / 64) < 1e-6

@@ -7829,13 +7829,14 @@ exports.FIND_IN_SCENE_LAYOUT = {
     stripPad: 0.12,
     dotShare: 0.56,
     /**
-     * A slot of the strip, of its height: a square with a dot in its middle,
-     * where a thing found lands in place of the dot — bigger than the dot, so it
-     * is not shrunk into it (owner, 2026-11-04).
+     * A slot of the strip is a square as big as the picture of what to find,
+     * with a dot in its middle: a thing found lands there in place of the dot,
+     * as big as the example, not shrunk into the dot (owner, 2026-11-04). From
+     * the picture to a slot and from slot to slot, this much of the strip's
+     * height. A strip short of width is made lower, so the slots stay the
+     * example's size.
      */
-    slotShare: 1,
-    /** The least a dot is smaller than its slot, when the strip is short of width. */
-    dotOfSlot: 0.8,
+    slotGap: 0.06,
     /** In px: the white rim the players draw round a picture shown whole; the layout leaves it room. */
     sheetRim: 6,
     /** A thing is hit this far round its middle at least, in px. */
@@ -7868,23 +7869,22 @@ function layoutFindInScene(stageWidth, stageHeight, config, insets = {}, control
     if (!board || count === 0 || area.width <= 0 || area.height <= 0) {
         return null;
     }
-    // The strip: the picture of what to find, then a slot for each in a row, a dot in its middle.
-    const stripHeight = Math.max(L.minStrip, Math.min(L.maxStrip, area.height * L.stripShare));
+    // The strip: the picture of what to find, then a slot of its size for each in a row, a dot in its middle.
+    // Its width is its height times this; one too wide for the stage is made lower.
+    const widthPerHeight = L.stripPad * 2 + (1 - L.stripPad * 2) * (count + 1) + L.slotGap * count;
+    const stripHeight = Math.min(Math.max(L.minStrip, Math.min(L.maxStrip, area.height * L.stripShare)), area.width / widthPerHeight);
     const pad = stripHeight * L.stripPad;
     const iconSize = stripHeight - pad * 2;
-    let slot = Math.min(stripHeight, stripHeight * L.slotShare);
-    if (pad * 2 + iconSize + slot * count > area.width) {
-        slot = Math.max(0, (area.width - pad * 2 - iconSize) / count);
-    }
-    const dot = Math.min(stripHeight * L.dotShare, slot * L.dotOfSlot);
-    const cardWidth = Math.min(area.width, pad * 2 + iconSize + slot * count);
+    const step = iconSize + stripHeight * L.slotGap;
+    const dot = stripHeight * L.dotShare;
+    const cardWidth = Math.min(area.width, stripHeight * widthPerHeight);
     const card = { left: area.left + (area.width - cardWidth) / 2, top: area.top, width: cardWidth, height: stripHeight };
     const icon = { left: card.left + pad, top: card.top + pad, width: iconSize, height: iconSize };
     const slots = Array.from({ length: count }, (_value, at) => ({
-        left: icon.left + iconSize + at * slot,
-        top: card.top + (stripHeight - slot) / 2,
-        width: slot,
-        height: slot,
+        left: icon.left + (at + 1) * step,
+        top: icon.top,
+        width: iconSize,
+        height: iconSize,
     }));
     const dots = slots.map((box) => ({
         left: box.left + (box.width - dot) / 2,
