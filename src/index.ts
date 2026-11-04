@@ -10702,6 +10702,8 @@ export type FindInSceneLayout = {
   whole: boolean;
   /** Everything on the picture in stage pixels, in `things` order: where it is drawn and tapped. */
   things: BoardRect[];
+  /** The ring round each thing once found, in `things` order (`findInSceneRings`): drawn as round as its shorter side lets it be. */
+  rings: BoardRect[];
   /** The strip at the top, the picture of what to find on it, and a dot for each one there is. */
   card: BoardRect;
   icon: BoardRect;
@@ -10780,7 +10782,7 @@ export function layoutFindInScene(
     const pointHidden = config.things.some((thing, index) => !thing.image && (!seen(things[index]) || keepOuts.some((keepOut) => rectsOverlap(things[index], keepOut))));
     if (!pointHidden) {
       const sheet: BoardRect = { left: scene.cover.left, top: scene.cover.top, width: scene.cover.width, height: scene.cover.height };
-      return { sheet, whole: false, things, card, icon, dots, slop: slopFor(sheet) };
+      return { sheet, whole: false, things, rings: findInSceneRings(things), card, icon, dots, slop: slopFor(sheet) };
     }
   }
 
@@ -10802,20 +10804,44 @@ export function layoutFindInScene(
     height: board.height * fit,
   };
 
+  const things = config.things.map((thing) => ({
+    left: sheet.left + (thing.x / 100) * sheet.width,
+    top: sheet.top + (thing.y / 100) * sheet.height,
+    width: (thing.width / 100) * sheet.width,
+    height: (thing.height / 100) * sheet.height,
+  }));
+
   return {
     sheet,
     whole: true,
-    things: config.things.map((thing) => ({
-      left: sheet.left + (thing.x / 100) * sheet.width,
-      top: sheet.top + (thing.y / 100) * sheet.height,
-      width: (thing.width / 100) * sheet.width,
-      height: (thing.height / 100) * sheet.height,
-    })),
+    things,
+    rings: findInSceneRings(things),
     card,
     icon,
     dots,
     slop: slopFor(sheet),
   };
+}
+
+/**
+ * The ring round each thing once it is found: its box grown a little — to a
+ * fingertip for a small one — but never into another thing's ring (owner,
+ * 2026-11-04: the rings of three apples side by side ran into one another).
+ * Each grows at most half the way to its nearest neighbour; two boxes that
+ * lie over one another give their rings up to a fifth of their size inward.
+ * A ring drawn as round as its shorter side lets it be stays inside its box,
+ * so no two rings touch.
+ */
+export function findInSceneRings(things: ReadonlyArray<BoardRect>): BoardRect[] {
+  // Room for the white outline the players draw round a ring.
+  const margin = 4;
+  return things.map((rect, index) => {
+    let pad = Math.max(Math.max(rect.width, rect.height) * 0.08, (FIND_IN_SCENE_LAYOUT.minHit - Math.min(rect.width, rect.height)) / 2);
+    things.forEach((other, at) => {
+      if (at !== index) pad = Math.min(pad, sceneRectsApart(rect, other) / 2 - margin);
+    });
+    return growRect(rect, Math.max(pad, -Math.min(rect.width, rect.height) * 0.2));
+  });
 }
 
 /** Where a point of the stage lies on the picture, in percent of it. */

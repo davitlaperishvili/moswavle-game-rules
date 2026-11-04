@@ -7707,7 +7707,7 @@ export function layoutFindInScene(stageWidth, stageHeight, config, insets = {}, 
         const pointHidden = config.things.some((thing, index) => !thing.image && (!seen(things[index]) || keepOuts.some((keepOut) => rectsOverlap(things[index], keepOut))));
         if (!pointHidden) {
             const sheet = { left: scene.cover.left, top: scene.cover.top, width: scene.cover.width, height: scene.cover.height };
-            return { sheet, whole: false, things, card, icon, dots, slop: slopFor(sheet) };
+            return { sheet, whole: false, things, rings: findInSceneRings(things), card, icon, dots, slop: slopFor(sheet) };
         }
     }
     // Whole, under the strip, and beside a button the stage has: the side it stands on is left to it.
@@ -7728,20 +7728,43 @@ export function layoutFindInScene(stageWidth, stageHeight, config, insets = {}, 
         width: board.width * fit,
         height: board.height * fit,
     };
+    const things = config.things.map((thing) => ({
+        left: sheet.left + (thing.x / 100) * sheet.width,
+        top: sheet.top + (thing.y / 100) * sheet.height,
+        width: (thing.width / 100) * sheet.width,
+        height: (thing.height / 100) * sheet.height,
+    }));
     return {
         sheet,
         whole: true,
-        things: config.things.map((thing) => ({
-            left: sheet.left + (thing.x / 100) * sheet.width,
-            top: sheet.top + (thing.y / 100) * sheet.height,
-            width: (thing.width / 100) * sheet.width,
-            height: (thing.height / 100) * sheet.height,
-        })),
+        things,
+        rings: findInSceneRings(things),
         card,
         icon,
         dots,
         slop: slopFor(sheet),
     };
+}
+/**
+ * The ring round each thing once it is found: its box grown a little — to a
+ * fingertip for a small one — but never into another thing's ring (owner,
+ * 2026-11-04: the rings of three apples side by side ran into one another).
+ * Each grows at most half the way to its nearest neighbour; two boxes that
+ * lie over one another give their rings up to a fifth of their size inward.
+ * A ring drawn as round as its shorter side lets it be stays inside its box,
+ * so no two rings touch.
+ */
+export function findInSceneRings(things) {
+    // Room for the white outline the players draw round a ring.
+    const margin = 4;
+    return things.map((rect, index) => {
+        let pad = Math.max(Math.max(rect.width, rect.height) * 0.08, (FIND_IN_SCENE_LAYOUT.minHit - Math.min(rect.width, rect.height)) / 2);
+        things.forEach((other, at) => {
+            if (at !== index)
+                pad = Math.min(pad, sceneRectsApart(rect, other) / 2 - margin);
+        });
+        return growRect(rect, Math.max(pad, -Math.min(rect.width, rect.height) * 0.2));
+    });
 }
 /** Where a point of the stage lies on the picture, in percent of it. */
 export function findInScenePoint(layout, stageX, stageY) {

@@ -3472,6 +3472,8 @@ export type FindInSceneLayout = {
     whole: boolean;
     /** Everything on the picture in stage pixels, in `things` order: where it is drawn and tapped. */
     things: BoardRect[];
+    /** The ring round each thing once found, in `things` order (`findInSceneRings`): drawn as round as its shorter side lets it be. */
+    rings: BoardRect[];
     /** The strip at the top, the picture of what to find on it, and a dot for each one there is. */
     card: BoardRect;
     icon: BoardRect;
@@ -3495,6 +3497,16 @@ export type FindInSceneLayout = {
  * `layoutScene` keeps them.
  */
 export declare function layoutFindInScene(stageWidth: number, stageHeight: number, config: Pick<FindInSceneConfig, "things" | "targets" | "board">, insets?: SceneInsets, controls?: ReadonlyArray<BoardRect>): FindInSceneLayout | null;
+/**
+ * The ring round each thing once it is found: its box grown a little — to a
+ * fingertip for a small one — but never into another thing's ring (owner,
+ * 2026-11-04: the rings of three apples side by side ran into one another).
+ * Each grows at most half the way to its nearest neighbour; two boxes that
+ * lie over one another give their rings up to a fifth of their size inward.
+ * A ring drawn as round as its shorter side lets it be stays inside its box,
+ * so no two rings touch.
+ */
+export declare function findInSceneRings(things: ReadonlyArray<BoardRect>): BoardRect[];
 /** Where a point of the stage lies on the picture, in percent of it. */
 export declare function findInScenePoint(layout: Pick<FindInSceneLayout, "sheet">, stageX: number, stageY: number): {
     x: number;

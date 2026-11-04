@@ -2734,6 +2734,26 @@ section('find_in_scene: every one of a kind found on a big picture');
   const orchardLayout = rules.layoutFindInScene(811, 544, orchard, {});
   check('a point at the very edge of the picture keeps it over the whole window', orchardLayout && !orchardLayout.whole && covers(orchardLayout.sheet, 811, 544));
 
+  // Three apples side by side and a pear: their rings never run into one another.
+  const fruit = (x, extra = {}) => ({ x, y: 55, width: 16, height: 30, target: true, image: 'https://x/apple.webp', ...extra });
+  const row = rules.normalizeFindInSceneConfig({ bg_image: 'b', board_width: 1600, board_height: 900, placements: [fruit(8), fruit(25), fruit(42), fruit(59), fruit(77, { target: false, image: 'https://x/pear.webp' })] });
+  let ringsApart = true;
+  detail = '';
+  stages.forEach(([w, h, insets]) => [row, beach, config].forEach((game, which) => {
+    const layout = rules.layoutFindInScene(w, h, game, insets);
+    const ok = layout && layout.rings.length === layout.things.length
+      && layout.rings.every((a, i) => layout.rings.every((b, j) => i === j || !overlap(a, b)))
+      && layout.rings.every((ringRect, i) => {
+        const thing = layout.things[i];
+        const middle = { left: thing.left + thing.width / 2, top: thing.top + thing.height / 2, width: 0, height: 0 };
+        return inside(middle, ringRect);
+      });
+    if (!ok && ringsApart) { ringsApart = false; detail = `${w}x${h} game ${which}: ${JSON.stringify(layout && layout.rings)}`; }
+  }));
+  const lone = rules.findInSceneRings([{ left: 100, top: 100, width: 10, height: 10 }]);
+  check('the rings of things side by side never run into one another; a small one is a fingertip', ringsApart
+    && Math.abs(lone[0].width - rules.FIND_IN_SCENE_LAYOUT.minHit) < 1e-6, detail);
+
   const layout = rules.layoutFindInScene(852, 393, config, {});
   const point = rules.findInScenePoint(layout, layout.things[0].left + 2, layout.things[0].top + 2);
   check('a point of the stage is read in percent of the picture', Math.abs(point.x - (10 + (2 / layout.sheet.width) * 100)) < 1e-6 && tap(config, [], point, layout.slop).type === 'found');
