@@ -1409,8 +1409,10 @@ export declare const GAME_TIMINGS: {
         readonly livesOutDelayMs: 320;
     };
     /** A miss rings the tap red for `wrongFeedbackMs`; once the last is found the game waits `successSettleMs`. */
+    /** A thing found flies into its slot of the strip over `flyMs`; the last one lands before `successSettleMs` ends the game. */
     readonly findInScene: {
         readonly wrongFeedbackMs: 600;
+        readonly flyMs: 560;
         readonly successSettleMs: 900;
         readonly livesOutDelayMs: 320;
     };
@@ -3454,8 +3456,14 @@ export declare const FIND_IN_SCENE_LAYOUT: {
     /** Inside the strip: the room round the picture and the dots, and a dot, of the strip's height. */
     readonly stripPad: 0.12;
     readonly dotShare: 0.56;
-    /** From one dot to the next, of a dot. */
-    readonly dotStep: 1.18;
+    /**
+     * A slot of the strip, of its height: a square with a dot in its middle,
+     * where a thing found lands in place of the dot — bigger than the dot, so it
+     * is not shrunk into it (owner, 2026-11-04).
+     */
+    readonly slotShare: 1;
+    /** The least a dot is smaller than its slot, when the strip is short of width. */
+    readonly dotOfSlot: 0.8;
     /** In px: the white rim the players draw round a picture shown whole; the layout leaves it room. */
     readonly sheetRim: 6;
     /** A thing is hit this far round its middle at least, in px. */
@@ -3478,6 +3486,12 @@ export type FindInSceneLayout = {
     card: BoardRect;
     icon: BoardRect;
     dots: BoardRect[];
+    /**
+     * A slot for each dot, in the order things are found: a square of the
+     * strip's height round its dot. A picture found flies from the scene into
+     * the next slot and stands there in the dot's place (owner, 2026-11-04).
+     */
+    slots: BoardRect[];
     /** What `resolveFindInSceneTap` grows a thing by, in percent of the picture. */
     slop: {
         x: number;
@@ -3497,6 +3511,19 @@ export type FindInSceneLayout = {
  * `layoutScene` keeps them.
  */
 export declare function layoutFindInScene(stageWidth: number, stageHeight: number, config: Pick<FindInSceneConfig, "things" | "targets" | "board">, insets?: SceneInsets, controls?: ReadonlyArray<BoardRect>): FindInSceneLayout | null;
+/**
+ * How a thing found flies into its slot, for a player that moves a view by a
+ * transform: the slot is where the view stands, and the flight starts from
+ * the thing on the scene — `dx`, `dy` from the slot's middle to the thing's,
+ * `scale` the thing's picture over the slot's. Both draw the picture whole
+ * in its box (contain), and a picture's box on the scene has its shape, so
+ * the longer side is the one that fills.
+ */
+export declare function findInSceneFlight(from: BoardRect, slot: BoardRect): {
+    dx: number;
+    dy: number;
+    scale: number;
+};
 /**
  * The ring round each thing once it is found: its box grown a little — to a
  * fingertip for a small one — but never into another thing's ring (owner,

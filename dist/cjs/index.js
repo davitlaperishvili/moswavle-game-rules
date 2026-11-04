@@ -175,6 +175,7 @@ exports.layoutChartRead = layoutChartRead;
 exports.normalizeFindInSceneConfig = normalizeFindInSceneConfig;
 exports.resolveFindInSceneTap = resolveFindInSceneTap;
 exports.layoutFindInScene = layoutFindInScene;
+exports.findInSceneFlight = findInSceneFlight;
 exports.findInSceneRings = findInSceneRings;
 exports.findInScenePoint = findInScenePoint;
 exports.resolveFindInSceneStageTap = resolveFindInSceneStageTap;
@@ -3416,7 +3417,8 @@ exports.GAME_TIMINGS = {
      */
     chartRead: { wrongFeedbackMs: 560, nextQuestionMs: 700, successSettleMs: 700, livesOutDelayMs: 320 },
     /** A miss rings the tap red for `wrongFeedbackMs`; once the last is found the game waits `successSettleMs`. */
-    findInScene: { wrongFeedbackMs: 600, successSettleMs: 900, livesOutDelayMs: 320 },
+    /** A thing found flies into its slot of the strip over `flyMs`; the last one lands before `successSettleMs` ends the game. */
+    findInScene: { wrongFeedbackMs: 600, flyMs: 560, successSettleMs: 900, livesOutDelayMs: 320 },
     /**
      * A card put on its pin flies there over `flyMs`; one on another pin shakes
      * it for `wrongFeedbackMs` and goes back. The last one put waits `successSettleMs`.
@@ -7826,8 +7828,14 @@ exports.FIND_IN_SCENE_LAYOUT = {
     /** Inside the strip: the room round the picture and the dots, and a dot, of the strip's height. */
     stripPad: 0.12,
     dotShare: 0.56,
-    /** From one dot to the next, of a dot. */
-    dotStep: 1.18,
+    /**
+     * A slot of the strip, of its height: a square with a dot in its middle,
+     * where a thing found lands in place of the dot — bigger than the dot, so it
+     * is not shrunk into it (owner, 2026-11-04).
+     */
+    slotShare: 1,
+    /** The least a dot is smaller than its slot, when the strip is short of width. */
+    dotOfSlot: 0.8,
     /** In px: the white rim the players draw round a picture shown whole; the layout leaves it room. */
     sheetRim: 6,
     /** A thing is hit this far round its middle at least, in px. */
@@ -7860,23 +7868,27 @@ function layoutFindInScene(stageWidth, stageHeight, config, insets = {}, control
     if (!board || count === 0 || area.width <= 0 || area.height <= 0) {
         return null;
     }
-    // The strip: the picture of what to find, then the dots in a row.
+    // The strip: the picture of what to find, then a slot for each in a row, a dot in its middle.
     const stripHeight = Math.max(L.minStrip, Math.min(L.maxStrip, area.height * L.stripShare));
     const pad = stripHeight * L.stripPad;
     const iconSize = stripHeight - pad * 2;
-    const run = L.dotStep * (count - 1) + 1;
-    const widthFor = (dot) => pad + iconSize + pad + dot * run + pad * 1.4;
-    let dot = stripHeight * L.dotShare;
-    if (widthFor(dot) > area.width) {
-        dot = Math.max(0, (area.width - pad * 3.4 - iconSize) / run);
+    let slot = Math.min(stripHeight, stripHeight * L.slotShare);
+    if (pad * 2 + iconSize + slot * count > area.width) {
+        slot = Math.max(0, (area.width - pad * 2 - iconSize) / count);
     }
-    const cardWidth = Math.min(area.width, widthFor(dot));
+    const dot = Math.min(stripHeight * L.dotShare, slot * L.dotOfSlot);
+    const cardWidth = Math.min(area.width, pad * 2 + iconSize + slot * count);
     const card = { left: area.left + (area.width - cardWidth) / 2, top: area.top, width: cardWidth, height: stripHeight };
     const icon = { left: card.left + pad, top: card.top + pad, width: iconSize, height: iconSize };
-    const dotsLeft = icon.left + iconSize + pad;
-    const dots = Array.from({ length: count }, (_value, at) => ({
-        left: dotsLeft + at * dot * L.dotStep,
-        top: card.top + (stripHeight - dot) / 2,
+    const slots = Array.from({ length: count }, (_value, at) => ({
+        left: icon.left + iconSize + at * slot,
+        top: card.top + (stripHeight - slot) / 2,
+        width: slot,
+        height: slot,
+    }));
+    const dots = slots.map((box) => ({
+        left: box.left + (box.width - dot) / 2,
+        top: box.top + (box.height - dot) / 2,
         width: dot,
         height: dot,
     }));
@@ -7894,7 +7906,7 @@ function layoutFindInScene(stageWidth, stageHeight, config, insets = {}, control
         const pointHidden = config.things.some((thing, index) => !thing.image && (!seen(things[index]) || keepOuts.some((keepOut) => rectsOverlap(things[index], keepOut))));
         if (!pointHidden) {
             const sheet = { left: scene.cover.left, top: scene.cover.top, width: scene.cover.width, height: scene.cover.height };
-            return { sheet, whole: false, things, rings: findInSceneRings(things), card, icon, dots, slop: slopFor(sheet) };
+            return { sheet, whole: false, things, rings: findInSceneRings(things), card, icon, dots, slots, slop: slopFor(sheet) };
         }
     }
     // Whole, under the strip, and beside a button the stage has: the side it stands on is left to it.
@@ -7929,7 +7941,24 @@ function layoutFindInScene(stageWidth, stageHeight, config, insets = {}, control
         card,
         icon,
         dots,
+        slots,
         slop: slopFor(sheet),
+    };
+}
+/**
+ * How a thing found flies into its slot, for a player that moves a view by a
+ * transform: the slot is where the view stands, and the flight starts from
+ * the thing on the scene — `dx`, `dy` from the slot's middle to the thing's,
+ * `scale` the thing's picture over the slot's. Both draw the picture whole
+ * in its box (contain), and a picture's box on the scene has its shape, so
+ * the longer side is the one that fills.
+ */
+function findInSceneFlight(from, slot) {
+    const side = Math.max(slot.width, slot.height, 1);
+    return {
+        dx: from.left + from.width / 2 - (slot.left + slot.width / 2),
+        dy: from.top + from.height / 2 - (slot.top + slot.height / 2),
+        scale: Math.max(0.05, Math.max(from.width, from.height) / side),
     };
 }
 /**
