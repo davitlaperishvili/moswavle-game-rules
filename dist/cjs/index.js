@@ -176,6 +176,7 @@ exports.normalizeFindInSceneConfig = normalizeFindInSceneConfig;
 exports.resolveFindInSceneTap = resolveFindInSceneTap;
 exports.layoutFindInScene = layoutFindInScene;
 exports.findInScenePoint = findInScenePoint;
+exports.resolveFindInSceneStageTap = resolveFindInSceneStageTap;
 exports.normalizeMapPlaceConfig = normalizeMapPlaceConfig;
 exports.resolveMapPlaceDrop = resolveMapPlaceDrop;
 exports.layoutMapPlace = layoutMapPlace;
@@ -7817,21 +7818,33 @@ function resolveFindInSceneTap(config, found, point, slop = { x: 0, y: 0 }) {
 }
 /** Proportions of the find game. */
 exports.FIND_IN_SCENE_LAYOUT = {
-    /** The card with what to find: of the free width (a column) or height (a row), within these in px. */
-    cardShare: 0.17,
-    minCard: 84,
-    maxCard: 150,
-    /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+    /** The strip at the top with what to find and a dot for each: its height, of the free height, within these in px. */
+    stripShare: 0.16,
+    minStrip: 56,
+    maxStrip: 92,
+    /** Inside the strip: the room round the picture and the dots, and a dot, of the strip's height. */
+    stripPad: 0.12,
+    dotShare: 0.56,
+    /** From one dot to the next, of a dot. */
+    dotStep: 1.18,
+    /** In px: the white rim the players draw round a picture shown whole; the layout leaves it room. */
     sheetRim: 6,
     /** A thing is hit this far round its middle at least, in px. */
     minHit: 44,
 };
 /**
- * Where everything of the find game goes: the card at the right of the sheet
- * on a wide stage, over it on a tall one, and the sheet as big as the rest
- * lets it be, its picture whole. Inside the stage less `insets`.
+ * Where everything of the find game goes (owner, 2026-11-04: one picture over
+ * the whole window, as every scene game has it, and what to find in a strip
+ * at the top). The strip stands at the top in the middle; the picture covers
+ * the stage through `layoutScene`, so a picture on it the crop would cut is
+ * shrunk or moved, and none lies under the strip. A point of the picture
+ * itself cannot be moved: when one would be cut or covered, the picture is
+ * shown whole under the strip instead, as big as the rest lets it be.
+ * Inside the stage less `insets`, the phone's edges; `controls` are the
+ * player's buttons on the stage (the voice in its corner), kept clear as
+ * `layoutScene` keeps them.
  */
-function layoutFindInScene(stageWidth, stageHeight, config, insets = {}) {
+function layoutFindInScene(stageWidth, stageHeight, config, insets = {}, controls = []) {
     const L = exports.FIND_IN_SCENE_LAYOUT;
     const board = config.board;
     const count = config.targets.length;
@@ -7846,56 +7859,64 @@ function layoutFindInScene(stageWidth, stageHeight, config, insets = {}) {
     if (!board || count === 0 || area.width <= 0 || area.height <= 0) {
         return null;
     }
-    const tall = area.height > area.width;
-    const cardSize = Math.max(L.minCard, Math.min(L.maxCard, (tall ? area.height : area.width) * L.cardShare));
-    // Wide: a column at the right — the picture on top, the dots two abreast under it.
-    // Tall: a row over the sheet — the picture at the left, the dots in a row beside it.
-    const room = tall
-        ? { left: area.left, top: area.top + cardSize + gap, width: area.width, height: area.height - cardSize - gap }
-        : { left: area.left, top: area.top, width: area.width - cardSize - gap, height: area.height };
-    const fit = Math.min((room.width - L.sheetRim * 2) / board.width, (room.height - L.sheetRim * 2) / board.height);
+    // The strip: the picture of what to find, then the dots in a row.
+    const stripHeight = Math.max(L.minStrip, Math.min(L.maxStrip, area.height * L.stripShare));
+    const pad = stripHeight * L.stripPad;
+    const iconSize = stripHeight - pad * 2;
+    const run = L.dotStep * (count - 1) + 1;
+    const widthFor = (dot) => pad + iconSize + pad + dot * run + pad * 1.4;
+    let dot = stripHeight * L.dotShare;
+    if (widthFor(dot) > area.width) {
+        dot = Math.max(0, (area.width - pad * 3.4 - iconSize) / run);
+    }
+    const cardWidth = Math.min(area.width, widthFor(dot));
+    const card = { left: area.left + (area.width - cardWidth) / 2, top: area.top, width: cardWidth, height: stripHeight };
+    const icon = { left: card.left + pad, top: card.top + pad, width: iconSize, height: iconSize };
+    const dotsLeft = icon.left + iconSize + pad;
+    const dots = Array.from({ length: count }, (_value, at) => ({
+        left: dotsLeft + at * dot * L.dotStep,
+        top: card.top + (stripHeight - dot) / 2,
+        width: dot,
+        height: dot,
+    }));
+    const slopFor = (sheet) => ({ x: (L.minHit / 2 / sheet.width) * 100, y: (L.minHit / 2 / sheet.height) * 100 });
+    // Over the whole stage. A point is placed where the crop puts it.
+    const boxes = config.things.map((thing) => ({ x: thing.x, y: thing.y, width: thing.width, height: thing.height }));
+    const scene = layoutScene(stageWidth, stageHeight, board, boxes, null, insets, [card, ...controls]);
+    const keepOuts = [card, ...controls].map((rect) => growRect(rect, edge));
+    if (scene.cover.width > 0) {
+        const things = config.things.map((thing, index) => (thing.image ? scene.content[index] : sceneBoxToStage(boxes[index], scene.cover)));
+        // A point may lie at the window's very edge (no margin as a picture keeps): it is seen there and tapped.
+        const seen = (rect) => rect.left >= (insets.left ?? 0) - 1e-6 && rect.top >= (insets.top ?? 0) - 1e-6
+            && rect.left + rect.width <= stageWidth - (insets.right ?? 0) + 1e-6
+            && rect.top + rect.height <= stageHeight - (insets.bottom ?? 0) + 1e-6;
+        const pointHidden = config.things.some((thing, index) => !thing.image && (!seen(things[index]) || keepOuts.some((keepOut) => rectsOverlap(things[index], keepOut))));
+        if (!pointHidden) {
+            const sheet = { left: scene.cover.left, top: scene.cover.top, width: scene.cover.width, height: scene.cover.height };
+            return { sheet, whole: false, things, card, icon, dots, slop: slopFor(sheet) };
+        }
+    }
+    // Whole, under the strip, and beside a button the stage has: the side it stands on is left to it.
+    let room = { left: area.left, top: card.top + card.height + gap, width: area.width, height: area.height - card.height - gap };
+    for (const keepOut of keepOuts.slice(1)) {
+        if (!rectsOverlap(keepOut, room))
+            continue;
+        const fromLeft = keepOut.left + keepOut.width - room.left;
+        const fromRight = room.left + room.width - keepOut.left;
+        room = fromLeft <= fromRight
+            ? { ...room, left: room.left + fromLeft, width: room.width - fromLeft }
+            : { ...room, width: room.width - fromRight };
+    }
+    const fit = Math.max(0, Math.min((room.width - L.sheetRim * 2) / board.width, (room.height - L.sheetRim * 2) / board.height));
     const sheet = {
         left: room.left + (room.width - board.width * fit) / 2,
         top: room.top + (room.height - board.height * fit) / 2,
         width: board.width * fit,
         height: board.height * fit,
     };
-    let card;
-    let icon;
-    const dots = [];
-    const pad = cardSize * 0.1;
-    if (tall) {
-        card = { left: area.left, top: area.top, width: area.width, height: cardSize };
-        icon = { left: card.left + pad, top: card.top + pad, width: cardSize - pad * 2, height: cardSize - pad * 2 };
-        const left = icon.left + icon.width + pad;
-        const dot = Math.min((card.left + card.width - pad - left) / count, cardSize * 0.42);
-        for (let at = 0; at < count; at += 1) {
-            dots.push({ left: left + at * dot + dot * 0.08, top: card.top + (cardSize - dot) / 2 + dot * 0.08, width: dot * 0.84, height: dot * 0.84 });
-        }
-    }
-    else {
-        // Two, three or four dots a row, whichever leaves the picture and the dots biggest.
-        let pick = { score: -Infinity, across: 2, dot: 0, iconSize: 0 };
-        for (const across of [2, 3, 4]) {
-            const rows = Math.ceil(count / across);
-            const dot = Math.min((cardSize - pad * 2) / across, cardSize * 0.42);
-            const iconSize = Math.min(cardSize - pad * 2, area.height - pad * 3 - rows * dot);
-            const score = Math.min(iconSize, dot * 2.5);
-            if (score > pick.score + 1e-9)
-                pick = { score, across, dot, iconSize };
-        }
-        const { across, dot, iconSize } = pick;
-        const rows = Math.ceil(count / across);
-        const height = pad * 3 + iconSize + rows * dot;
-        card = { left: room.left + room.width + gap, top: area.top + (area.height - height) / 2, width: cardSize, height };
-        icon = { left: card.left + (cardSize - iconSize) / 2, top: card.top + pad, width: iconSize, height: iconSize };
-        const dotsLeft = card.left + (cardSize - dot * Math.min(across, count)) / 2;
-        for (let at = 0; at < count; at += 1) {
-            dots.push({ left: dotsLeft + (at % across) * dot + dot * 0.08, top: icon.top + icon.height + pad + Math.floor(at / across) * dot + dot * 0.08, width: dot * 0.84, height: dot * 0.84 });
-        }
-    }
     return {
         sheet,
+        whole: true,
         things: config.things.map((thing) => ({
             left: sheet.left + (thing.x / 100) * sheet.width,
             top: sheet.top + (thing.y / 100) * sheet.height,
@@ -7905,7 +7926,7 @@ function layoutFindInScene(stageWidth, stageHeight, config, insets = {}) {
         card,
         icon,
         dots,
-        slop: { x: (L.minHit / 2 / sheet.width) * 100, y: (L.minHit / 2 / sheet.height) * 100 },
+        slop: slopFor(sheet),
     };
 }
 /** Where a point of the stage lies on the picture, in percent of it. */
@@ -7914,6 +7935,27 @@ function findInScenePoint(layout, stageX, stageY) {
         x: ((stageX - layout.sheet.left) / layout.sheet.width) * 100,
         y: ((stageY - layout.sheet.top) / layout.sheet.height) * 100,
     };
+}
+/**
+ * What a tap at a point of the stage does: `resolveFindInSceneTap` on the
+ * things where the layout put them — a picture the crop would have cut stands
+ * elsewhere than its author put it, and is found where it is seen.
+ */
+function resolveFindInSceneStageTap(config, layout, found, stageX, stageY) {
+    const { sheet } = layout;
+    const things = config.things.map((thing, index) => {
+        const rect = layout.things[index];
+        return rect
+            ? {
+                ...thing,
+                x: ((rect.left - sheet.left) / sheet.width) * 100,
+                y: ((rect.top - sheet.top) / sheet.height) * 100,
+                width: (rect.width / sheet.width) * 100,
+                height: (rect.height / sheet.height) * 100,
+            }
+            : thing;
+    });
+    return resolveFindInSceneTap({ things, targets: config.targets }, found, findInScenePoint(layout, stageX, stageY), layout.slop);
 }
 // --- map_place: pictures put on their places on a map ---------------------------
 //

@@ -2663,20 +2663,77 @@ section('find_in_scene: every one of a kind found on a big picture');
   const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
     && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
   const eight = rules.normalizeFindInSceneConfig({ bg_image: 'b', board_width: 1000, board_height: 1000, placements: Array.from({ length: 8 }, (_v, i) => tower(i * 11, 20)) });
+  const shell = (x, y, extra = {}) => ({ x, y, width: 9, height: 14, target: true, image: 'https://x/shell.webp', ...extra });
+  // Four shells and a starfish on a beach; one shell at the very top, where the strip goes.
+  const beach = rules.normalizeFindInSceneConfig({ bg_image: 'b', board_width: 1600, board_height: 900, placements: [shell(5, 80), shell(25, 82), { image: 'https://x/star.webp', x: 45, y: 80, width: 9, height: 14 }, shell(46, 2), shell(88, 85)] });
   const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [1024, 768, {}], [667, 300, { top: 60 }], [600, 800, {}]];
-  let whole = true;
+  const safeOf = (w, h, insets) => ({ left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) });
+  const stripOk = (layout, safe, count) => inside(layout.card, safe) && layout.card.width > layout.card.height
+    && Math.abs(layout.card.left + layout.card.width / 2 - (safe.left + safe.width / 2)) < 1 && layout.card.top - safe.top < 30
+    && inside(layout.icon, layout.card) && layout.icon.width >= 40 && layout.dots.length === count
+    && layout.dots.every((dot) => inside(dot, layout.card) && dot.width >= 16 && !overlap(dot, layout.icon))
+    && layout.dots.every((a, i) => layout.dots.every((b, j) => i === j || !overlap(a, b)));
+  const covers = (sheet, w, h) => sheet.left <= 1e-6 && sheet.top <= 1e-6 && sheet.left + sheet.width >= w - 1e-6 && sheet.top + sheet.height >= h - 1e-6;
+
+  let wide = true;
   let detail = '';
+  stages.forEach(([w, h, insets]) => {
+    const layout = rules.layoutFindInScene(w, h, beach, insets);
+    const safe = safeOf(w, h, insets);
+    const ok = layout && !layout.whole && covers(layout.sheet, w, h)
+      && Math.abs(layout.sheet.width / layout.sheet.height - beach.board.width / beach.board.height) < 1e-6
+      && stripOk(layout, safe, beach.targets.length)
+      && layout.things.every((thing) => inside(thing, safe) && !overlap(thing, layout.card))
+      && layout.things.every((a, i) => layout.things.every((b, j) => i === j || !overlap(a, b)));
+    if (!ok && wide) { wide = false; detail = `${w}x${h}: ${JSON.stringify(layout)}`; }
+  });
+  check('pictures to find: the picture covers the stage, the strip at the top in the middle, every picture whole and clear of it', wide, detail);
+
+  let stageTaps = true;
+  stages.forEach(([w, h, insets]) => {
+    const layout = rules.layoutFindInScene(w, h, beach, insets);
+    beach.things.forEach((thing, index) => {
+      const rect = layout.things[index];
+      const result = rules.resolveFindInSceneStageTap(beach, layout, [], rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (thing.target ? result.type !== 'found' || result.id !== thing.id : result.type !== 'miss') stageTaps = false;
+    });
+  });
+  check('a picture is found where it is drawn, moved or not; one that only stands there is a miss', stageTaps);
+
+  let points = true;
+  detail = '';
+  let fellBack = false;
   stages.forEach(([w, h, insets]) => [config, eight].forEach((game, which) => {
     const layout = rules.layoutFindInScene(w, h, game, insets);
-    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
-    const ok = layout && inside(layout.sheet, stage) && inside(layout.card, stage) && !overlap(layout.sheet, layout.card)
-      && Math.abs(layout.sheet.width / layout.sheet.height - game.board.width / game.board.height) < 1e-6
-      && inside(layout.icon, layout.card) && layout.dots.length === game.targets.length && layout.dots.every((dot) => inside(dot, layout.card) && dot.width >= 16)
-      && layout.dots.every((a, i) => layout.dots.every((b, j) => i === j || !overlap(a, b)))
-      && layout.things.every((thing) => inside(thing, layout.sheet)) && layout.icon.width >= 60;
-    if (!ok && whole) { whole = false; detail = `${w}x${h} game ${which}: ${JSON.stringify(layout)}`; }
+    const safe = safeOf(w, h, insets);
+    const below = layout && layout.sheet.top >= layout.card.top + layout.card.height - 1e-6;
+    const pointsSeen = layout && game.things.every((thing, index) => thing.image || (inside(layout.things[index], safe) && !overlap(layout.things[index], layout.card)));
+    const ok = layout && stripOk(layout, safe, game.targets.length) && pointsSeen && (layout.whole
+      ? inside(layout.sheet, safe) && below && Math.abs(layout.sheet.width / layout.sheet.height - game.board.width / game.board.height) < 1e-6
+        && layout.things.every((thing) => inside(thing, layout.sheet))
+      : covers(layout.sheet, w, h));
+    if (layout && layout.whole) fellBack = true;
+    if (!ok && points) { points = false; detail = `${w}x${h} game ${which}: ${JSON.stringify(layout)}`; }
   }));
-  check('on every stage the picture is whole and the card beside it, both inside the safe area', whole, detail);
+  check('a point of the picture to find is never cut nor under the strip: the picture is shown whole under it when it would be', points && fellBack, detail);
+
+  // The speaker in its corner, as the players pass it: nothing to find lies under it.
+  let speakerClear = true;
+  detail = '';
+  stages.forEach(([w, h, insets]) => [beach, config, eight].forEach((game, which) => {
+    const speaker = { left: (insets.left || 0) + 8, top: h - (insets.bottom || 0) - 64, width: 56, height: 56 };
+    const layout = rules.layoutFindInScene(w, h, game, insets, [speaker]);
+    const ok = layout && layout.things.every((thing, index) => !overlap(thing, speaker) || (!game.things[index].target && game.things[index].image === null))
+      && (!layout.whole || !overlap(layout.sheet, speaker));
+    if (!ok && speakerClear) { speakerClear = false; detail = `${w}x${h} game ${which}: ${JSON.stringify(layout)}`; }
+  }));
+  check('nothing to find lies under the speaker, and a picture shown whole keeps out of its corner', speakerClear, detail);
+
+  // Apples painted at the very edges of an orchard: seen at the window's edge, so the picture still covers it.
+  const orchard = rules.normalizeFindInSceneConfig({ bg_image: 'b', board_width: 1600, board_height: 1200, placements: [[5.31, 53.17], [9.69, 56], [87.19, 55.83], [95.13, 58.17], [8.13, 84.17], [90.25, 86.67], [84.13, 92.08]].map(([x, y]) => ({ x, y, width: 5, height: 6.7, target: true })) });
+  const orchardLayout = rules.layoutFindInScene(811, 544, orchard, {});
+  check('a point at the very edge of the picture keeps it over the whole window', orchardLayout && !orchardLayout.whole && covers(orchardLayout.sheet, 811, 544));
+
   const layout = rules.layoutFindInScene(852, 393, config, {});
   const point = rules.findInScenePoint(layout, layout.things[0].left + 2, layout.things[0].top + 2);
   check('a point of the stage is read in percent of the picture', Math.abs(point.x - (10 + (2 / layout.sheet.width) * 100)) < 1e-6 && tap(config, [], point, layout.slop).type === 'found');

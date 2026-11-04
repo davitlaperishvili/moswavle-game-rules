@@ -3447,21 +3447,32 @@ export declare function resolveFindInSceneTap(config: Pick<FindInSceneConfig, "t
 }): FindInSceneTapResult;
 /** Proportions of the find game. */
 export declare const FIND_IN_SCENE_LAYOUT: {
-    /** The card with what to find: of the free width (a column) or height (a row), within these in px. */
-    readonly cardShare: 0.17;
-    readonly minCard: 84;
-    readonly maxCard: 150;
-    /** In px: the white rim the players draw round the sheet; the layout leaves it room. */
+    /** The strip at the top with what to find and a dot for each: its height, of the free height, within these in px. */
+    readonly stripShare: 0.16;
+    readonly minStrip: 56;
+    readonly maxStrip: 92;
+    /** Inside the strip: the room round the picture and the dots, and a dot, of the strip's height. */
+    readonly stripPad: 0.12;
+    readonly dotShare: 0.56;
+    /** From one dot to the next, of a dot. */
+    readonly dotStep: 1.18;
+    /** In px: the white rim the players draw round a picture shown whole; the layout leaves it room. */
     readonly sheetRim: 6;
     /** A thing is hit this far round its middle at least, in px. */
     readonly minHit: 44;
 };
 export type FindInSceneLayout = {
-    /** The picture, whole and never cropped. */
+    /**
+     * The picture. Over the whole stage, cropped as every scene is, the pictures
+     * on it kept whole (`whole` false); or whole and never cropped, under the
+     * strip, a blurred copy of it behind (`whole` true) — when a point of the
+     * picture itself is to be found and the crop or the strip would hide it.
+     */
     sheet: BoardRect;
-    /** Everything on the sheet in stage pixels, in `things` order. */
+    whole: boolean;
+    /** Everything on the picture in stage pixels, in `things` order: where it is drawn and tapped. */
     things: BoardRect[];
-    /** The card, the picture of what to find on it, and a dot for each one there is. */
+    /** The strip at the top, the picture of what to find on it, and a dot for each one there is. */
     card: BoardRect;
     icon: BoardRect;
     dots: BoardRect[];
@@ -3472,16 +3483,29 @@ export type FindInSceneLayout = {
     };
 };
 /**
- * Where everything of the find game goes: the card at the right of the sheet
- * on a wide stage, over it on a tall one, and the sheet as big as the rest
- * lets it be, its picture whole. Inside the stage less `insets`.
+ * Where everything of the find game goes (owner, 2026-11-04: one picture over
+ * the whole window, as every scene game has it, and what to find in a strip
+ * at the top). The strip stands at the top in the middle; the picture covers
+ * the stage through `layoutScene`, so a picture on it the crop would cut is
+ * shrunk or moved, and none lies under the strip. A point of the picture
+ * itself cannot be moved: when one would be cut or covered, the picture is
+ * shown whole under the strip instead, as big as the rest lets it be.
+ * Inside the stage less `insets`, the phone's edges; `controls` are the
+ * player's buttons on the stage (the voice in its corner), kept clear as
+ * `layoutScene` keeps them.
  */
-export declare function layoutFindInScene(stageWidth: number, stageHeight: number, config: Pick<FindInSceneConfig, "things" | "targets" | "board">, insets?: SceneInsets): FindInSceneLayout | null;
+export declare function layoutFindInScene(stageWidth: number, stageHeight: number, config: Pick<FindInSceneConfig, "things" | "targets" | "board">, insets?: SceneInsets, controls?: ReadonlyArray<BoardRect>): FindInSceneLayout | null;
 /** Where a point of the stage lies on the picture, in percent of it. */
 export declare function findInScenePoint(layout: Pick<FindInSceneLayout, "sheet">, stageX: number, stageY: number): {
     x: number;
     y: number;
 };
+/**
+ * What a tap at a point of the stage does: `resolveFindInSceneTap` on the
+ * things where the layout put them — a picture the crop would have cut stands
+ * elsewhere than its author put it, and is found where it is seen.
+ */
+export declare function resolveFindInSceneStageTap(config: Pick<FindInSceneConfig, "things" | "targets">, layout: Pick<FindInSceneLayout, "sheet" | "things" | "slop">, found: readonly string[], stageX: number, stageY: number): FindInSceneTapResult;
 export declare const MAP_PLACE_ITEMS: {
     readonly min: 2;
     readonly max: 6;
