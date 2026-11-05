@@ -1003,6 +1003,51 @@ section('svg_assemble: a composed scene is rearranged to its safe layout');
   check('the background is untouched', arranged.includes('href="https://example.test/bg.png" x="0" y="0" width="1600" height="1200"'));
 }
 
+section('svg_assemble: the parts of one drawing move as one');
+
+{
+  // Game 59041: a flower put together at x = 800, its root and leaf missing.
+  // The tray took the bottom right, and the root alone was moved from under
+  // it, away from its stem.
+  const viewBox = { minX: 0, minY: 0, width: 1600, height: 1200 };
+  const slots = [
+    { id: 'root', x: 711.2, y: 850, width: 177.6, height: 210 },
+    { id: 'leaf', x: 817.67, y: 640, width: 129.61, height: 140 },
+  ];
+  const layers = [
+    { id: 'flower', x: 715.33, y: 470, width: 169.34, height: 170 },
+    { id: 'stem', x: 776.33, y: 625, width: 47.34, height: 240 },
+    { id: 'sun', x: 1350, y: 60, width: 160, height: 160 },
+  ];
+  const authored = [...slots, ...layers];
+  const overlaps = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left)
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top);
+
+  [[1430, 734, 70], [812, 375, 46], [900, 400, 46], [1024, 768, 60]].forEach(([width, height, top]) => {
+    const voice = { left: 0, top: height - 70, width: 70, height: 70 };
+    const layout = rules.layoutSvgAssembleScene(width, height, viewBox, slots, 4, false, { top }, layers, [voice]);
+    const rects = [...layout.slots, ...layout.layers];
+    const unit = layout.board.width / 1600;
+    // Where each part stands against the flower's head, in viewBox units.
+    const head = rects.find((rect) => rect.id === 'flower');
+    const headAt = authored.find((part) => part.id === 'flower');
+    const scale = head.width / (headAt.width * unit);
+    const keeps = ['root', 'leaf', 'stem'].every((id) => {
+      const rect = rects.find((r) => r.id === id);
+      const part = authored.find((p) => p.id === id);
+      return Math.abs((rect.left - head.left) / (scale * unit) - (part.x - headAt.x)) < 0.01
+        && Math.abs((rect.top - head.top) / (scale * unit) - (part.y - headAt.y)) < 0.01
+        && Math.abs(rect.width / (scale * unit) - part.width) < 0.01;
+    });
+    check(`${width}x${height}: root, leaf and stem stay on the flower`, keeps, JSON.stringify(rects));
+    check(`${width}x${height}: and none of them under the tray`, rects.every((rect) => !overlaps(rect, layout.tray)), JSON.stringify({ rects, tray: layout.tray }));
+  });
+
+  const plain = rules.layoutScene(1000, 600, { width: 1600, height: 1200 }, [{ x: 10, y: 10, width: 20, height: 20 }, { x: 60, y: 60, width: 20, height: 20 }]);
+  const alone = rules.layoutScene(1000, 600, { width: 1600, height: 1200 }, [{ x: 10, y: 10, width: 20, height: 20 }, { x: 60, y: 60, width: 20, height: 20 }], null, {}, [], [[0], [1]]);
+  check('a drawing of one picture is laid out as before', JSON.stringify(plain.content) === JSON.stringify(alone.content));
+}
+
 section('connect_pairs: two groups, joined pair by pair');
 
 {

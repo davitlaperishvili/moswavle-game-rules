@@ -779,6 +779,12 @@ export type SceneLayout = {
  * `insets` are edges the player's controls take; `controls` are buttons the
  * player puts on the stage itself (the voice button in its corner): the
  * answers never go over one, and the pictures keep an edge margin from them.
+ *
+ * `drawings` lists content boxes that make one drawing together, by their
+ * indexes — the parts of a flower. Such a drawing is fitted, moved and made
+ * smaller as one box, so its parts keep where they stood against one another;
+ * the answers still go by the parts themselves, not by the empty corners of
+ * the drawing's box. A box in no list is a drawing of its own.
  */
 export declare function layoutScene(stageWidth: number, stageHeight: number, board: {
     width: number;
@@ -786,7 +792,7 @@ export declare function layoutScene(stageWidth: number, stageHeight: number, boa
 }, content: ReadonlyArray<ScenePercentBox>, overlay?: {
     width: number;
     height: number;
-} | null, insets?: SceneInsets, controls?: ReadonlyArray<BoardRect>): SceneLayout;
+} | null, insets?: SceneInsets, controls?: ReadonlyArray<BoardRect>, drawings?: ReadonlyArray<ReadonlyArray<number>> | null): SceneLayout;
 /** Card geometry for the svg_assemble answer tray, in stage pixels. */
 export declare const SVG_ASSEMBLE_CARD: {
     /** Space between two cards. */
@@ -827,9 +833,12 @@ export type SvgAssembleSceneLayout = {
  *
  * A composed scene passes its `layers` (the pictures that are not slots):
  * those and the slots are then kept whole and clear of the tray, and
- * `arrangeSvgAssembleScene` moves them in the markup to match. A hand-made
- * scene (`layers` null) cannot be rearranged, so its slots follow the picture
- * as they are.
+ * `arrangeSvgAssembleScene` moves them in the markup to match. Parts the
+ * author put together — touching or over one another — are one drawing and
+ * are moved and made smaller as one, so a flower's root never leaves its stem
+ * to get out of the tray's way (`joinSvgAssembleParts`). A hand-made scene
+ * (`layers` null) cannot be rearranged, so its slots follow the picture as
+ * they are.
  */
 export declare function layoutSvgAssembleScene(stageWidth: number, stageHeight: number, viewBox: SvgViewBox, slots: ReadonlyArray<SvgAssembleSlot>, count: number, hasLabels: boolean, insets?: SceneInsets, layers?: ReadonlyArray<SvgAssembleSlot> | null, controls?: ReadonlyArray<BoardRect>): SvgAssembleSceneLayout | null;
 /**

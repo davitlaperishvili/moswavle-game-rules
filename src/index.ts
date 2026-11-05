@@ -2764,6 +2764,12 @@ export type SceneLayout = {
  * `insets` are edges the player's controls take; `controls` are buttons the
  * player puts on the stage itself (the voice button in its corner): the
  * answers never go over one, and the pictures keep an edge margin from them.
+ *
+ * `drawings` lists content boxes that make one drawing together, by their
+ * indexes — the parts of a flower. Such a drawing is fitted, moved and made
+ * smaller as one box, so its parts keep where they stood against one another;
+ * the answers still go by the parts themselves, not by the empty corners of
+ * the drawing's box. A box in no list is a drawing of its own.
  */
 export function layoutScene(
   stageWidth: number,
@@ -2773,6 +2779,7 @@ export function layoutScene(
   overlay: { width: number; height: number } | null = null,
   insets: SceneInsets = {},
   controls: ReadonlyArray<BoardRect> = [],
+  drawings: ReadonlyArray<ReadonlyArray<number>> | null = null,
 ): SceneLayout {
   const cover = coverSceneBoard(stageWidth, stageHeight, board, content, insets);
   const edge = sceneEdge(stageWidth, stageHeight);
@@ -2786,10 +2793,38 @@ export function layoutScene(
   const clearOfControls = (rect: BoardRect) =>
     controlKeepOuts.reduce((current, keepOut) => keepSceneRectClear(current, frame, keepOut), rect);
   const authored = content.map((box) => sceneBoxToStage(box, cover));
-  const whole = authored.map((rect) => clearOfControls(fitSceneRect(rect, frame)));
+
+  // Every box in exactly one drawing; everything below moves drawings, then
+  // `spread` puts each box where its drawing went.
+  const groups = sceneDrawings(content.length, drawings);
+  const drawn = groups.map((members) =>
+    members.length === 1 ? authored[members[0]] : boundingRect(members.map((index) => authored[index])));
+  const spread = (moved: ReadonlyArray<BoardRect>): BoardRect[] => {
+    const rects = authored.slice();
+    groups.forEach((members, drawing) => {
+      if (members.length === 1) {
+        rects[members[0]] = moved[drawing];
+        return;
+      }
+      const from = drawn[drawing];
+      const to = moved[drawing];
+      const scaleX = from.width > 0 ? to.width / from.width : 1;
+      const scaleY = from.height > 0 ? to.height / from.height : 1;
+      members.forEach((index) => {
+        rects[index] = {
+          left: to.left + (authored[index].left - from.left) * scaleX,
+          top: to.top + (authored[index].top - from.top) * scaleY,
+          width: authored[index].width * scaleX,
+          height: authored[index].height * scaleY,
+        };
+      });
+    });
+    return rects;
+  };
+  const whole = drawn.map((rect) => clearOfControls(fitSceneRect(rect, frame)));
 
   if (cover.width <= 0 || !overlay || overlay.width <= 0 || overlay.height <= 0) {
-    return { cover, frame, content: keepSceneRectsApart(whole, authored, frame, controlKeepOuts, edge), overlay: null };
+    return { cover, frame, content: spread(keepSceneRectsApart(whole, drawn, frame, controlKeepOuts, edge)), overlay: null };
   }
 
   const gap = sceneGap(stageWidth, stageHeight);
@@ -2798,7 +2833,7 @@ export function layoutScene(
     stageHeight,
     overlay.width,
     overlay.height,
-    whole.map((rect) => growRect(rect, gap)),
+    spread(whole).map((rect) => growRect(rect, gap)),
     insets,
     controlKeepOuts,
   );
@@ -2810,14 +2845,41 @@ export function layoutScene(
     frame,
     // Clear of the answers last: they are the bigger thing to keep apart from.
     // And then of one another, which none of the moves above looks at.
-    content: keepSceneRectsApart(
+    content: spread(keepSceneRectsApart(
       whole.map((rect) => keepSceneRectClear(rect, frame, keepOut)),
-      authored,
+      drawn,
       frame,
       [...controlKeepOuts, keepOut],
       edge,
-    ),
+    )),
     overlay: placed,
+  };
+}
+
+/** `layoutScene`'s drawings made whole: every box in one, a box nobody named alone. */
+function sceneDrawings(count: number, drawings: ReadonlyArray<ReadonlyArray<number>> | null): number[][] {
+  const taken = new Set<number>();
+  const groups: number[][] = [];
+  for (const members of drawings ?? []) {
+    const group = members.filter((index) => Number.isInteger(index) && index >= 0 && index < count && !taken.has(index));
+    group.forEach((index) => taken.add(index));
+    if (group.length > 0) groups.push(group);
+  }
+  for (let index = 0; index < count; index += 1) {
+    if (!taken.has(index)) groups.push([index]);
+  }
+  return groups;
+}
+
+/** The smallest box around all of `rects`. */
+function boundingRect(rects: ReadonlyArray<BoardRect>): BoardRect {
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  return {
+    left,
+    top,
+    width: Math.max(...rects.map((rect) => rect.left + rect.width)) - left,
+    height: Math.max(...rects.map((rect) => rect.top + rect.height)) - top,
   };
 }
 
@@ -2851,6 +2913,42 @@ export type SvgAssembleSceneLayout = {
 };
 
 /**
+ * How near two parts of a composed svg_assemble scene stand to be one drawing,
+ * as a share of the scene's short side: a leaf put beside a stem with a hair
+ * of air between them is still the flower's leaf.
+ */
+const SVG_ASSEMBLE_JOIN = 0.02;
+
+/**
+ * The parts of a composed svg_assemble scene that make one drawing: each list
+ * holds the indexes of parts that touch or lie over one another, directly or
+ * through another part — a flower's head, its stem, its leaf and its root.
+ * A part that stands apart is a list of its own.
+ */
+function joinSvgAssembleParts(parts: ReadonlyArray<SvgAssembleSlot>, reach: number): number[][] {
+  const owner = parts.map((_, index) => index);
+  const find = (index: number): number => (owner[index] === index ? index : (owner[index] = find(owner[index])));
+  const apart = (a: SvgAssembleSlot, b: SvgAssembleSlot) => Math.max(
+    Math.max(a.x, b.x) - Math.min(a.x + a.width, b.x + b.width),
+    Math.max(a.y, b.y) - Math.min(a.y + a.height, b.y + b.height),
+  );
+
+  for (let i = 0; i < parts.length; i += 1) {
+    for (let j = i + 1; j < parts.length; j += 1) {
+      if (apart(parts[i], parts[j]) <= reach) owner[find(j)] = find(i);
+    }
+  }
+
+  const drawings = new Map<number, number[]>();
+  parts.forEach((_, index) => {
+    const root = find(index);
+    drawings.set(root, [...(drawings.get(root) ?? []), index]);
+  });
+
+  return [...drawings.values()];
+}
+
+/**
  * Where everything of an svg_assemble game goes on its stage, through
  * `layoutScene`: the scene covers the whole stage and the answer cards float
  * on it in a tray. The source and the target rects share the stage's
@@ -2859,9 +2957,12 @@ export type SvgAssembleSceneLayout = {
  *
  * A composed scene passes its `layers` (the pictures that are not slots):
  * those and the slots are then kept whole and clear of the tray, and
- * `arrangeSvgAssembleScene` moves them in the markup to match. A hand-made
- * scene (`layers` null) cannot be rearranged, so its slots follow the picture
- * as they are.
+ * `arrangeSvgAssembleScene` moves them in the markup to match. Parts the
+ * author put together — touching or over one another — are one drawing and
+ * are moved and made smaller as one, so a flower's root never leaves its stem
+ * to get out of the tray's way (`joinSvgAssembleParts`). A hand-made scene
+ * (`layers` null) cannot be rearranged, so its slots follow the picture as
+ * they are.
  */
 export function layoutSvgAssembleScene(
   stageWidth: number,
@@ -2888,6 +2989,10 @@ export function layoutSvgAssembleScene(
   });
   const slotBoxes = slots.map(toBox);
   const layerBoxes = (layers ?? []).map(toBox);
+  // A composed scene is moved drawing by drawing; a hand-made one is not moved.
+  const drawings = layers
+    ? joinSvgAssembleParts([...slots, ...layers], Math.min(vbWidth, vbHeight) * SVG_ASSEMBLE_JOIN)
+    : null;
 
   const { gap, imagePad, trayPad } = SVG_ASSEMBLE_CARD;
   const labelHeight = hasLabels ? SVG_ASSEMBLE_CARD.labelHeight : 0;
@@ -2916,6 +3021,7 @@ export function layoutSvgAssembleScene(
     { width: trayWidth, height: trayHeight },
     insets,
     controls,
+    drawings,
   );
   const board = scene.cover;
   const slotRects = slots.map((slot, index) => ({
