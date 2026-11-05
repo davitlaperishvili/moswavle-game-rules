@@ -575,6 +575,89 @@ export function layoutAnswerChoiceStack(areaWidth, areaHeight, answerCount) {
         gridWidth: best.columns * cardWidth + (best.columns - 1) * gap,
     };
 }
+/**
+ * An answer_choice question can be a chain with one step missing (owner,
+ * 2026-11-05: five steps said one after another by the voice, over a single
+ * picture, could not be followed): the steps stand in a row, an arrow between
+ * two, the missing one a "?", and the child picks the card that goes there.
+ */
+export const ANSWER_CHAIN = {
+    /** A chain is at least this many steps, the missing one among them… */
+    minSteps: 3,
+    /** …and at most this many: more do not fit a phone on its side. */
+    maxSteps: 6,
+    /** The room between two steps, for the arrow, as a share of a step. */
+    arrowScale: 0.3,
+    /** An answer card is nearly square, as in the stacked layout. */
+    cardAspect: ANSWER_CHOICE_STACK.cardAspect,
+    /** An answer card grows past a step's height up to this much. */
+    maxCardScale: 1.25,
+    /** A step never grows past this, however big the stage. */
+    maxStepSize: 240,
+};
+/**
+ * Where the missing step of a chain is: the one step with no picture. -1 when
+ * the row is no chain — too short, too long, or not exactly one step missing —
+ * and a client then shows the question picture as before.
+ */
+export function answerChainGap(steps) {
+    if (!steps || steps.length < ANSWER_CHAIN.minSteps || steps.length > ANSWER_CHAIN.maxSteps) {
+        return -1;
+    }
+    const missing = steps.flatMap((step, index) => (typeof step === 'string' && step.trim() !== '' ? [] : [index]));
+    return missing.length === 1 ? missing[0] : -1;
+}
+/**
+ * The chain on top, the answers under it: the steps as big as the width and
+ * the height allow, the answer cards at least as tall as a step and growing
+ * into the room left over. Every column count of the answers is tried and the
+ * one giving the biggest steps wins; on a tie, fewer rows — one row of answers
+ * under the row of steps — then full rows.
+ * Sizes are for the area the client lays the game out in (its padding already
+ * taken off): stepSize + rows × (gap + cardHeight) never passes its height.
+ */
+export function layoutAnswerChain(areaWidth, areaHeight, stepCount, answerCount) {
+    const width = Math.max(areaWidth, 1);
+    const height = Math.max(areaHeight, 1);
+    const steps = Math.max(Math.round(stepCount), 1);
+    const count = Math.max(answerCount, 1);
+    const gap = clampNumber(Math.min(width, height) * 0.03, 8, 20);
+    const { arrowScale, cardAspect, maxCardScale, maxStepSize } = ANSWER_CHAIN;
+    const cardWidthFor = (columns) => (width - (columns - 1) * gap) / columns;
+    let best = { columns: 1, rows: count, stepSize: 0, complete: false };
+    for (let columns = 1; columns <= count; columns += 1) {
+        const rows = Math.ceil(count / columns);
+        const stepSize = Math.min(
+        // The steps and their arrows fit the width…
+        width / (steps + (steps - 1) * arrowScale), 
+        // …the chain and every row of cards, each at least a step tall, the height…
+        (height - rows * gap) / (1 + rows), 
+        // …and a card a step tall fits its column.
+        cardWidthFor(columns) / cardAspect, maxStepSize);
+        const complete = count % columns === 0;
+        const tie = Math.abs(stepSize - best.stepSize) <= 0.5;
+        if (stepSize > best.stepSize + 0.5 ||
+            (tie && rows < best.rows) ||
+            (tie && rows === best.rows && complete && !best.complete)) {
+            best = { columns, rows, stepSize, complete };
+        }
+    }
+    const stepSize = Math.max(Math.floor(best.stepSize), 1);
+    const arrowWidth = Math.floor(stepSize * arrowScale);
+    const cardHeight = Math.max(Math.floor(Math.min(stepSize * maxCardScale, (height - stepSize - best.rows * gap) / best.rows, cardWidthFor(best.columns) / cardAspect, ANSWER_CHOICE_STACK.maxCardHeight)), 1);
+    const cardWidth = Math.floor(cardHeight * cardAspect);
+    return {
+        gap,
+        stepSize,
+        arrowWidth,
+        stripWidth: steps * stepSize + (steps - 1) * arrowWidth,
+        columns: best.columns,
+        rows: best.rows,
+        cardWidth,
+        cardHeight,
+        gridWidth: best.columns * cardWidth + (best.columns - 1) * gap,
+    };
+}
 function normalizeGameTypeValue(type) {
     return type
         .trim()

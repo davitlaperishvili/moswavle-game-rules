@@ -795,6 +795,29 @@ section('answer_choice stacked: the question on top, nearly square answers under
   check('a card stops growing on a big stage', rules.layoutAnswerChoiceStack(3000, 2000, 2).cardHeight === rules.ANSWER_CHOICE_STACK.maxCardHeight);
 }
 
+section('answer_choice chain: the steps in a row with one missing, the answers under them');
+
+{
+  check('the one missing step is found', rules.answerChainGap(['a', 'b', null, 'd', 'e']) === 2 && rules.answerChainGap(['', 'b', 'c']) === 0);
+  check('no step missing is no chain', rules.answerChainGap(['a', 'b', 'c', 'd']) === -1);
+  check('two steps missing is no chain', rules.answerChainGap(['a', null, null, 'd']) === -1);
+  check('two steps are too few, seven too many', rules.answerChainGap(['a', null]) === -1 && rules.answerChainGap(['a', 'b', 'c', null, 'e', 'f', 'g']) === -1);
+  check('no row is no chain', rules.answerChainGap(null) === -1 && rules.answerChainGap(undefined) === -1);
+  const fits = (layout, width, height) =>
+    layout.stepSize + layout.rows * (layout.gap + layout.cardHeight) <= height + 1e-6
+    && layout.stripWidth <= width + 1e-6 && layout.gridWidth <= width + 1e-6;
+  const phone = rules.layoutAnswerChain(760, 280, 5, 4);
+  check('a phone on its side: four answers in one row under the chain', phone.columns === 4 && phone.rows === 1, JSON.stringify(phone));
+  check('an answer card is at least as tall as a step', phone.cardHeight >= phone.stepSize, JSON.stringify(phone));
+  const desktop = rules.layoutAnswerChain(1100, 690, 5, 4);
+  check('a big stage keeps the answers in one row too, the steps no smaller', desktop.rows === 1, JSON.stringify(desktop));
+  check('the arrow has room between two steps', phone.arrowWidth >= Math.floor(phone.stepSize * 0.3) - 1);
+  const cases = [[760, 280, 5, 4], [1100, 690, 5, 4], [1100, 690, 6, 3], [360, 640, 5, 4], [500, 300, 3, 3], [1800, 950, 5, 4], [600, 450, 6, 4]];
+  check('everything fits the area', cases.every(([w, h, s, n]) => fits(rules.layoutAnswerChain(w, h, s, n), w, h)),
+    JSON.stringify(cases.filter(([w, h, s, n]) => !fits(rules.layoutAnswerChain(w, h, s, n), w, h)).map(([w, h, s, n]) => rules.layoutAnswerChain(w, h, s, n))));
+  check('a step stops growing on a big stage', rules.layoutAnswerChain(3000, 2000, 3, 2).stepSize === rules.ANSWER_CHAIN.maxStepSize);
+}
+
 section('scene safe areas: the content and the answers never touch, nothing leaves the stage');
 
 {

@@ -501,6 +501,56 @@ export type AnswerChoiceStackLayout = {
  * in (its padding already taken off).
  */
 export declare function layoutAnswerChoiceStack(areaWidth: number, areaHeight: number, answerCount: number): AnswerChoiceStackLayout;
+/**
+ * An answer_choice question can be a chain with one step missing (owner,
+ * 2026-11-05: five steps said one after another by the voice, over a single
+ * picture, could not be followed): the steps stand in a row, an arrow between
+ * two, the missing one a "?", and the child picks the card that goes there.
+ */
+export declare const ANSWER_CHAIN: {
+    /** A chain is at least this many steps, the missing one among them… */
+    readonly minSteps: 3;
+    /** …and at most this many: more do not fit a phone on its side. */
+    readonly maxSteps: 6;
+    /** The room between two steps, for the arrow, as a share of a step. */
+    readonly arrowScale: 0.3;
+    /** An answer card is nearly square, as in the stacked layout. */
+    readonly cardAspect: 1.15;
+    /** An answer card grows past a step's height up to this much. */
+    readonly maxCardScale: 1.25;
+    /** A step never grows past this, however big the stage. */
+    readonly maxStepSize: 240;
+};
+/**
+ * Where the missing step of a chain is: the one step with no picture. -1 when
+ * the row is no chain — too short, too long, or not exactly one step missing —
+ * and a client then shows the question picture as before.
+ */
+export declare function answerChainGap(steps: ReadonlyArray<string | null | undefined> | null | undefined): number;
+export type AnswerChainLayout = {
+    gap: number;
+    /** A step of the chain is a square this big. */
+    stepSize: number;
+    /** The room between two steps, where the arrow is drawn. */
+    arrowWidth: number;
+    stripWidth: number;
+    columns: number;
+    rows: number;
+    cardWidth: number;
+    cardHeight: number;
+    /** The answer rows' width; an incomplete last row is centred in it. */
+    gridWidth: number;
+};
+/**
+ * The chain on top, the answers under it: the steps as big as the width and
+ * the height allow, the answer cards at least as tall as a step and growing
+ * into the room left over. Every column count of the answers is tried and the
+ * one giving the biggest steps wins; on a tie, fewer rows — one row of answers
+ * under the row of steps — then full rows.
+ * Sizes are for the area the client lays the game out in (its padding already
+ * taken off): stepSize + rows × (gap + cardHeight) never passes its height.
+ */
+export declare function layoutAnswerChain(areaWidth: number, areaHeight: number, stepCount: number, answerCount: number): AnswerChainLayout;
 export declare function resolveGameKind(type: string, config: Record<string, unknown>): RuntimeGameKind;
 export declare function normalizeCatchCorrectConfig(config: Record<string, unknown>): CatchCorrectConfig;
 export declare function normalizeShadowMatchConfig(config: Record<string, unknown>): ShadowMatchConfig;

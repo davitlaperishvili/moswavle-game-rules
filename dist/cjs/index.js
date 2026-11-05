@@ -25,14 +25,16 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = void 0;
+exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHAIN = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
 exports.buildPreparedGame = buildPreparedGame;
 exports.normalizeAnswerChoiceConfig = normalizeAnswerChoiceConfig;
 exports.layoutAnswerChoiceStack = layoutAnswerChoiceStack;
+exports.answerChainGap = answerChainGap;
+exports.layoutAnswerChain = layoutAnswerChain;
 exports.resolveGameKind = resolveGameKind;
 exports.normalizeCatchCorrectConfig = normalizeCatchCorrectConfig;
 exports.normalizeShadowMatchConfig = normalizeShadowMatchConfig;
@@ -756,6 +758,89 @@ function layoutAnswerChoiceStack(areaWidth, areaHeight, answerCount) {
         gap,
         questionWidth: Math.floor(Math.min(questionHeight * questionAspect, width)),
         questionHeight,
+        columns: best.columns,
+        rows: best.rows,
+        cardWidth,
+        cardHeight,
+        gridWidth: best.columns * cardWidth + (best.columns - 1) * gap,
+    };
+}
+/**
+ * An answer_choice question can be a chain with one step missing (owner,
+ * 2026-11-05: five steps said one after another by the voice, over a single
+ * picture, could not be followed): the steps stand in a row, an arrow between
+ * two, the missing one a "?", and the child picks the card that goes there.
+ */
+exports.ANSWER_CHAIN = {
+    /** A chain is at least this many steps, the missing one among them… */
+    minSteps: 3,
+    /** …and at most this many: more do not fit a phone on its side. */
+    maxSteps: 6,
+    /** The room between two steps, for the arrow, as a share of a step. */
+    arrowScale: 0.3,
+    /** An answer card is nearly square, as in the stacked layout. */
+    cardAspect: exports.ANSWER_CHOICE_STACK.cardAspect,
+    /** An answer card grows past a step's height up to this much. */
+    maxCardScale: 1.25,
+    /** A step never grows past this, however big the stage. */
+    maxStepSize: 240,
+};
+/**
+ * Where the missing step of a chain is: the one step with no picture. -1 when
+ * the row is no chain — too short, too long, or not exactly one step missing —
+ * and a client then shows the question picture as before.
+ */
+function answerChainGap(steps) {
+    if (!steps || steps.length < exports.ANSWER_CHAIN.minSteps || steps.length > exports.ANSWER_CHAIN.maxSteps) {
+        return -1;
+    }
+    const missing = steps.flatMap((step, index) => (typeof step === 'string' && step.trim() !== '' ? [] : [index]));
+    return missing.length === 1 ? missing[0] : -1;
+}
+/**
+ * The chain on top, the answers under it: the steps as big as the width and
+ * the height allow, the answer cards at least as tall as a step and growing
+ * into the room left over. Every column count of the answers is tried and the
+ * one giving the biggest steps wins; on a tie, fewer rows — one row of answers
+ * under the row of steps — then full rows.
+ * Sizes are for the area the client lays the game out in (its padding already
+ * taken off): stepSize + rows × (gap + cardHeight) never passes its height.
+ */
+function layoutAnswerChain(areaWidth, areaHeight, stepCount, answerCount) {
+    const width = Math.max(areaWidth, 1);
+    const height = Math.max(areaHeight, 1);
+    const steps = Math.max(Math.round(stepCount), 1);
+    const count = Math.max(answerCount, 1);
+    const gap = clampNumber(Math.min(width, height) * 0.03, 8, 20);
+    const { arrowScale, cardAspect, maxCardScale, maxStepSize } = exports.ANSWER_CHAIN;
+    const cardWidthFor = (columns) => (width - (columns - 1) * gap) / columns;
+    let best = { columns: 1, rows: count, stepSize: 0, complete: false };
+    for (let columns = 1; columns <= count; columns += 1) {
+        const rows = Math.ceil(count / columns);
+        const stepSize = Math.min(
+        // The steps and their arrows fit the width…
+        width / (steps + (steps - 1) * arrowScale), 
+        // …the chain and every row of cards, each at least a step tall, the height…
+        (height - rows * gap) / (1 + rows), 
+        // …and a card a step tall fits its column.
+        cardWidthFor(columns) / cardAspect, maxStepSize);
+        const complete = count % columns === 0;
+        const tie = Math.abs(stepSize - best.stepSize) <= 0.5;
+        if (stepSize > best.stepSize + 0.5 ||
+            (tie && rows < best.rows) ||
+            (tie && rows === best.rows && complete && !best.complete)) {
+            best = { columns, rows, stepSize, complete };
+        }
+    }
+    const stepSize = Math.max(Math.floor(best.stepSize), 1);
+    const arrowWidth = Math.floor(stepSize * arrowScale);
+    const cardHeight = Math.max(Math.floor(Math.min(stepSize * maxCardScale, (height - stepSize - best.rows * gap) / best.rows, cardWidthFor(best.columns) / cardAspect, exports.ANSWER_CHOICE_STACK.maxCardHeight)), 1);
+    const cardWidth = Math.floor(cardHeight * cardAspect);
+    return {
+        gap,
+        stepSize,
+        arrowWidth,
+        stripWidth: steps * stepSize + (steps - 1) * arrowWidth,
         columns: best.columns,
         rows: best.rows,
         cardWidth,
