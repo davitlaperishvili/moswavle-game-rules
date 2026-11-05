@@ -101,6 +101,12 @@ export type AnswerChoiceLayout = "stacked" | "split";
 
 export type AnswerChoiceConfig = {
   questionImage: string | null;
+  /**
+   * A chain with one step missing, drawn in place of the question picture: the
+   * steps in order, null for the "?" (`answerChainGap`). Null when the game has
+   * none, or the row it has is no chain.
+   */
+  questionRow: Array<string | null> | null;
   bg_image: string | null;
   layout: AnswerChoiceLayout;
   answers: AnswerChoiceOption[];
@@ -1115,9 +1121,16 @@ export function normalizeAnswerChoiceConfig(
   const correctOptionIds = answers
     .filter((answer) => answer.isCorrect)
     .map((answer) => answer.id);
+  const questionRow = Array.isArray(config.question_row)
+    ? config.question_row.map((step) => {
+      const record = asRecord(step);
+      return (record ? extractMediaUrl(record.image) ?? extractMediaUrl(record.url) : extractMediaUrl(step)) ?? null;
+    })
+    : null;
 
   return {
     questionImage: extractMediaUrl(config.question_image),
+    questionRow: answerChainGap(questionRow) >= 0 ? questionRow : null,
     bg_image: normalizeBackground(config),
     layout: normalizeAnswerChoiceLayout(
       config.question_layout ?? config.display_layout ?? config.presentation_layout ?? config.layout,

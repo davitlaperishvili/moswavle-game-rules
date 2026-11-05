@@ -93,6 +93,18 @@ const imageless = rules.normalizeAnswerChoiceConfig(
 
 check('an answer with no image is not playable', imageless.answers.length === 0);
 
+{
+  const chained = (row) => rules.normalizeAnswerChoiceConfig(
+    game('answer_choice'),
+    rules.getRuntimeConfig({ question_row: row, answers: [{ id: 'a', image: 'c.png', is_correct: true }, { id: 'b', image: 'x.png' }] }),
+  ).questionRow;
+  check('a chain with one step missing is read in order, null for the "?"',
+    JSON.stringify(chained(['a.png', 'b.png', null, 'd.png', 'e.png'])) === JSON.stringify(['a.png', 'b.png', null, 'd.png', 'e.png']));
+  check('a chain written as rows of pictures is read too', JSON.stringify(chained([{ image: 'a.png' }, { image: '' }, { image: 'c.png' }])) === JSON.stringify(['a.png', null, 'c.png']));
+  check('a row with no step missing, or two, is no chain', chained(['a.png', 'b.png', 'c.png']) === null && chained(['a.png', null, null, 'd.png']) === null);
+  check('a game with no row has no chain', single.questionRow === null);
+}
+
 section('answer choice: the cards are shuffled, the right one is not always first');
 
 {

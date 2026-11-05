@@ -690,8 +690,15 @@ function normalizeAnswerChoiceConfig(game, config) {
     const correctOptionIds = answers
         .filter((answer) => answer.isCorrect)
         .map((answer) => answer.id);
+    const questionRow = Array.isArray(config.question_row)
+        ? config.question_row.map((step) => {
+            const record = asRecord(step);
+            return (record ? extractMediaUrl(record.image) ?? extractMediaUrl(record.url) : extractMediaUrl(step)) ?? null;
+        })
+        : null;
     return {
         questionImage: extractMediaUrl(config.question_image),
+        questionRow: answerChainGap(questionRow) >= 0 ? questionRow : null,
         bg_image: normalizeBackground(config),
         layout: normalizeAnswerChoiceLayout(config.question_layout ?? config.display_layout ?? config.presentation_layout ?? config.layout),
         answers,

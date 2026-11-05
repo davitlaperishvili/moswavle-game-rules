@@ -55,6 +55,12 @@ export type AnswerChoiceOption = {
 export type AnswerChoiceLayout = "stacked" | "split";
 export type AnswerChoiceConfig = {
     questionImage: string | null;
+    /**
+     * A chain with one step missing, drawn in place of the question picture: the
+     * steps in order, null for the "?" (`answerChainGap`). Null when the game has
+     * none, or the row it has is no chain.
+     */
+    questionRow: Array<string | null> | null;
     bg_image: string | null;
     layout: AnswerChoiceLayout;
     answers: AnswerChoiceOption[];
