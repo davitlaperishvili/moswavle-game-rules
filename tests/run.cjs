@@ -3107,8 +3107,8 @@ section('sound_match: what starts like a word, or rhymes with it');
     bg_image: 'https://x/room.webp',
     lives: 2,
     answers: [
-      { image: 'https://x/mole.webp', name: 'КрОт', right: true },
-      { image: 'https://x/mouth.webp', name: 'рот', right: true },
+      { image: 'https://x/mole.webp', name: 'КрОт', right: true, voice: 'https://x/krot.mp3' },
+      { image: 'https://x/mouth.webp', name: 'рот', right: true, voice: 'https://x/rot.mp3' },
       { image: 'https://x/hippo.webp', name: 'бегемот', right: true },
       { image: 'https://x/hedgehog.webp', name: 'ёж', right: true },
       { image: 'https://x/house.webp', name: 'дом', right: false },
@@ -3128,6 +3128,12 @@ section('sound_match: what starts like a word, or rhymes with it');
   check('the background, the word\'s picture and every card are fetched before the clock',
     config.imageUris.length === 8 && config.imageUris[0] === 'https://x/room.webp' && config.imageUris[1] === 'https://x/cat.webp');
   check('lives as authored', config.lives === 2 && rules.normalizeSoundMatchConfig({ id: 1 }, {}).lives === 3);
+  check('a card says its name by its own clip, fetched with the pictures; a word with no clip says nothing',
+    config.answers.find((answer) => answer.name === 'крот').voice === 'https://x/krot.mp3'
+    && config.answers.find((answer) => answer.name === 'дом').voice === null
+    && config.voiceUris.length === 2 && config.voiceUris.includes('https://x/rot.mp3'));
+  check('the last card waits for its word before the win',
+    rules.GAME_TIMINGS.soundMatch.spokenSettleMs > rules.GAME_TIMINGS.soundMatch.successSettleMs);
 
   const tap = rules.resolveSoundMatchTap;
   const [first, second, third] = config.correctOptionIds;

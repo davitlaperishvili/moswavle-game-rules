@@ -1512,11 +1512,14 @@ export declare const GAME_TIMINGS: {
     };
     /**
      * A card whose name does not sound so shakes for `wrongFeedbackMs` and stays
-     * crossed out. The last right one stays lit `successSettleMs` before the win.
+     * crossed out. The last right one stays lit `successSettleMs` before the win —
+     * `spokenSettleMs` when it says its name as it is tapped, so that the word is
+     * heard to its end before the win cuts in.
      */
     readonly soundMatch: {
         readonly wrongFeedbackMs: 560;
         readonly successSettleMs: 700;
+        readonly spokenSettleMs: 1400;
         readonly livesOutDelayMs: 320;
     };
     readonly mathEquation: {
@@ -3954,8 +3957,13 @@ export declare const SOUND_MATCH_RIGHT: {
 export type SoundMatchOption = {
     id: string;
     image: string;
-    /** What the child calls the picture, in the game's language: said by nobody, read by a screen reader. */
+    /** What the child calls the picture, in the game's language: read by a screen reader, said by `voice`. */
     name: string;
+    /**
+     * That name said aloud as the card is tapped (owner, 2026-11-06: the child
+     * hears the word it chose); null while the word has no clip.
+     */
+    voice: string | null;
     isCorrect: boolean;
 };
 export type SoundMatchConfig = {
@@ -3972,6 +3980,8 @@ export type SoundMatchConfig = {
     lives: number;
     /** The background, the word's picture and every card: preload before the clock. */
     imageUris: string[];
+    /** The cards' names said aloud: fetched with the pictures, so a word starts as its card is tapped. */
+    voiceUris: string[];
 };
 /**
  * The game as the players draw it, in the language the server chose. A card

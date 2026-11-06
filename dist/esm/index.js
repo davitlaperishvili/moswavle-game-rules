@@ -3430,9 +3430,11 @@ export const GAME_TIMINGS = {
     hiddenLight: { wrongFeedbackMs: 560, revealMs: 650, flyMs: 700, nextQuestionMs: 500, successSettleMs: 900, livesOutDelayMs: 320 },
     /**
      * A card whose name does not sound so shakes for `wrongFeedbackMs` and stays
-     * crossed out. The last right one stays lit `successSettleMs` before the win.
+     * crossed out. The last right one stays lit `successSettleMs` before the win —
+     * `spokenSettleMs` when it says its name as it is tapped, so that the word is
+     * heard to its end before the win cuts in.
      */
-    soundMatch: { wrongFeedbackMs: 560, successSettleMs: 700, livesOutDelayMs: 320 },
+    soundMatch: { wrongFeedbackMs: 560, successSettleMs: 700, spokenSettleMs: 1400, livesOutDelayMs: 320 },
     mathEquation: {
         wrongFeedbackMs: 560,
         flyMs: 620,
@@ -8636,6 +8638,7 @@ export function normalizeSoundMatchConfig(game, config) {
             id: record ? extractText(record.id) ?? `${game.id}-sound-${index}` : `${game.id}-sound-${index}`,
             image,
             name: (record ? extractText(record.name) ?? "" : "").toLowerCase(),
+            voice: record ? extractMediaUrl(record.voice) : null,
             isCorrect: record
                 ? extractBoolean(record.right) ?? extractBoolean(record.is_correct) ?? extractBoolean(record.correct) ?? false
                 : false,
@@ -8656,6 +8659,7 @@ export function normalizeSoundMatchConfig(game, config) {
         time_limit: extractNumber(config.time_limit),
         lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
         imageUris: [bg, wordImage, ...answers.map((answer) => answer.image)].filter((uri) => Boolean(uri)),
+        voiceUris: [...new Set(answers.map((answer) => answer.voice).filter((uri) => Boolean(uri)))],
     };
 }
 /**

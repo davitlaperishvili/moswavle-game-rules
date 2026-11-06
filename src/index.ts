@@ -5016,9 +5016,11 @@ export const GAME_TIMINGS = {
   hiddenLight: { wrongFeedbackMs: 560, revealMs: 650, flyMs: 700, nextQuestionMs: 500, successSettleMs: 900, livesOutDelayMs: 320 },
   /**
    * A card whose name does not sound so shakes for `wrongFeedbackMs` and stays
-   * crossed out. The last right one stays lit `successSettleMs` before the win.
+   * crossed out. The last right one stays lit `successSettleMs` before the win —
+   * `spokenSettleMs` when it says its name as it is tapped, so that the word is
+   * heard to its end before the win cuts in.
    */
-  soundMatch: { wrongFeedbackMs: 560, successSettleMs: 700, livesOutDelayMs: 320 },
+  soundMatch: { wrongFeedbackMs: 560, successSettleMs: 700, spokenSettleMs: 1400, livesOutDelayMs: 320 },
   mathEquation: {
     wrongFeedbackMs: 560,
     flyMs: 620,
@@ -12009,8 +12011,13 @@ export const SOUND_MATCH_RIGHT = { min: 1, max: 3 } as const;
 export type SoundMatchOption = {
   id: string;
   image: string;
-  /** What the child calls the picture, in the game's language: said by nobody, read by a screen reader. */
+  /** What the child calls the picture, in the game's language: read by a screen reader, said by `voice`. */
   name: string;
+  /**
+   * That name said aloud as the card is tapped (owner, 2026-11-06: the child
+   * hears the word it chose); null while the word has no clip.
+   */
+  voice: string | null;
   isCorrect: boolean;
 };
 
@@ -12028,6 +12035,8 @@ export type SoundMatchConfig = {
   lives: number;
   /** The background, the word's picture and every card: preload before the clock. */
   imageUris: string[];
+  /** The cards' names said aloud: fetched with the pictures, so a word starts as its card is tapped. */
+  voiceUris: string[];
 };
 
 /**
@@ -12048,6 +12057,7 @@ export function normalizeSoundMatchConfig(game: AuthoredGame, config: Record<str
         id: record ? extractText(record.id) ?? `${game.id}-sound-${index}` : `${game.id}-sound-${index}`,
         image,
         name: (record ? extractText(record.name) ?? "" : "").toLowerCase(),
+        voice: record ? extractMediaUrl(record.voice) : null,
         isCorrect: record
           ? extractBoolean(record.right) ?? extractBoolean(record.is_correct) ?? extractBoolean(record.correct) ?? false
           : false,
@@ -12069,6 +12079,7 @@ export function normalizeSoundMatchConfig(game: AuthoredGame, config: Record<str
     time_limit: extractNumber(config.time_limit),
     lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
     imageUris: [bg, wordImage, ...answers.map((answer) => answer.image)].filter((uri): uri is string => Boolean(uri)),
+    voiceUris: [...new Set(answers.map((answer) => answer.voice).filter((uri): uri is string => Boolean(uri)))],
   };
 }
 
