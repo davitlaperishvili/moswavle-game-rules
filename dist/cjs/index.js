@@ -57,6 +57,7 @@ exports.arrangeSvgAssembleScene = arrangeSvgAssembleScene;
 exports.normalizePatternNextConfig = normalizePatternNextConfig;
 exports.normalizeSortBinsConfig = normalizeSortBinsConfig;
 exports.normalizeJigsawConfig = normalizeJigsawConfig;
+exports.jigsawCellAccepts = jigsawCellAccepts;
 exports.normalizeDragDropMatchConfig = normalizeDragDropMatchConfig;
 exports.normalizeSelectOptionConfig = normalizeSelectOptionConfig;
 exports.normalizeMemoryCardsConfig = normalizeMemoryCardsConfig;
@@ -2413,9 +2414,69 @@ function normalizeJigsawConfig(config) {
         // Defaults on: without the picture underneath, a four-year-old is
         // rearranging abstract rectangles.
         showGuide: extractBoolean(config.show_guide) ?? true,
+        alike: normalizeJigsawAlike(config.alike ?? config.jig_alike, columns * rows),
         time_limit: extractNumber(config.time_limit),
         lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
     };
+}
+/**
+ * The look-alike groups as the server sent them, made safe to play by: only
+ * pieces this board has, a piece in one group only (two groups that share a
+ * piece are one), groups of two or more, each in order.
+ */
+function normalizeJigsawAlike(value, pieceCount) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    // Each piece points at a piece of its group; the root names the group.
+    const parent = Array.from({ length: pieceCount }, (_, index) => index);
+    const root = (piece) => {
+        let current = piece;
+        while (parent[current] !== current) {
+            current = parent[current];
+        }
+        return current;
+    };
+    for (const raw of value) {
+        if (!Array.isArray(raw)) {
+            continue;
+        }
+        const members = raw
+            .map((item) => extractNumber(item))
+            .filter((piece) => piece !== null && Number.isInteger(piece) && piece >= 0 && piece < pieceCount);
+        for (let index = 1; index < members.length; index++) {
+            const left = root(members[0]);
+            const right = root(members[index]);
+            if (left !== right) {
+                parent[Math.max(left, right)] = Math.min(left, right);
+            }
+        }
+    }
+    const groups = new Map();
+    for (let piece = 0; piece < pieceCount; piece++) {
+        const key = root(piece);
+        groups.set(key, [...(groups.get(key) ?? []), piece]);
+    }
+    return [...groups.values()].filter((group) => group.length >= 2);
+}
+/**
+ * Whether a cell takes a piece dropped into it.
+ *
+ * Its own cell does, and so does any free cell of its look-alike group: a
+ * child cannot tell one piece of sand from the next, and refusing the one that
+ * looks the same makes the puzzle a guess. The two pieces swap homes. Every
+ * piece of a group still has a free cell of the group to go to, so the board
+ * always finishes. A cell then shows its own part of the picture, so the
+ * finished board is the whole picture. A filled cell takes nothing.
+ */
+function jigsawCellAccepts(config, piece, cell, filled = []) {
+    if (filled.includes(cell)) {
+        return false;
+    }
+    if (piece === cell) {
+        return true;
+    }
+    return config.alike.some((group) => group.includes(piece) && group.includes(cell));
 }
 function normalizeDragDropMatchConfig(config) {
     const rawZones = Array.isArray(config.zones)

@@ -220,6 +220,48 @@ check('the picture is found on any of the three fields', rules.normalizeJigsawCo
 
 check('the type resolves to its own kind', rules.resolveGameKind('jigsaw', {}) === 'jigsaw' && rules.resolveGameKind('Picture Puzzle', {}) === 'jigsaw');
 
+section('a jigsaw piece that looks like another goes into its cell too');
+
+// Every background leaves its bottom third empty for a game's answers, so a
+// 4x3 playground has four pieces of the same sand along the bottom (G70245,
+// 2026-11-07). The server measures which pieces look alike; a child who drops
+// one sand piece into another's cell is right.
+const sand = rules.normalizeJigsawConfig({ image: 'bg-playground.webp', columns: 4, rows: 3, alike: [[8, 9, 10, 11]] });
+check('the groups are read from the config', JSON.stringify(sand.alike) === '[[8,9,10,11]]', JSON.stringify(sand.alike));
+check('and from the authored field name', JSON.stringify(rules.normalizeJigsawConfig({ image: 'x', columns: 2, rows: 2, jig_alike: [[2, 3]] }).alike) === '[[2,3]]');
+check('no groups when nothing is sent', JSON.stringify(rules.normalizeJigsawConfig({ image: 'x' }).alike) === '[]');
+check('a group not a list is no group', JSON.stringify(rules.normalizeJigsawConfig({ image: 'x', columns: 2, rows: 2, alike: 'all' }).alike) === '[]');
+
+const messy = rules.normalizeJigsawConfig({ image: 'x', columns: 3, rows: 2, alike: [[5, 4, 4], [3, 4], [9, -1, 1.5, '2'], [0], [2, '1']] });
+check('pieces the board has not, halves and repeats are dropped, groups sharing a piece are one, a lone piece is no group',
+  JSON.stringify(messy.alike) === '[[1,2],[3,4,5]]', JSON.stringify(messy.alike));
+check('a board clamped smaller keeps only its own pieces',
+  JSON.stringify(rules.normalizeJigsawConfig({ image: 'x', columns: 9, rows: 9, alike: [[14, 15, 16, 80]] }).alike) === '[[14,15]]');
+
+const accepts = rules.jigsawCellAccepts;
+check('a piece goes into its own cell', accepts(sand, 9, 9) && accepts(sand, 0, 0));
+check('a sand piece goes into any cell of the sand', accepts(sand, 8, 11) && accepts(sand, 11, 8) && accepts(sand, 10, 9));
+check('but not into a cell that does not look like it', !accepts(sand, 8, 4) && !accepts(sand, 4, 8) && !accepts(sand, 0, 1));
+check('a filled cell takes nothing, not even its own piece', !accepts(sand, 9, 9, [9]) && !accepts(sand, 8, 9, [9]) && accepts(sand, 8, 10, [9]));
+check('a board without groups takes a piece in its own cell only', accepts(jig, 2, 2) && !accepts(jig, 2, 3));
+
+// Whatever cell of its group each piece is dropped into, the last piece of a
+// group always finds the group's last free cell: the puzzle cannot be stuck.
+let stuck = 0;
+for (let trial = 0; trial < 200; trial++) {
+  const filled = [];
+  const heap = rules.shuffle([...sand.pieces.keys()]);
+  for (const piece of heap) {
+    const free = [...sand.pieces.keys()].filter((cell) => accepts(sand, piece, cell, filled));
+    if (free.length === 0) {
+      stuck++;
+      break;
+    }
+    filled.push(free[Math.floor(Math.random() * free.length)]);
+  }
+}
+check('dropped anywhere they are taken, the pieces always fill the board', stuck === 0, `${stuck} of 200 stuck`);
+
 section('counting is authored as one picture and one number');
 
 // A single drawing of an apple has to cover counting from one to ten, or the

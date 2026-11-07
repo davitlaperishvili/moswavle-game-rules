@@ -280,6 +280,14 @@ export type JigsawConfig = {
     pieces: JigsawPiece[];
     /** Show the finished picture faintly under the board. */
     showGuide: boolean;
+    /**
+     * Pieces a child cannot tell apart — the sand along the bottom of a
+     * playground, a floor, a sky without a cloud — as groups of piece indexes in
+     * home order (left to right, top to bottom). The server measures them on the
+     * picture at the grid it is cut to. Any piece of a group goes into any free
+     * cell of the group (`jigsawCellAccepts`). Empty when every piece is its own.
+     */
+    alike: number[][];
     time_limit: number | null;
     lives: number;
 };
@@ -890,6 +898,17 @@ export declare function normalizeSortBinsConfig(config: Record<string, unknown>)
  * ambitious should still produce a playable game.
  */
 export declare function normalizeJigsawConfig(config: Record<string, unknown>): JigsawConfig;
+/**
+ * Whether a cell takes a piece dropped into it.
+ *
+ * Its own cell does, and so does any free cell of its look-alike group: a
+ * child cannot tell one piece of sand from the next, and refusing the one that
+ * looks the same makes the puzzle a guess. The two pieces swap homes. Every
+ * piece of a group still has a free cell of the group to go to, so the board
+ * always finishes. A cell then shows its own part of the picture, so the
+ * finished board is the whole picture. A filled cell takes nothing.
+ */
+export declare function jigsawCellAccepts(config: Pick<JigsawConfig, "alike">, piece: number, cell: number, filled?: readonly number[]): boolean;
 export declare function normalizeDragDropMatchConfig(config: Record<string, unknown>): DragDropMatchConfig;
 export declare function normalizeSelectOptionConfig(config: Record<string, unknown>): SelectOptionConfig;
 export declare function normalizeMemoryCardsConfig(config: Record<string, unknown>): MemoryCardsConfig;
