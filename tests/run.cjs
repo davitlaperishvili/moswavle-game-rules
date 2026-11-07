@@ -262,6 +262,48 @@ for (let trial = 0; trial < 200; trial++) {
 }
 check('dropped anywhere they are taken, the pieces always fill the board', stuck === 0, `${stuck} of 200 stuck`);
 
+section('a jigsaw\'s heap and board share the room');
+
+// A desktop window keeps what it had: the board 42% of the width, the heap in
+// the board's own shape, its pieces 0.86 of a cell.
+const desk = rules.layoutJigsaw(1050, 560, 4 / 3, 4, 3);
+check('on a desktop the board keeps its share of the width', desk.boardWidth === 441, JSON.stringify(desk));
+check('and the heap is the board\'s shape, its pieces a little under a cell',
+  desk.heapColumns === 4 && desk.heapRows === 3 && desk.pieceWidth === Math.floor((441 / 4) * 0.86), JSON.stringify(desk));
+
+// An iPhone on its side, less its edges and the speaker's strip: the share made
+// the board 267 wide with a third of the height empty (owner, 2026-11-07).
+const phone = rules.layoutJigsaw(635, 322, 4 / 3, 4, 3);
+check('on a phone on its side the board grows past its share', phone.boardWidth >= 355, JSON.stringify(phone));
+check('and so do the loose pieces', phone.pieceWidth > Math.floor((267 / 4) * 0.86), JSON.stringify(phone));
+check('the heap stands in three columns of four beside it', phone.heapColumns === 3 && phone.heapRows === 4, JSON.stringify(phone));
+
+const roomy = (w, h, aspect, c, r) => {
+  const box = rules.layoutJigsaw(w, h, aspect, c, r);
+  return (
+    box.boardWidth > 0 &&
+    box.heapWidth + box.gap + box.boardWidth <= w + 0.001 &&
+    box.heapHeight <= h + 0.001 &&
+    box.boardHeight <= h + 0.001 &&
+    box.heapColumns * box.heapRows >= c * r &&
+    box.pieceWidth < box.boardWidth / c &&
+    box.pieceWidth >= Math.floor((box.boardWidth / c) * 0.7) - 1
+  );
+};
+const rooms = [[520, 280], [635, 322], [730, 360], [700, 480], [1050, 560], [1600, 800]];
+const shapes = [[2, 2], [3, 2], [3, 3], [4, 3], [4, 4], [5, 4]];
+const aspects = [1, 4 / 3, 16 / 9, 3 / 4];
+let cramped = [];
+for (const [w, h] of rooms) {
+  for (const [c, r] of shapes) {
+    for (const aspect of aspects) {
+      if (!roomy(w, h, aspect, c, r)) cramped.push(`${w}x${h} ${c}x${r} @${aspect.toFixed(2)}`);
+    }
+  }
+}
+check('the heap and the board always fit the room, whatever the puzzle and the screen', cramped.length === 0, cramped.slice(0, 5).join('; '));
+check('a room not measured yet breaks nothing', rules.layoutJigsaw(0, 0, 4 / 3, 4, 3).boardWidth === 0);
+
 section('counting is authored as one picture and one number');
 
 // A single drawing of an apple has to cover counting from one to ten, or the

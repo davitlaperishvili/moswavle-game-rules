@@ -2287,6 +2287,103 @@ export function jigsawCellAccepts(config, piece, cell, filled = []) {
     }
     return config.alike.some((group) => group.includes(piece) && group.includes(cell));
 }
+/**
+ * The board's share of the room's width. Filling a desktop window made a
+ * four-piece puzzle read as wallpaper: a child could not see the picture.
+ */
+const JIGSAW_BOARD_SHARE = 0.42;
+/**
+ * …but the share never holds the board under this. On a phone on its side it
+ * left the pieces small with a third of the screen empty (owner, 2026-11-07).
+ */
+const JIGSAW_BOARD_SHARE_FLOOR = 400;
+/** The board never takes more of the room's height than this. */
+const JIGSAW_BOARD_HEIGHT_SHARE = 0.84;
+/** A loose piece's side against its cell's: as big as fits, within these. */
+const JIGSAW_PIECE_MAX = 0.86;
+const JIGSAW_PIECE_MIN = 0.7;
+/** A heap slot against its piece: room to lie askew without covering the next. */
+const JIGSAW_SLOT = 1.25;
+/**
+ * Where a jigsaw's heap and board go in a room (`width` x `height`, the stage
+ * less the phone's edges and the speaker's strip): side by side, the heap first.
+ *
+ * The board is as big as the room lets the heap stand beside it with its
+ * pieces at their smallest, within its share of a big screen. Then the heap's
+ * pieces grow as far as they fit beside that board, laid in the grid of slots
+ * that lets them grow most — on a phone on its side three columns of four
+ * rather than the board's own shape — the board's shape where several fit
+ * alike. The heap's last row, when not full, stands in its middle.
+ */
+export function layoutJigsaw(width, height, aspect, columns, rows) {
+    const cols = Math.max(1, Math.floor(columns));
+    const rowCount = Math.max(1, Math.floor(rows));
+    const count = cols * rowCount;
+    const empty = {
+        boardWidth: 0,
+        boardHeight: 0,
+        pieceWidth: 0,
+        pieceHeight: 0,
+        heapColumns: cols,
+        heapRows: rowCount,
+        slotWidth: 0,
+        slotHeight: 0,
+        heapWidth: 0,
+        heapHeight: 0,
+        gap: 0,
+    };
+    if (!(width > 0) || !(height > 0) || !(aspect > 0)) {
+        return empty;
+    }
+    const gap = Math.round(clampNumber(width * 0.03, 8, 32));
+    // A cell against the board's width: across, and down.
+    const cellAcross = 1 / cols;
+    const cellDown = 1 / (aspect * rowCount);
+    const heapRowsFor = (heapColumns) => Math.ceil(count / heapColumns);
+    // The widest board that leaves room beside it for the heap at its smallest.
+    let fitted = 0;
+    for (let heapColumns = 1; heapColumns <= count; heapColumns += 1) {
+        const slot = JIGSAW_SLOT * JIGSAW_PIECE_MIN;
+        const across = (width - gap) / (1 + heapColumns * slot * cellAcross);
+        const down = height / (heapRowsFor(heapColumns) * slot * cellDown);
+        fitted = Math.max(fitted, Math.min(across, down));
+    }
+    const boardWidth = Math.floor(Math.min(fitted, height * JIGSAW_BOARD_HEIGHT_SHARE * aspect, Math.max(width * JIGSAW_BOARD_SHARE, JIGSAW_BOARD_SHARE_FLOOR)));
+    if (boardWidth <= 0) {
+        return { ...empty, gap };
+    }
+    const cellWidth = boardWidth * cellAcross;
+    const cellHeight = boardWidth * cellDown;
+    const room = width - gap - boardWidth;
+    let best = { heapColumns: cols, share: -1 };
+    for (let heapColumns = 1; heapColumns <= count; heapColumns += 1) {
+        const share = Math.min(JIGSAW_PIECE_MAX, room / (heapColumns * JIGSAW_SLOT * cellWidth), height / (heapRowsFor(heapColumns) * JIGSAW_SLOT * cellHeight));
+        const tie = Math.abs(share - best.share) < 1e-9;
+        if (share > best.share + 1e-9 ||
+            (tie && Math.abs(heapColumns - cols) < Math.abs(best.heapColumns - cols))) {
+            best = { heapColumns, share };
+        }
+    }
+    const share = Math.max(0, best.share);
+    const pieceWidth = Math.floor(cellWidth * share);
+    const pieceHeight = Math.floor(cellHeight * share);
+    const slotWidth = Math.floor(cellWidth * share * JIGSAW_SLOT);
+    const slotHeight = Math.floor(cellHeight * share * JIGSAW_SLOT);
+    const heapRows = heapRowsFor(best.heapColumns);
+    return {
+        boardWidth,
+        boardHeight: boardWidth / aspect,
+        pieceWidth,
+        pieceHeight,
+        heapColumns: best.heapColumns,
+        heapRows,
+        slotWidth,
+        slotHeight,
+        heapWidth: slotWidth * best.heapColumns,
+        heapHeight: slotHeight * heapRows,
+        gap,
+    };
+}
 export function normalizeDragDropMatchConfig(config) {
     const rawZones = Array.isArray(config.zones)
         ? config.zones

@@ -909,6 +909,35 @@ export declare function normalizeJigsawConfig(config: Record<string, unknown>): 
  * finished board is the whole picture. A filled cell takes nothing.
  */
 export declare function jigsawCellAccepts(config: Pick<JigsawConfig, "alike">, piece: number, cell: number, filled?: readonly number[]): boolean;
+export type JigsawLayout = {
+    /** The board, at the picture's own aspect, so a piece is cut alike on every device. */
+    boardWidth: number;
+    boardHeight: number;
+    /** A loose piece: a little under a cell, so the heap is pieces and not a second board. */
+    pieceWidth: number;
+    pieceHeight: number;
+    /** The heap is a grid of slots, each a piece and the room to lie askew in it. */
+    heapColumns: number;
+    heapRows: number;
+    slotWidth: number;
+    slotHeight: number;
+    heapWidth: number;
+    heapHeight: number;
+    /** Between the heap and the board, which stand side by side. */
+    gap: number;
+};
+/**
+ * Where a jigsaw's heap and board go in a room (`width` x `height`, the stage
+ * less the phone's edges and the speaker's strip): side by side, the heap first.
+ *
+ * The board is as big as the room lets the heap stand beside it with its
+ * pieces at their smallest, within its share of a big screen. Then the heap's
+ * pieces grow as far as they fit beside that board, laid in the grid of slots
+ * that lets them grow most — on a phone on its side three columns of four
+ * rather than the board's own shape — the board's shape where several fit
+ * alike. The heap's last row, when not full, stands in its middle.
+ */
+export declare function layoutJigsaw(width: number, height: number, aspect: number, columns: number, rows: number): JigsawLayout;
 export declare function normalizeDragDropMatchConfig(config: Record<string, unknown>): DragDropMatchConfig;
 export declare function normalizeSelectOptionConfig(config: Record<string, unknown>): SelectOptionConfig;
 export declare function normalizeMemoryCardsConfig(config: Record<string, unknown>): MemoryCardsConfig;
