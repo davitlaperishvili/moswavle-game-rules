@@ -2252,17 +2252,28 @@ export declare const LABEL_DIAGRAM_LAYOUT: {
     /** The most of the free width a column of cards takes, and of the free height a row of them. */
     readonly columnShare: 0.4;
     readonly rowShare: 0.36;
-    /** A pin on a picture: this share of its shorter side across. On a point: as big as the point. Both between these sizes in px. */
-    readonly pinShare: 0.34;
-    readonly minPin: 28;
-    readonly maxPin: 46;
+    /**
+     * A pin on a picture: this share of the sheet's shorter side across, so every
+     * pin of a sheet is one size whatever its picture. On a point: as big as the
+     * point. Both between these sizes in px.
+     */
+    readonly pinSheetShare: 0.15;
+    readonly minPin: 34;
+    readonly maxPin: 58;
+    /**
+     * A pin on a picture stands at its edge, not on it (owner, 2026-11-10: the
+     * numbers covered the animals): this share of the pin lies over the picture's
+     * box, the rest outside it, on whichever side or corner covers the least of
+     * the other pictures and pins.
+     */
+    readonly pinHold: 0.3;
 };
 export type LabelDiagramLayout = {
     /** The picture, whole and never cropped: the players draw it with a rim of `sheetRim` round it. */
     sheet: BoardRect;
     /** Everything on the sheet in stage pixels, in `parts` order, exactly where the author put it. */
     parts: BoardRect[];
-    /** A pin on the middle of every named part, in the order the parts are asked. */
+    /** A pin for every named part, in the order the parts are asked: on a point, or at the edge of a picture. */
     pins: Array<BoardRect & {
         partId: string;
         number: number;

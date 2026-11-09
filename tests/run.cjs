@@ -2097,8 +2097,12 @@ section('label_diagram: a picture whose parts are named');
   check('where the stage is tall the cards stand in a row under the sheet', tablet.arrangement === 'row' && tablet.tray.top > tablet.sheet.top + tablet.sheet.height);
   const pinOf = (layout, config, partId) => ({ pin: layout.pins.find((pin) => pin.partId === partId), rect: layout.parts[config.parts.findIndex((part) => part.id === partId)] });
   const cowPin = pinOf(phone, farm, 'part_2');
-  check('a pin stands on the middle of its part', Math.abs(cowPin.pin.left + cowPin.pin.width / 2 - (cowPin.rect.left + cowPin.rect.width / 2)) < 1e-6
-    && Math.abs(cowPin.pin.top + cowPin.pin.height / 2 - (cowPin.rect.top + cowPin.rect.height / 2)) < 1e-6);
+  const held = (pin, rect) => Math.max(0, Math.min(pin.left + pin.width, rect.left + rect.width) - Math.max(pin.left, rect.left))
+    * Math.max(0, Math.min(pin.top + pin.height, rect.top + rect.height) - Math.max(pin.top, rect.top));
+  check('a pin stands at the edge of its picture, touching it but covering little of it', held(cowPin.pin, cowPin.rect) > 0
+    && held(cowPin.pin, cowPin.rect) <= cowPin.pin.width * cowPin.pin.height * rules.LABEL_DIAGRAM_LAYOUT.pinHold + 1e-6);
+  check('no two pins lie on one another', [phone, tablet].every((layout) => layout.pins.every((pin, i) => layout.pins.every((other, j) => i === j || held(pin, other) === 0))));
+  check('every pin stays on its sheet', [phone, tablet].every((layout) => layout.pins.every((pin) => inside(pin, layout.sheet))));
   check('a pin is big enough to see and never a blot', phone.pins.every((pin) => pin.width >= rules.LABEL_DIAGRAM_LAYOUT.minPin && pin.width <= rules.LABEL_DIAGRAM_LAYOUT.maxPin));
   const wide = rules.layoutLabelDiagram(1250, 750, world, {});
   check('a name of two words may be broken in two lines, never cut', wide.cards.every((card) => card.lines.map((line) => line.text).join(' ') === world.labels.find((label) => label.id === card.id).text));

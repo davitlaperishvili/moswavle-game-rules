@@ -5326,10 +5326,21 @@ exports.LABEL_DIAGRAM_LAYOUT = {
     /** The most of the free width a column of cards takes, and of the free height a row of them. */
     columnShare: 0.4,
     rowShare: 0.36,
-    /** A pin on a picture: this share of its shorter side across. On a point: as big as the point. Both between these sizes in px. */
-    pinShare: 0.34,
-    minPin: 28,
-    maxPin: 46,
+    /**
+     * A pin on a picture: this share of the sheet's shorter side across, so every
+     * pin of a sheet is one size whatever its picture. On a point: as big as the
+     * point. Both between these sizes in px.
+     */
+    pinSheetShare: 0.15,
+    minPin: 34,
+    maxPin: 58,
+    /**
+     * A pin on a picture stands at its edge, not on it (owner, 2026-11-10: the
+     * numbers covered the animals): this share of the pin lies over the picture's
+     * box, the rest outside it, on whichever side or corner covers the least of
+     * the other pictures and pins.
+     */
+    pinHold: 0.3,
 };
 /**
  * Where everything of a picture to name goes on its stage: the sheet and the
@@ -5446,23 +5457,69 @@ function layoutLabelDiagram(stageWidth, stageHeight, config, insets = {}) {
         width: (part.width / 100) * sheet.width,
         height: (part.height / 100) * sheet.height,
     }));
+    const area = (a, b) => Math.max(0, Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left))
+        * Math.max(0, Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top));
+    // A pin never leaves the sheet.
+    const onSheet = (left, top, size) => ({
+        left: Math.min(Math.max(left, sheet.left), sheet.left + sheet.width - size),
+        top: Math.min(Math.max(top, sheet.top), sheet.top + sheet.height - size),
+        width: size,
+        height: size,
+    });
+    const pictureSize = Math.max(L.minPin, Math.min(L.maxPin, Math.min(sheet.width, sheet.height) * L.pinSheetShare));
+    // A point is where its pin goes: those are placed first, the pictures' pins around them.
+    const placed = [];
+    const pinRects = new Map();
+    config.order.forEach((partId) => {
+        const index = config.parts.findIndex((part) => part.id === partId);
+        const rect = parts[index];
+        if (rect && config.parts[index].image === null) {
+            const size = Math.max(L.minPin, Math.min(L.maxPin, Math.min(rect.width, rect.height)));
+            const pin = onSheet(rect.left + rect.width / 2 - size / 2, rect.top + rect.height / 2 - size / 2, size);
+            pinRects.set(partId, pin);
+            placed.push(pin);
+        }
+    });
+    config.order.forEach((partId) => {
+        const index = config.parts.findIndex((part) => part.id === partId);
+        const rect = parts[index];
+        if (!rect || config.parts[index].image === null) {
+            return;
+        }
+        const size = pictureSize;
+        const out = size * (1 - L.pinHold);
+        const midX = rect.left + rect.width / 2 - size / 2;
+        const midY = rect.top + rect.height / 2 - size / 2;
+        const leftX = rect.left - out;
+        const rightX = rect.left + rect.width - size + out;
+        const topY = rect.top - out;
+        const bottomY = rect.top + rect.height - size + out;
+        // The corners first — a pin there hides least of an animal — then the sides; the first of two as good wins.
+        const candidates = [
+            [rightX, topY], [leftX, topY], [rightX, bottomY], [leftX, bottomY],
+            [midX, topY], [rightX, midY], [leftX, midY], [midX, bottomY],
+        ];
+        const others = parts.filter((_, other) => other !== index && config.parts[other].image !== null);
+        let best = null;
+        for (const [x, y] of candidates) {
+            const pin = onSheet(x, y, size);
+            const cost = area(pin, rect)
+                + others.reduce((sum, other) => sum + area(pin, other) * 1.5, 0)
+                + placed.reduce((sum, other) => sum + area(pin, other) * 4, 0);
+            if (!best || cost < best.cost - 1e-6) {
+                best = { pin, cost };
+            }
+        }
+        if (best) {
+            pinRects.set(partId, best.pin);
+            placed.push(best.pin);
+        }
+    });
     const pins = config.order
         .map((partId) => {
         const index = config.parts.findIndex((part) => part.id === partId);
-        const rect = parts[index];
-        if (!rect) {
-            return null;
-        }
-        const across = Math.min(rect.width, rect.height) * (config.parts[index].image === null ? 1 : L.pinShare);
-        const size = Math.max(L.minPin, Math.min(L.maxPin, across));
-        return {
-            partId,
-            number: config.parts[index].number,
-            left: rect.left + rect.width / 2 - size / 2,
-            top: rect.top + rect.height / 2 - size / 2,
-            width: size,
-            height: size,
-        };
+        const pin = pinRects.get(partId);
+        return pin ? { partId, number: config.parts[index].number, ...pin } : null;
     })
         .filter((pin) => Boolean(pin));
     return { sheet, parts, pins, arrangement, tray, cards };
