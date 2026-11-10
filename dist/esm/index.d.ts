@@ -930,12 +930,12 @@ export type JigsawLayout = {
  * Where a jigsaw's heap and board go in a room (`width` x `height`, the stage
  * less the phone's edges and the speaker's strip): side by side, the heap first.
  *
- * The board is as big as the room lets the heap stand beside it with its
- * pieces at their smallest, within its share of a big screen. Then the heap's
- * pieces grow as far as they fit beside that board, laid in the grid of slots
- * that lets them grow most — on a phone on its side three columns of four
- * rather than the board's own shape — the board's shape where several fit
- * alike. The heap's last row, when not full, stands in its middle.
+ * The loose pieces are as big as the room allows: for every grid of heap slots
+ * the board and the pieces are balanced so the pieces come out biggest, a piece
+ * at most as big as its cell, and the grid with the biggest pieces is taken —
+ * the bigger board, then the board's own shape, where two are alike. A big
+ * screen keeps its board to its share of the width. The heap's last row, when
+ * not full, stands in its middle.
  */
 export declare function layoutJigsaw(width: number, height: number, aspect: number, columns: number, rows: number): JigsawLayout;
 export declare function normalizeDragDropMatchConfig(config: Record<string, unknown>): DragDropMatchConfig;

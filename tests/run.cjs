@@ -265,17 +265,19 @@ check('dropped anywhere they are taken, the pieces always fill the board', stuck
 section('a jigsaw\'s heap and board share the room');
 
 // A desktop window keeps what it had: the board 42% of the width, the heap in
-// the board's own shape, its pieces 0.86 of a cell.
+// the board's own shape, its pieces as big as a cell.
 const desk = rules.layoutJigsaw(1050, 560, 4 / 3, 4, 3);
 check('on a desktop the board keeps its share of the width', desk.boardWidth === 441, JSON.stringify(desk));
-check('and the heap is the board\'s shape, its pieces a little under a cell',
-  desk.heapColumns === 4 && desk.heapRows === 3 && desk.pieceWidth === Math.floor((441 / 4) * 0.86), JSON.stringify(desk));
+check('and the heap is the board\'s shape, each piece as big as its cell',
+  desk.heapColumns === 4 && desk.heapRows === 3 && desk.pieceWidth === Math.floor(441 / 4), JSON.stringify(desk));
 
 // An iPhone on its side, less its edges and the speaker's strip: the share made
 // the board 267 wide with a third of the height empty (owner, 2026-11-07).
 const phone = rules.layoutJigsaw(635, 322, 4 / 3, 4, 3);
 check('on a phone on its side the board grows past its share', phone.boardWidth >= 355, JSON.stringify(phone));
-check('and so do the loose pieces', phone.pieceWidth > Math.floor((267 / 4) * 0.86), JSON.stringify(phone));
+check('and so do the loose pieces, past the 64 px of 1.72.0 (owner, 2026-11-10: as big as the room allows)', phone.pieceWidth >= 70, JSON.stringify(phone));
+const sixteen = rules.layoutJigsaw(635, 322, 4 / 3, 4, 4);
+check('sixteen pieces on a phone are no longer the 57 px of 1.72.0', sixteen.pieceWidth >= 70, JSON.stringify(sixteen));
 check('the heap stands in three columns of four beside it', phone.heapColumns === 3 && phone.heapRows === 4, JSON.stringify(phone));
 
 const roomy = (w, h, aspect, c, r) => {
@@ -286,8 +288,8 @@ const roomy = (w, h, aspect, c, r) => {
     box.heapHeight <= h + 0.001 &&
     box.boardHeight <= h + 0.001 &&
     box.heapColumns * box.heapRows >= c * r &&
-    box.pieceWidth < box.boardWidth / c &&
-    box.pieceWidth >= Math.floor((box.boardWidth / c) * 0.7) - 1
+    box.pieceWidth <= box.boardWidth / c &&
+    box.pieceWidth >= Math.floor((box.boardWidth / c) * 0.8) - 1
   );
 };
 const rooms = [[520, 280], [635, 322], [730, 360], [700, 480], [1050, 560], [1600, 800]];
