@@ -3346,47 +3346,91 @@ export declare const CHART_READ_SIZE: {
     readonly maxValue: 20;
     readonly maxPictures: 10;
     readonly maxQuestions: 3;
+    readonly maxUnit: 10;
 };
 /** The bars' colours, in turn: a toy's own, the same in both players. */
 export declare const CHART_BAR_COLORS: readonly ["#ff9f43", "#28bbf9", "#34d399", "#f472b6", "#a78bfa"];
-/** The questions as each language says them; {a} and {b} are the bars' pictures. */
+/**
+ * The questions as each language says them; {a} and {b} are the bars'
+ * pictures, {x} the number the question gives. `unit` is asked of a chart
+ * with a key alone.
+ */
 export declare const CHART_WORDS: {
     readonly ka: {
         readonly most: "რომელი არის ყველაზე მეტი?";
         readonly least: "რომელი არის ყველაზე ცოტა?";
         readonly count: "რამდენია {a}?";
         readonly difference: "რამდენით მეტია {a}, ვიდრე {b}?";
+        readonly pair: "რომელი ორი არის ერთად {x}?";
+        readonly unit: "სულ {x}-ია. რამდენს ნიშნავს ერთი სურათი?";
     };
     readonly ru: {
         readonly most: "Чего больше всего?";
         readonly least: "Чего меньше всего?";
         readonly count: "Сколько {a}?";
         readonly difference: "На сколько {a} больше, чем {b}?";
+        readonly pair: "Каких двух вместе {x}?";
+        readonly unit: "Всего {x}. Сколько обозначает одна картинка?";
     };
     readonly en: {
         readonly most: "Which is the most?";
         readonly least: "Which is the fewest?";
         readonly count: "How many {a}?";
         readonly difference: "How many more {a} than {b}?";
+        readonly pair: "Which two make {x} together?";
+        readonly unit: "{x} in all. How many does one picture stand for?";
     };
 };
-export type ChartAsk = "most" | "least" | "count" | "difference";
+/**
+ * The questions of a chart whose key has a sign, {s}: the sign is what is
+ * counted, the bars are whose it is ("how many books has Akaki?").
+ */
+export declare const CHART_KEY_WORDS: {
+    readonly ka: {
+        readonly most: "რომელს აქვს ყველაზე მეტი {s}?";
+        readonly least: "რომელს აქვს ყველაზე ნაკლები {s}?";
+        readonly count: "რამდენი {s} აქვს {a}-ს?";
+        readonly difference: "რამდენით მეტი {s} აქვს {a}-ს, ვიდრე {b}-ს?";
+        readonly pair: "რომელ ორს აქვს ერთად {x} {s}?";
+        readonly unit: "სულ {x} {s}-ია. რამდენს ნიშნავს ერთი {s}?";
+    };
+    readonly ru: {
+        readonly most: "У кого больше всего {s}?";
+        readonly least: "У кого меньше всего {s}?";
+        readonly count: "Сколько {s} у {a}?";
+        readonly difference: "На сколько {s} больше у {a}, чем у {b}?";
+        readonly pair: "У каких двух вместе {x} {s}?";
+        readonly unit: "Всего {x} {s}. Сколько обозначает один {s}?";
+    };
+    readonly en: {
+        readonly most: "Which has the most {s}?";
+        readonly least: "Which has the fewest {s}?";
+        readonly count: "How many {s} has {a}?";
+        readonly difference: "How many more {s} has {a} than {b}?";
+        readonly pair: "Which two have {x} {s} together?";
+        readonly unit: "{x} {s} in all. How many does one {s} stand for?";
+    };
+};
+export type ChartAsk = "most" | "least" | "count" | "difference" | "pair" | "unit";
 export type ChartBar = {
     id: string;
     image: string;
+    /** How many: in signs where the chart has a key (a half with an even unit), in things where not. */
     value: number;
     color: string;
 };
 export type ChartQuestion = {
     id: string;
     ask: ChartAsk;
-    /** count, difference: the bar asked about; difference: `other`, the one it is compared with. From 0. */
+    /** count, difference: the bar asked about; difference: `other`, the one it is compared with; pair: the two. From 0. */
     bar: number | null;
     other: number | null;
-    /** most, least: the bar to tap. count, difference: the number. */
+    /** most, least: the bar to tap. pair: the first of the two. count, difference, unit: the number. */
     answer: number;
-    /** count, difference: the numbers to choose from, smallest first. Empty where a bar is tapped. */
+    /** count, difference, unit: the numbers to choose from, smallest first. Empty where a bar is tapped. */
     options: number[];
+    /** pair, unit: the number the question gives — the two together, everything together. */
+    total: number | null;
 };
 export type ChartReadConfig = {
     style: "bars" | "pictures";
@@ -3395,7 +3439,11 @@ export type ChartReadConfig = {
     /** Bars: the top of the scale, and a number every `scaleStep`. */
     scaleMax: number;
     scaleStep: number;
-    /** In the order they are asked. */
+    /** The key: how many things one sign stands for — 1 where the chart has no key. */
+    unit: number;
+    /** The key's sign, stacked in every bar; null where the bars stack their own pictures. */
+    sign: string | null;
+    /** In the order they are asked: the key's own question first. */
     questions: ChartQuestion[];
     /** The language the questions are said in. */
     language: string;
@@ -3406,18 +3454,34 @@ export type ChartReadConfig = {
 };
 /** Whether the question is answered by a tap on a bar (rather than on a number). */
 export declare function chartQuestionTakesBar(question: Pick<ChartQuestion, "ask">): boolean;
+/** Whether the key's number is "?" at the question `index`: while its own question is not answered. */
+export declare function chartKeyHidden(config: Pick<ChartReadConfig, "questions">, index: number): boolean;
+/** How many things a bar counts: its signs times the key's unit. */
+export declare function chartBarThings(config: Pick<ChartReadConfig, "unit">, bar: Pick<ChartBar, "value">): number;
 /**
  * The game as the players draw it. `bars` are { image, value }: a whole
  * number from 0 (to 20 in bars, 10 in pictures). `questions` are { ask, bar,
  * other } — `bar` and `other` counted from 0. A "most" or "least" whose top
  * or bottom two bars tie, a bar that is none, or a "difference" whose bar is
  * not the bigger, is left out; fewer than two bars or no question is no game.
+ *
+ * A pictures chart with `unit` 2 to 10 has a key: `sign`, a picture, is
+ * stacked in every bar, a bar's value counts signs (a half where the unit is
+ * even) and the answers count things. A "pair" — `bar` and `other` — is left
+ * out where another two bars make the same together; a "unit" is asked of a
+ * key alone, and first. A game with no key is as it always was.
  */
 export declare function normalizeChartReadConfig(config: Record<string, unknown>): ChartReadConfig;
 export type ChartReadTapResult = 
 /** Every question is answered already, or the tap is none of this question's. */
 {
     type: "ignored";
+}
+/** Two bars asked: the first is held by its tap, or let go when tapped again. */
+ | {
+    type: "held";
+} | {
+    type: "released";
 }
 /** The answer is right; `complete` when the question was the last. */
  | {
@@ -3430,23 +3494,34 @@ export type ChartReadTapResult =
 };
 /**
  * What a tap does at the question `index`: `pick` is the bar tapped (from 0)
- * where a bar is asked, the number tapped where a number is.
+ * where a bar is asked, the number tapped where a number is. Where two bars
+ * are asked ("pair"), `held` is the bar the first tap holds: the second tap
+ * answers.
  */
-export declare function resolveChartReadTap(config: Pick<ChartReadConfig, "questions" | "bars">, index: number, pick: number): ChartReadTapResult;
-/** A piece of a question as it is set on its card: a word, or a bar's picture. */
+export declare function resolveChartReadTap(config: Pick<ChartReadConfig, "questions" | "bars">, index: number, pick: number, held?: number | null): ChartReadTapResult;
+/** A piece of a question as it is set on its card: a word, a bar's picture, or the key's sign. */
 export type ChartQuestionPiece = {
     text: string;
     bar?: undefined;
+    sign?: undefined;
 } | {
     bar: number;
     text?: undefined;
+    sign?: undefined;
+} | {
+    sign: true;
+    text?: undefined;
+    bar?: undefined;
 };
 /**
  * The question in the game's language, Georgian where it has none, cut into
  * its words and pictures; `glued` marks a piece that follows the one before
- * with no space ("?" after a picture).
+ * with no space ("?" after a picture). `sign`: the chart's key has a sign,
+ * and the question counts it (`CHART_KEY_WORDS`).
  */
-export declare function chartQuestionPieces(question: Pick<ChartQuestion, "ask" | "bar" | "other">, language: string): Array<ChartQuestionPiece & {
+export declare function chartQuestionPieces(question: Pick<ChartQuestion, "ask" | "bar" | "other"> & {
+    total?: number | null;
+}, language: string, sign?: boolean): Array<ChartQuestionPiece & {
     glued: boolean;
 }>;
 /** Proportions of the chart game. */
@@ -3469,12 +3544,18 @@ export declare const CHART_READ_LAYOUT: {
     readonly minOption: 48;
     readonly maxOption: 92;
     readonly optionAspect: 1.4;
+    /** The key under a pictograph's floor ("sign = 3"): of the chart's height, and in px. */
+    readonly keyShare: 0.13;
+    readonly minKey: 24;
+    readonly maxKey: 60;
 };
 export type ChartReadBarLayout = {
     /** Bars: the coloured column (0 tall for 0). Pictures: null. */
     column: BoardRect | null;
-    /** Pictures: one box a unit, from the bottom up. Bars: empty. */
-    units: BoardRect[];
+    /** Pictures: one box a unit, from the bottom up; `part` 0.5 on half a sign, its left half shown. Bars: empty. */
+    units: Array<BoardRect & {
+        part?: number;
+    }>;
     /** The bar's picture under it. */
     icon: BoardRect;
     /** Where a tap picks the bar: its slot, from the top of the plot to under its picture. */
@@ -3498,6 +3579,12 @@ export type ChartReadLayout = {
     options: Array<BoardRect & {
         value: number;
     }>;
+    /** A pictograph's key under its floor: the sign, "=", and the number (or "?", `chartKeyHidden`). Null with no key. */
+    key: {
+        icon: BoardRect;
+        equals: BoardRect;
+        value: BoardRect;
+    } | null;
 };
 /**
  * Where everything of the question `index` goes. The background covers the
@@ -3505,7 +3592,7 @@ export type ChartReadLayout = {
  * question's card and the numbers to tap beside it. The chart and the card's
  * room are the same for every question, so nothing moves as they change.
  */
-export declare function layoutChartRead(stageWidth: number, stageHeight: number, config: Pick<ChartReadConfig, "style" | "bars" | "scaleMax" | "scaleStep" | "questions" | "language">, index: number, insets?: SceneInsets): ChartReadLayout | null;
+export declare function layoutChartRead(stageWidth: number, stageHeight: number, config: Pick<ChartReadConfig, "style" | "bars" | "scaleMax" | "scaleStep" | "questions" | "language"> & Partial<Pick<ChartReadConfig, "unit" | "sign">>, index: number, insets?: SceneInsets): ChartReadLayout | null;
 export declare const FIND_IN_SCENE_TARGETS: {
     readonly min: 2;
     readonly max: 8;

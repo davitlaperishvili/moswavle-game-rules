@@ -2797,6 +2797,70 @@ section('chart_read: a chart read, and questions about it');
     return bars.every((bar) => Math.abs(bar.top + bar.height - floor) < 1e-6) && Math.abs(bars[2].height / bars[1].height - 9 / 4) < 1e-6;
   })());
   check('the timings and the gesture are there', rules.GAME_TIMINGS.chartRead.nextQuestionMs > 0 && rules.GAME_TIMINGS_BY_KIND['chart-read'] === rules.GAME_TIMINGS.chartRead && rules.GAME_GESTURES['chart-read'] === 'pick');
+  check('a chart with no key is as it was: unit 1, no sign, no key drawn', config.unit === 1 && config.sign === null && first.key === null
+    && rules.normalizeChartReadConfig({ style: 'bars', unit: 3, sign: 'https://x/star.webp', bars: fruit, questions: [{ ask: 'most' }] }).unit === 1);
+
+  // A pictograph with a key: one fish stands for 4 (the textbook, p. 74 №109).
+  const people = [{ image: 'https://x/gogi.webp', value: 7 }, { image: 'https://x/rezo.webp', value: 10 }, { image: 'https://x/ato.webp', value: 2 }, { image: 'https://x/nika.webp', value: 6 }];
+  const fish = rules.normalizeChartReadConfig({
+    style: 'pictures', unit: 4, sign: 'https://x/fish.webp', bars: people, language: 'ru',
+    questions: [{ ask: 'count', bar: 0 }, { ask: 'difference', bar: 1, other: 3 }, { ask: 'pair', bar: 1, other: 2 }],
+  });
+  const [fishCount, fishDifference, fishPair] = fish.questions;
+  check('a key: the answers count things, signs times the unit', fish.unit === 4 && fish.sign === 'https://x/fish.webp' && fishCount.answer === 28 && fishDifference.answer === 16
+    && fish.imageUris.includes('https://x/fish.webp') && rules.chartBarThings(fish, fish.bars[1]) === 40);
+  check('a key\'s numbers to pick: a sign more and fewer, and the signs counted with the key forgotten', [24, 28, 32].every((v) => fishCount.options.includes(v)) && fishCount.options.includes(7)
+    && fishDifference.options.includes(4) && fishDifference.options.includes(12) && fishDifference.options.includes(20) && fishCount.options.length === 4);
+  check('two together: a tap holds the first, the second answers, a tap again lets go', fishPair.total === 48 && fishPair.options.length === 0 && rules.chartQuestionTakesBar(fishPair)
+    && tap(fish, 2, 1).type === 'held' && tap(fish, 2, 1, 1).type === 'released' && tap(fish, 2, 2, 1).type === 'right' && tap(fish, 2, 1, 2).complete === true
+    && tap(fish, 2, 0, 1).type === 'wrong' && tap(fish, 2, 9, 1).type === 'ignored');
+  check('two together is no question where two other bars make the same',
+    rules.normalizeChartReadConfig({ style: 'pictures', unit: 2, sign: 's', bars: [{ image: 'a', value: 1 }, { image: 'b', value: 4 }, { image: 'c', value: 2 }, { image: 'd', value: 3 }], questions: [{ ask: 'pair', bar: 0, other: 1 }] }).questions.length === 0);
+  const said = (pieces) => pieces.map((p) => (p.sign ? '$' : p.bar !== undefined ? '#' + p.bar : p.text)).join(' ');
+  check('a key\'s questions count its sign', said(rules.chartQuestionPieces(fishCount, 'ru', true)) === 'Сколько $ у #0 ?'
+    && said(rules.chartQuestionPieces(fishPair, 'en', true)) === 'Which two have 48 $ together?'
+    && said(rules.chartQuestionPieces(fishCount, 'ru')) === 'Сколько #0 ?');
+
+  // The key's own question (p. 87 №167): three and two diamonds, 35 children in all.
+  const classes = rules.normalizeChartReadConfig({
+    style: 'pictures', unit: 7, sign: 'https://x/diamond.webp', language: 'ka',
+    bars: [{ image: 'https://x/class-a.webp', value: 3 }, { image: 'https://x/class-b.webp', value: 2 }],
+    questions: [{ ask: 'count', bar: 1 }, { ask: 'unit' }, { ask: 'unit' }],
+  });
+  check('the key\'s own question: asked first, once, of everything together', classes.questions.length === 2 && classes.questions[0].ask === 'unit' && classes.questions[0].total === 35
+    && classes.questions[0].answer === 7 && classes.questions[0].options.includes(5) && classes.questions[0].options.every((v) => v >= 1)
+    && rules.chartKeyHidden(classes, 0) && !rules.chartKeyHidden(classes, 1) && classes.questions[1].answer === 14 && classes.questions[1].id === 'question_2');
+  check('no key, no key\'s question', rules.normalizeChartReadConfig({ style: 'pictures', bars: fruit, questions: [{ ask: 'unit' }] }).questions.length === 0);
+
+  // Half a sign: one book stands for 2 (p. 66 №63), 3.5 books are 7.
+  const books = rules.normalizeChartReadConfig({
+    style: 'pictures', unit: 2, sign: 'https://x/book.webp', language: 'en',
+    bars: [{ image: 'a', value: 3.5 }, { image: 'b', value: 9 }, { image: 'c', value: 2.5 }, { image: 'd', value: 1.5 }],
+    questions: [{ ask: 'count', bar: 0 }, { ask: 'difference', bar: 1, other: 2 }],
+  });
+  check('half a sign with an even unit; none with an odd one or no key', books.bars.length === 4 && books.questions[0].answer === 7 && books.questions[1].answer === 13
+    && books.questions[0].options.includes(4)
+    && rules.normalizeChartReadConfig({ style: 'pictures', unit: 3, sign: 's', bars: [{ image: 'a', value: 3.5 }, { image: 'b', value: 2 }, { image: 'c', value: 4 }], questions: [{ ask: 'most' }] }).bars.length === 2
+    && rules.normalizeChartReadConfig({ style: 'pictures', bars: [{ image: 'a', value: 3.5 }, { image: 'b', value: 2 }, { image: 'c', value: 4 }], questions: [{ ask: 'most' }] }).bars.length === 2);
+
+  let keyWhole = true;
+  let keyDetail = '';
+  stages.forEach(([w, h, insets]) => [fish, classes, books].forEach((game, which) => game.questions.forEach((question, index) => {
+    const layout = rules.layoutChartRead(w, h, game, index, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout && layout.key && inside(layout.chart, stage) && !overlap(layout.chart, layout.card)
+      && [layout.key.icon, layout.key.equals, layout.key.value].every((r) => inside(r, layout.chart) && !overlap(r, layout.plot) && layout.bars.every((bar) => !overlap(r, bar.icon)))
+      && !overlap(layout.key.icon, layout.key.equals) && !overlap(layout.key.equals, layout.key.value)
+      && layout.bars.every((bar, at) => bar.units.length === Math.ceil(game.bars[at].value) && bar.units.every((u) => inside(u, layout.plot)) && inside(bar.icon, layout.chart))
+      && layout.pieces.every((piece) => inside(piece, layout.card)) && layout.pieces.some((piece) => piece.sign)
+      && layout.pieces.every((a, i) => layout.pieces.every((b, j) => i === j || !overlap(a, b)))
+      && layout.options.length === question.options.length
+      && layout.options.every((o) => inside(o, stage) && !overlap(o, layout.card) && !overlap(o, layout.chart));
+    if (!ok && keyWhole) { keyWhole = false; keyDetail = `${w}x${h} game ${which} question ${index}: ${JSON.stringify(layout)}`; }
+  })));
+  check('a key stands under the floor, whole, apart from the bars, on every stage', keyWhole, keyDetail);
+  const half = rules.layoutChartRead(852, 393, books, 0, {}).bars[0].units;
+  check('half a sign is the last of its stack, marked so', half.length === 4 && half[3].part === 0.5 && half.slice(0, 3).every((u) => u.part === undefined));
 }
 
 section('find_in_scene: every one of a kind found on a big picture');

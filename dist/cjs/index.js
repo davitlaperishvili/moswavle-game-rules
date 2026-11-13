@@ -26,7 +26,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHAIN = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -172,6 +172,8 @@ exports.gridRouteShortest = gridRouteShortest;
 exports.gridRouteCellRect = gridRouteCellRect;
 exports.layoutGridRoute = layoutGridRoute;
 exports.chartQuestionTakesBar = chartQuestionTakesBar;
+exports.chartKeyHidden = chartKeyHidden;
+exports.chartBarThings = chartBarThings;
 exports.normalizeChartReadConfig = normalizeChartReadConfig;
 exports.resolveChartReadTap = resolveChartReadTap;
 exports.chartQuestionPieces = chartQuestionPieces;
@@ -7836,7 +7838,7 @@ function layoutGridRoute(stageWidth, stageHeight, config, insets = {}) {
     });
     return best?.layout ?? null;
 }
-// --- chart_read: a chart read, and questions about it ---------------------------
+/// --- chart_read: a chart read, and questions about it ---------------------------
 //
 // A chart the game draws: two to five bars, each with a library picture under
 // it (apples, pears, plums picked). Bars: a coloured column against a numbered
@@ -7845,32 +7847,89 @@ function layoutGridRoute(stageWidth, stageHeight, config, insets = {}) {
 // are asked in turn on a card beside it, in words of the game's language with
 // the bars' pictures among them: which
 // is the most, which the fewest (a tap on its bar), how many of one, how many
-// more of one than of another (a tap on a number). A wrong answer costs a life
-// and the question stays.
-exports.CHART_READ_SIZE = { minBars: 2, maxBars: 5, maxValue: 20, maxPictures: 10, maxQuestions: 3 };
+// more of one than of another (a tap on a number), which two make a number
+// together (a tap on two bars). A wrong answer costs a life and the question
+// stays.
+//
+// A pictograph can have a key, as the Georgian grade 3 textbook draws them
+// (pp. 66, 74, 87): one sign — a library picture, a book, a fish, a star —
+// stands for `unit` things (2 to 10), the same sign stacked in every bar and
+// drawn once more under the chart, "sign = 3". The bars' pictures under them
+// say whose or where (a child, a class, a basket); a bar's value is still the
+// number of signs, and every answer is in things: a count is value × unit, a
+// difference (a − b) × unit. With an even unit a bar may end in half a sign
+// (3.5 signs of 2 books = 7). One question more is the key's own: "35 in all —
+// how many does one sign stand for?", the key showing "?" until it is answered.
+exports.CHART_READ_SIZE = { minBars: 2, maxBars: 5, maxValue: 20, maxPictures: 10, maxQuestions: 3, maxUnit: 10 };
 /** The bars' colours, in turn: a toy's own, the same in both players. */
 exports.CHART_BAR_COLORS = ["#ff9f43", "#28bbf9", "#34d399", "#f472b6", "#a78bfa"];
-/** The questions as each language says them; {a} and {b} are the bars' pictures. */
+/**
+ * The questions as each language says them; {a} and {b} are the bars'
+ * pictures, {x} the number the question gives. `unit` is asked of a chart
+ * with a key alone.
+ */
 exports.CHART_WORDS = {
-    ka: { most: "რომელი არის ყველაზე მეტი?", least: "რომელი არის ყველაზე ცოტა?", count: "რამდენია {a}?", difference: "რამდენით მეტია {a}, ვიდრე {b}?" },
-    ru: { most: "Чего больше всего?", least: "Чего меньше всего?", count: "Сколько {a}?", difference: "На сколько {a} больше, чем {b}?" },
-    en: { most: "Which is the most?", least: "Which is the fewest?", count: "How many {a}?", difference: "How many more {a} than {b}?" },
+    ka: {
+        most: "რომელი არის ყველაზე მეტი?", least: "რომელი არის ყველაზე ცოტა?", count: "რამდენია {a}?", difference: "რამდენით მეტია {a}, ვიდრე {b}?",
+        pair: "რომელი ორი არის ერთად {x}?", unit: "სულ {x}-ია. რამდენს ნიშნავს ერთი სურათი?",
+    },
+    ru: {
+        most: "Чего больше всего?", least: "Чего меньше всего?", count: "Сколько {a}?", difference: "На сколько {a} больше, чем {b}?",
+        pair: "Каких двух вместе {x}?", unit: "Всего {x}. Сколько обозначает одна картинка?",
+    },
+    en: {
+        most: "Which is the most?", least: "Which is the fewest?", count: "How many {a}?", difference: "How many more {a} than {b}?",
+        pair: "Which two make {x} together?", unit: "{x} in all. How many does one picture stand for?",
+    },
+};
+/**
+ * The questions of a chart whose key has a sign, {s}: the sign is what is
+ * counted, the bars are whose it is ("how many books has Akaki?").
+ */
+exports.CHART_KEY_WORDS = {
+    ka: {
+        most: "რომელს აქვს ყველაზე მეტი {s}?", least: "რომელს აქვს ყველაზე ნაკლები {s}?", count: "რამდენი {s} აქვს {a}-ს?",
+        difference: "რამდენით მეტი {s} აქვს {a}-ს, ვიდრე {b}-ს?", pair: "რომელ ორს აქვს ერთად {x} {s}?", unit: "სულ {x} {s}-ია. რამდენს ნიშნავს ერთი {s}?",
+    },
+    ru: {
+        most: "У кого больше всего {s}?", least: "У кого меньше всего {s}?", count: "Сколько {s} у {a}?",
+        difference: "На сколько {s} больше у {a}, чем у {b}?", pair: "У каких двух вместе {x} {s}?", unit: "Всего {x} {s}. Сколько обозначает один {s}?",
+    },
+    en: {
+        most: "Which has the most {s}?", least: "Which has the fewest {s}?", count: "How many {s} has {a}?",
+        difference: "How many more {s} has {a} than {b}?", pair: "Which two have {x} {s} together?", unit: "{x} {s} in all. How many does one {s} stand for?",
+    },
 };
 /** Whether the question is answered by a tap on a bar (rather than on a number). */
 function chartQuestionTakesBar(question) {
-    return question.ask === "most" || question.ask === "least";
+    return question.ask === "most" || question.ask === "least" || question.ask === "pair";
+}
+/** Whether the key's number is "?" at the question `index`: while its own question is not answered. */
+function chartKeyHidden(config, index) {
+    return config.questions[index]?.ask === "unit";
+}
+/** How many things a bar counts: its signs times the key's unit. */
+function chartBarThings(config, bar) {
+    return Math.round(bar.value * config.unit);
 }
 /**
  * The numbers a child who misreads would pick: one off either way first, then
  * the other numbers of the question; three of them, none below 0.
  */
 function chartConfusions(answer, near) {
-    const pool = [answer + 1, answer - 1, ...near, answer + 2, answer - 2, answer + 3];
+    return chartPick(answer, [answer + 1, answer - 1, ...near, answer + 2, answer - 2, answer + 3], 0);
+}
+/** The right number and the first three of `pool` that are whole, `least` or more and none of the others; smallest first. */
+function chartPick(answer, pool, least) {
     const picked = [];
     for (const value of pool) {
-        if (value >= 0 && value !== answer && !picked.includes(value) && picked.length < 3) {
+        if (Number.isInteger(value) && value >= least && value !== answer && !picked.includes(value) && picked.length < 3) {
             picked.push(value);
         }
+    }
+    for (let step = 1; picked.length < 3; step += 1) {
+        if (!picked.includes(answer + step))
+            picked.push(answer + step);
     }
     return [answer, ...picked].sort((a, b) => a - b);
 }
@@ -7880,18 +7939,30 @@ function chartConfusions(answer, near) {
  * other } — `bar` and `other` counted from 0. A "most" or "least" whose top
  * or bottom two bars tie, a bar that is none, or a "difference" whose bar is
  * not the bigger, is left out; fewer than two bars or no question is no game.
+ *
+ * A pictures chart with `unit` 2 to 10 has a key: `sign`, a picture, is
+ * stacked in every bar, a bar's value counts signs (a half where the unit is
+ * even) and the answers count things. A "pair" — `bar` and `other` — is left
+ * out where another two bars make the same together; a "unit" is asked of a
+ * key alone, and first. A game with no key is as it always was.
  */
 function normalizeChartReadConfig(config) {
     const bg = normalizeBackground(config);
     const style = extractText(config.style) === "pictures" ? "pictures" : "bars";
+    const asksUnit = extractNumber(config.unit);
+    const unit = style === "pictures" && asksUnit !== null && Number.isInteger(asksUnit) && asksUnit >= 2 && asksUnit <= exports.CHART_READ_SIZE.maxUnit ? asksUnit : 1;
+    const sign = unit > 1 ? extractMediaUrl(config.sign) : null;
+    const halves = unit % 2 === 0;
     const most = style === "pictures" ? exports.CHART_READ_SIZE.maxPictures : exports.CHART_READ_SIZE.maxValue;
     const bars = (Array.isArray(config.bars) ? config.bars : [])
         .map((row) => asRecord(row))
         .map((row) => ({ image: extractMediaUrl(row?.image), value: extractNumber(row?.value) }))
-        .filter((row) => Boolean(row.image) && row.value !== null && Number.isInteger(row.value) && row.value >= 0 && row.value <= most)
+        .filter((row) => Boolean(row.image) && row.value !== null
+        && (Number.isInteger(row.value) || (halves && Number.isInteger(row.value * 2))) && row.value >= 0 && row.value <= most)
         .slice(0, exports.CHART_READ_SIZE.maxBars)
         .map((row, index) => ({ id: `bar_${index + 1}`, image: row.image, value: row.value, color: exports.CHART_BAR_COLORS[index % exports.CHART_BAR_COLORS.length] }));
     const values = bars.map((bar) => bar.value);
+    const things = values.map((value) => Math.round(value * unit));
     const top = Math.max(0, ...values);
     const asked = extractNumber(config.scale_step);
     const scaleStep = asked !== null && Number.isInteger(asked) && asked >= 1 && asked <= 10 ? asked : top <= 10 ? 1 : 2;
@@ -7901,6 +7972,8 @@ function normalizeChartReadConfig(config) {
         return index !== null && Number.isInteger(index) && index >= 0 && index < bars.length ? index : null;
     };
     const only = (target) => (values.filter((value) => value === target).length === 1 ? values.indexOf(target) : null);
+    // A keyed count's slips: a sign more or fewer, the signs counted and the key forgotten.
+    const keyed = (answer, signs) => chartPick(answer, [answer - unit, answer + unit, signs, answer + unit * 2, answer - unit * 2, answer + 1, answer - 1], 0);
     const questions = [];
     for (const row of Array.isArray(config.questions) ? config.questions : []) {
         const record = asRecord(row);
@@ -7908,44 +7981,77 @@ function normalizeChartReadConfig(config) {
         let question = null;
         if (ask === "most" || ask === "least") {
             const answer = only(ask === "most" ? Math.max(...values) : Math.min(...values));
-            question = answer === null ? null : { ask, bar: null, other: null, answer, options: [] };
+            question = answer === null ? null : { ask, bar: null, other: null, answer, options: [], total: null };
         }
         else if (ask === "count") {
             const bar = barAt(record?.bar);
             question = bar === null ? null : {
-                ask, bar, other: null, answer: values[bar], options: chartConfusions(values[bar], values.filter((_value, index) => index !== bar)),
+                ask, bar, other: null, answer: things[bar], total: null,
+                options: unit > 1 ? keyed(things[bar], Math.ceil(values[bar])) : chartConfusions(values[bar], values.filter((_value, index) => index !== bar)),
             };
         }
         else if (ask === "difference") {
             const bar = barAt(record?.bar);
             const other = barAt(record?.other);
             question = bar === null || other === null || values[bar] <= values[other] ? null : {
-                ask, bar, other, answer: values[bar] - values[other], options: chartConfusions(values[bar] - values[other], [values[bar], values[other]]),
+                ask, bar, other, answer: things[bar] - things[other], total: null,
+                options: unit > 1
+                    ? keyed(things[bar] - things[other], values[bar] - values[other])
+                    : chartConfusions(values[bar] - values[other], [values[bar], values[other]]),
             };
         }
+        else if (ask === "pair") {
+            const bar = barAt(record?.bar);
+            const other = barAt(record?.other);
+            if (bar !== null && other !== null && bar !== other) {
+                const total = things[bar] + things[other];
+                const low = Math.min(bar, other);
+                const high = Math.max(bar, other);
+                // No other two bars make the same together.
+                const alone = things.every((first, i) => things.every((second, j) => j <= i || first + second !== total || (i === low && j === high)));
+                question = alone ? { ask, bar, other, answer: bar, options: [], total } : null;
+            }
+        }
+        else if (ask === "unit" && unit > 1 && !questions.some((item) => item.ask === "unit")) {
+            const total = things.reduce((sum, value) => sum + value, 0);
+            const signs = values.reduce((sum, value) => sum + value, 0);
+            question = { ask, bar: null, other: null, answer: unit, total, options: chartPick(unit, [unit - 1, unit + 1, signs, unit + 2, unit - 2], 1) };
+        }
         if (question && questions.length < exports.CHART_READ_SIZE.maxQuestions) {
-            questions.push({ id: `question_${questions.length + 1}`, ...question });
+            // The key's own question goes first: it is no question once the key shows its number.
+            const entry = { id: "", ...question };
+            if (entry.ask === "unit")
+                questions.unshift(entry);
+            else
+                questions.push(entry);
         }
     }
+    questions.forEach((question, at) => {
+        question.id = `question_${at + 1}`;
+    });
     const playable = bars.length >= exports.CHART_READ_SIZE.minBars && questions.length > 0;
     return {
         style,
         bars: playable ? bars : [],
         scaleMax,
         scaleStep,
+        unit,
+        sign,
         questions: playable ? questions : [],
         language: extractText(config.language) ?? "ka",
         bg_image: bg,
         time_limit: extractNumber(config.time_limit),
         lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
-        imageUris: [...new Set([bg, ...(playable ? bars : []).map((bar) => bar.image)].filter((uri) => Boolean(uri)))],
+        imageUris: [...new Set([bg, ...(playable ? [sign, ...bars.map((bar) => bar.image)] : [])].filter((uri) => Boolean(uri)))],
     };
 }
 /**
  * What a tap does at the question `index`: `pick` is the bar tapped (from 0)
- * where a bar is asked, the number tapped where a number is.
+ * where a bar is asked, the number tapped where a number is. Where two bars
+ * are asked ("pair"), `held` is the bar the first tap holds: the second tap
+ * answers.
  */
-function resolveChartReadTap(config, index, pick) {
+function resolveChartReadTap(config, index, pick, held = null) {
     const question = config.questions[index];
     if (!question) {
         return { type: "ignored" };
@@ -7954,22 +8060,38 @@ function resolveChartReadTap(config, index, pick) {
     if (!fits) {
         return { type: "ignored" };
     }
-    return pick === question.answer ? { type: "right", complete: index + 1 === config.questions.length } : { type: "wrong" };
+    const complete = index + 1 === config.questions.length;
+    if (question.ask === "pair") {
+        if (held === null || held < 0 || held >= config.bars.length)
+            return { type: "held" };
+        if (held === pick)
+            return { type: "released" };
+        const two = [held, pick].sort((a, b) => a - b);
+        const right = [question.bar ?? -1, question.other ?? -1].sort((a, b) => a - b);
+        return two[0] === right[0] && two[1] === right[1] ? { type: "right", complete } : { type: "wrong" };
+    }
+    return pick === question.answer ? { type: "right", complete } : { type: "wrong" };
 }
 /**
  * The question in the game's language, Georgian where it has none, cut into
  * its words and pictures; `glued` marks a piece that follows the one before
- * with no space ("?" after a picture).
+ * with no space ("?" after a picture). `sign`: the chart's key has a sign,
+ * and the question counts it (`CHART_KEY_WORDS`).
  */
-function chartQuestionPieces(question, language) {
-    const words = exports.CHART_WORDS[(language in exports.CHART_WORDS ? language : "ka")];
+function chartQuestionPieces(question, language, sign = false) {
+    const lang = (language in exports.CHART_WORDS ? language : "ka");
+    const words = (sign ? exports.CHART_KEY_WORDS : exports.CHART_WORDS)[lang];
     const pieces = [];
-    for (const part of words[question.ask].split(/(\{a\}|\{b\})/)) {
+    for (const part of words[question.ask].split(/(\{a\}|\{b\}|\{s\})/)) {
         if (part === "{a}" || part === "{b}") {
             pieces.push({ bar: (part === "{a}" ? question.bar : question.other) ?? 0, glued: false });
             continue;
         }
-        part.split(/(\s+)/).forEach((word, at) => {
+        if (part === "{s}") {
+            pieces.push({ sign: true, glued: false });
+            continue;
+        }
+        part.replace(/\{x\}/g, String(question.total ?? 0)).split(/(\s+)/).forEach((word, at) => {
             if (word.trim() === "")
                 return;
             pieces.push({ text: word, glued: at === 0 && pieces.length > 0 });
@@ -7997,6 +8119,10 @@ exports.CHART_READ_LAYOUT = {
     minOption: 48,
     maxOption: 92,
     optionAspect: 1.4,
+    /** The key under a pictograph's floor ("sign = 3"): of the chart's height, and in px. */
+    keyShare: 0.13,
+    minKey: 24,
+    maxKey: 60,
 };
 /**
  * Where everything of the question `index` goes. The background covers the
@@ -8031,7 +8157,12 @@ function layoutChartRead(stageWidth, stageHeight, config, index, insets = {}) {
         : { left: chart.left + chart.width + gap, top: area.top, width: area.width - chart.width - gap, height: area.height };
     // The chart: the scale at the left (bars), the pictures along the floor.
     const pad = Math.max(gap / 2, Math.min(chart.width, chart.height) * 0.05);
-    const inner = { left: chart.left + pad, top: chart.top + pad, width: chart.width - pad * 2, height: chart.height - pad * 2 };
+    const panel = { left: chart.left + pad, top: chart.top + pad, width: chart.width - pad * 2, height: chart.height - pad * 2 };
+    // A pictograph's key takes a row at the bottom of the panel, under the bars' pictures.
+    const unit = config.style === "pictures" && (config.unit ?? 1) > 1 ? (config.unit ?? 1) : 1;
+    const keyLine = unit > 1 ? Math.max(L.minKey, Math.min(L.maxKey, panel.height * L.keyShare)) : 0;
+    const keyGap = unit > 1 ? gap / 2 : 0;
+    const inner = { ...panel, height: Math.max(panel.height - keyLine - keyGap, 1) };
     const count = config.bars.length;
     const lines = config.scaleMax / config.scaleStep + 1;
     const scaleLine = config.style === "bars"
@@ -8056,22 +8187,23 @@ function layoutChartRead(stageWidth, stageHeight, config, index, insets = {}) {
         })
         : [];
     // A pictograph stacks its pictures one above the other, or two abreast where that makes them bigger.
-    const tallest = Math.max(1, ...config.bars.map((bar) => bar.value));
+    const tallest = Math.max(1, ...config.bars.map((bar) => Math.ceil(bar.value)));
     const single = Math.min(slot * 0.8, plot.height / tallest);
     const paired = Math.min((slot * 0.8) / 2, plot.height / Math.ceil(tallest / 2));
     const abreast = config.style === "pictures" && paired > single * 1.15 ? 2 : 1;
-    const unit = config.style === "pictures" ? (abreast === 2 ? paired : single) : 0;
+    const box = config.style === "pictures" ? (abreast === 2 ? paired : single) : 0;
     const bars = config.bars.map((bar, at) => {
         const middle = plot.left + slot * (at + 0.5);
         const height = config.style === "bars" ? (bar.value / config.scaleMax) * plot.height : 0;
         return {
             column: config.style === "bars" ? { left: middle - (slot * L.barShare) / 2, top: floor - height, width: slot * L.barShare, height } : null,
             units: config.style === "pictures"
-                ? Array.from({ length: bar.value }, (_unused, step) => ({
-                    left: middle - (unit * abreast) / 2 + (step % abreast) * unit + unit * 0.04,
-                    top: floor - (Math.floor(step / abreast) + 1) * unit + unit * 0.04,
-                    width: unit * 0.92,
-                    height: unit * 0.92,
+                ? Array.from({ length: Math.ceil(bar.value) }, (_unused, step) => ({
+                    left: middle - (box * abreast) / 2 + (step % abreast) * box + box * 0.04,
+                    top: floor - (Math.floor(step / abreast) + 1) * box + box * 0.04,
+                    width: box * 0.92,
+                    height: box * 0.92,
+                    ...(step + 1 > bar.value ? { part: 0.5 } : {}),
                 }))
                 : [],
             icon: { left: middle - icon / 2, top: floor + gap / 2, width: icon, height: icon },
@@ -8094,9 +8226,9 @@ function layoutChartRead(stageWidth, stageHeight, config, index, insets = {}) {
         return { value, left: rowLeft + (at % 2) * (optionWidth + gap), top: optionsTop + row * (optionHeight + gap), width: optionWidth, height: optionHeight };
     });
     // The question set as big as it goes on its card, in rows, every row in the middle.
-    const pieces = chartQuestionPieces(question, config.language);
+    const pieces = chartQuestionPieces(question, config.language, unit > 1 && Boolean(config.sign));
     const room = { width: card.width * 0.9, height: card.height * 0.86 };
-    const widthOf = (piece, size) => (piece.bar !== undefined ? size * L.pieceIcon : textLineUnits(piece.text) * size);
+    const widthOf = (piece, size) => (piece.text !== undefined ? textLineUnits(piece.text) * size : size * L.pieceIcon);
     const set = (size) => {
         const space = size * 0.22;
         const rows = [[]];
@@ -8142,13 +8274,30 @@ function layoutChartRead(stageWidth, stageHeight, config, index, insets = {}) {
         const y = card.top + (card.height - rows.length * line) / 2 + at * line;
         for (const item of row) {
             x += item.before;
-            placed.push(item.piece.bar !== undefined
-                ? { bar: item.piece.bar, left: x, top: y, width: item.width, height: line }
-                : { text: item.piece.text, left: x, top: y + (line - size) / 2, width: item.width, height: size });
+            const piece = item.piece;
+            placed.push(piece.text !== undefined
+                ? { text: piece.text, left: x, top: y + (line - size) / 2, width: item.width, height: size }
+                : piece.sign
+                    ? { sign: true, left: x, top: y, width: item.width, height: line }
+                    : { bar: piece.bar, left: x, top: y, width: item.width, height: line });
             x += item.width;
         }
     });
-    return { chart, plot, scale, bars, card, pieces: placed, options };
+    // The key: the sign, "=", the number, side by side in the middle of its row.
+    let key = null;
+    if (unit > 1) {
+        const top = panel.top + panel.height - keyLine;
+        const glyph = keyLine * 0.62;
+        const digits = String(unit).length;
+        const width = keyLine + glyph + glyph * digits + gap / 2;
+        const left = panel.left + (panel.width - width) / 2;
+        key = {
+            icon: { left, top, width: keyLine, height: keyLine },
+            equals: { left: left + keyLine + gap / 4, top: top + (keyLine - glyph) / 2, width: glyph, height: glyph },
+            value: { left: left + keyLine + glyph + gap / 2, top: top + (keyLine - glyph) / 2, width: glyph * digits, height: glyph },
+        };
+    }
+    return { chart, plot, scale, bars, card, pieces: placed, options, key };
 }
 // --- find_in_scene: every one of a kind found on a big picture -----------------
 //
