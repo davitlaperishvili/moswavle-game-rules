@@ -396,9 +396,11 @@ export type SvgAssembleConfig = {
 /**
  * The signs an example is written with. `-` is the minus, whatever dash the
  * author typed; `×` and `÷` are times and divided by, whatever stood for them
- * (`*`, `x`, `·`, `/`, `:`). How each is drawn is the players' own.
+ * (`*`, `x`, `·`, `/`, `:`). `(` and `)` are brackets, worked out first, as at
+ * school (owner, 2026-11-15: the fourth grade's `4 × (3 + 5) = 4 × 3 + 4 × 5`);
+ * a bracket is never a place to fill. How each is drawn is the players' own.
  */
-export type MathEquationSign = "+" | "-" | "×" | "÷" | "=" | "<" | ">";
+export type MathEquationSign = "+" | "-" | "×" | "÷" | "=" | "<" | ">" | "(" | ")";
 /** Every character an example is drawn with, each a picture from the library when there is one. */
 export type MathEquationGlyph = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | MathEquationSign | "?";
 /** One place in the example, left to right: a number or a sign, shown or left for the child to fill. */
@@ -1673,14 +1675,67 @@ export declare const MATH_EQUATION_CHOICES_MIN = 2;
 export declare const MATH_EQUATION_CHOICES_MAX = 4;
 /** The most copies of a picture one number shows: counting to ten. */
 export declare const MATH_EQUATION_PICTURES_MAX = 10;
-/** The largest number an example holds: four digits is what its row and its cards have room for. */
-export declare const MATH_EQUATION_NUMBER_MAX = 9999;
+/**
+ * The largest number an example holds, and a typed answer: six digits, the
+ * fourth grade's numbers to a million (owner, 2026-11-15; 9999 before). A
+ * number of five digits or more is written in groups of three with a thin
+ * space between (`44 294`), as the Georgian and Russian textbooks write it.
+ */
+export declare const MATH_EQUATION_NUMBER_MAX = 999999;
+/**
+ * The most rows an example has, brackets counted: `4 × (3 + 5) = 4 × 3 + 4 × 5`
+ * is fifteen. The server's import refuses more (its twin, `me_terms` rows).
+ */
+export declare const MATH_EQUATION_TERMS_MAX = 15;
 /** Whether a sign compares the two sides (`<`, `=`, `>`) rather than working a number out. */
 export declare function isMathComparison(sign: MathEquationSign): boolean;
 /** Whether a sign multiplies or divides: done before the adding and taking away around it. */
 export declare function isMathProduct(sign: MathEquationSign): boolean;
-/** The glyphs a number is written with: 15 is "1" then "5". */
+/** Whether a sign is a bracket, `(` or `)`: what it holds is worked out first. Never a place to fill. */
+export declare function isMathBracket(sign: MathEquationSign): boolean;
+/** The glyphs a number is written with: 15 is "1" then "5". The thin space of a long number is not one: see `mathDigitSpans`. */
 export declare function mathNumberGlyphs(value: number): MathEquationGlyph[];
+/** Whether a number of so many digits is written in groups of three: from five digits (`44 294`); four stay together (`2974`). */
+export declare function mathDigitsGrouped(count: number): boolean;
+/**
+ * How wide so many digits are written, as a share of their height: a digit's
+ * cell each (`MATH_EQUATION_LAYOUT.digit`) and, in a number of five digits or
+ * more, a thin space between its thousands and its units.
+ */
+export declare function mathDigitsUnits(count: number): number;
+/**
+ * Where each of so many digits stands, left to right, in fractions of the
+ * width `mathDigitsUnits(count)`: four digits share it evenly; from five, the
+ * groups of three counted from the right stand a thin space apart. Both
+ * players write every number with it, so `396 425` is the same on a card,
+ * in an example and on a pad's place.
+ */
+export declare function mathDigitSpans(count: number): Array<{
+    left: number;
+    width: number;
+}>;
+/**
+ * A number as text, as the players write it: `44 294`, `396 425`, `2974`. The
+ * space is the narrow no-break one (U+202F), so a line never breaks inside a
+ * number (`MATH_NUMBER_SPACE`).
+ */
+export declare function formatMathNumber(value: number): string;
+/** The thin space between the thousands and the units of a long number: narrow and no-break. */
+export declare const MATH_NUMBER_SPACE = "\u202F";
+/**
+ * A text with its long numbers written as the players write them: a number of
+ * five digits or more in groups of three a thin space apart, whether the
+ * author wrote it whole (`396425`) or with spaces (`396 425`). Four digits
+ * stay together (`2974`, `2 974` as written). A word problem's text is
+ * written so.
+ */
+export declare function groupMathNumbersInText(text: string): string;
+/**
+ * Whether the terms are an example at all, whatever their numbers: two sides
+ * around one comparison, every bracket closed, numbers and signs where a
+ * child expects them. What the import's Check asks first.
+ */
+export declare function isMathExampleShape(terms: ReadonlyArray<Pick<MathEquationTerm, "kind" | "value">>): boolean;
 /**
  * How many ways the places still open can be filled from the cards not yet
  * used so that the example reads true, counting no further than `limit`.
@@ -1719,9 +1774,14 @@ export declare function resolveMathEquationTap(config: Pick<MathEquationConfig, 
 export declare const MATH_EQUATION_LAYOUT: {
     /** One digit's cell. The library digits are about 0.65–0.8 as wide as they are high. */
     readonly digit: 0.8;
+    /** The thin space between the groups of three of a number of five digits or more: `44 294`. */
+    readonly groupGap: 0.3;
     /** A sign's cell, and the height its picture is fitted into. */
     readonly sign: 0.78;
     readonly signHeight: 0.62;
+    /** A bracket's cell: narrow, and as tall as the row, so it stands a little over the digits it holds. */
+    readonly bracket: 0.5;
+    readonly bracketHeight: 1;
     /** The "?" in an empty place. */
     readonly blankMark: 0.62;
     /**
@@ -1733,8 +1793,9 @@ export declare const MATH_EQUATION_LAYOUT: {
     readonly pictureLarge: 0.9;
     readonly pictureSmall: 0.5;
     readonly pictureLargeUpTo: 3;
-    /** Space between two places of the example. */
+    /** Space between two places of the example; inside a bracket, next to it, less: `(3 + 5)`. */
     readonly gap: 0.16;
+    readonly bracketGap: 0.04;
     /** The panel's padding around the example. */
     readonly pad: 0.18;
     /** The row never grows past this, in px… */
@@ -1770,6 +1831,12 @@ export type MathEquationItem = {
 export declare function mathEquationPictureCell(config: Pick<MathEquationConfig, "terms" | "cards">): number;
 /** How wide an item is drawn, as a share of its height; `pictureCell` from `mathEquationPictureCell`. */
 export declare function mathEquationItemUnits(item: MathEquationItem, pictureCell?: number): number;
+/**
+ * The space after each place of an example but the last, as a share of the
+ * row's height: `MATH_EQUATION_LAYOUT.gap`, and less just inside a bracket,
+ * so `(3 + 5)` holds together.
+ */
+export declare function mathEquationGaps(terms: ReadonlyArray<Pick<MathEquationTerm, "kind" | "value">>): number[];
 /** One picture of an item: a digit, a sign, the "?" or one copy of a picture. */
 export type MathEquationPiece = {
     key: string;
@@ -1850,9 +1917,16 @@ export declare function textLineAdvance(text: string): number;
 /** How wide the box of a line is for its height: see `TEXT_ART`. */
 export declare function textLineUnits(text: string): number;
 /**
+ * Whether a character ends a word of a line of writing: a space, but never
+ * the thin one inside a long number (`396 425`, `MATH_NUMBER_SPACE`). The
+ * players colour a sentence word by word with it.
+ */
+export declare function isWordSpace(char: string): boolean;
+/**
  * A text broken into at most `maxLines` lines at its spaces, as evenly as
  * it goes: of every way to break it the one whose longest line is shortest.
- * A text of fewer words has fewer lines; a word is never split.
+ * A text of fewer words has fewer lines; a word is never split, nor a long
+ * number at its thin space.
  */
 export declare function breakTextLines(text: string, maxLines: number): string[];
 export declare const TEXT_CHOICE_ANSWERS_MIN = 2;

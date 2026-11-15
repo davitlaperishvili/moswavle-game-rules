@@ -134,8 +134,18 @@ export function letterPictureUri(char, tone) {
 export const TEXT_UNKNOWN_ADVANCE = 0.82;
 /** The room added after every character of a line, in ems: the letters wear an outline. */
 export const TEXT_TRACKING = 0.03;
+/**
+ * The thin spaces, which have no outline of ours: the narrow no-break space
+ * between the thousands and the units of a long number (`396 425`) and the
+ * thin space. Narrower than a word's space, in ems.
+ */
+export const TEXT_THIN_SPACE_ADVANCE = 0.14;
+const TEXT_THIN_SPACES = new Set([" ", " "]);
 /** How far the pen moves on after a character, in ems, the room for its outline included. */
 export function textCharAdvance(char) {
+    if (TEXT_THIN_SPACES.has(char)) {
+        return TEXT_THIN_SPACE_ADVANCE + TEXT_TRACKING;
+    }
     const shape = glyphShape(char);
     return (shape ? shape.advance / OUTLINE_EM : TEXT_UNKNOWN_ADVANCE) + TEXT_TRACKING;
 }

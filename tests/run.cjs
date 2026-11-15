@@ -1460,11 +1460,53 @@ section('math_equation: an example with a place or two to fill');
   // Numbers past ninety-nine.
   const hundreds = example(n(348), s('+'), n(125), s('='), n(473, { missing: true }));
   check('348 + 125 = ?: the wrong cards are a ten out, as a slip in carrying is', numbers(hundreds).join() === '463,473,483', numbers(hundreds).join());
-  check('a number is written in up to four digits', rules.mathNumberGlyphs(1000).join() === '1,0,0,0'
-    && example(n(123456), s('='), n(123456, { missing: true })).terms[0].value === rules.MATH_EQUATION_NUMBER_MAX && rules.MATH_EQUATION_NUMBER_MAX === 9999);
+  check('a number is written in up to six digits: the fourth grade counts to a million', rules.mathNumberGlyphs(396425).join() === '3,9,6,4,2,5'
+    && example(n(1234567), s('='), n(1234567, { missing: true })).terms[0].value === rules.MATH_EQUATION_NUMBER_MAX && rules.MATH_EQUATION_NUMBER_MAX === 999999);
+  check('an example has room for fifteen rows: 4 × (3 + 5) = 4 × 3 + 4 × 5', rules.MATH_EQUATION_TERMS_MAX === 15);
   const thousands = example(n(2500), s('+'), n(3750), s('='), n(6250, { missing: true }));
   check('2500 + 3750 = ?: a hundred out, then a ten', numbers(thousands).includes(6250) && numbers(thousands).length === 3 && numbers(thousands).every((value) => value <= 9999), numbers(thousands).join());
   check('the small sums keep the numbers next to the answer', numbers(example(n(8), s('+'), n(5), s('='), n(13, { missing: true }))).join() === '12,13,14');
+  const column = rules.normalizeMathEquationConfig({ terms: [n(44294), s('-'), n(27499), s('='), n(16795, { missing: true })], choice_count: 4 });
+  check('44 294 − 27 499 = ?: 16 795, and the wrong cards a ten or a hundred out, as a slip in a column is',
+    numbers(column).length === 4 && numbers(column).includes(16795)
+      && numbers(column).filter((value) => value !== 16795).every((value) => [10, 100, 1000, 10000].includes(Math.abs(value - 16795))), numbers(column).join());
+  check('past twenty thousand a slip may be a thousand or ten thousand out too', (() => {
+    const far = rules.normalizeMathEquationConfig({ terms: [n(396425), s('+'), n(1), s('='), n(396426, { missing: true })], wrong_answers: '', choice_count: 4 });
+    return numbers(far).includes(396426) && numbers(far).every((value) => value <= rules.MATH_EQUATION_NUMBER_MAX);
+  })());
+  check('the column takes a six-digit sum', ways(n(396425), s('+'), n(408767), s('='), n(805192, { missing: true })) === 1
+    && ways(n(396425), s('+'), n(408767), s('='), n(805182, { missing: true })) === 0);
+
+  // Brackets: worked out first, as at school.
+  check('brackets are read from ( ) and [ ], or the words', ['(', '[', 'open bracket', 'left_bracket'].every((sign) => example(s(sign), n(1), s(')'), s('='), n(1, { missing: true })).terms[0].value === '(')
+    && [')', ']', 'close bracket'].every((sign) => example(s('('), n(1), s(sign), s('='), n(1, { missing: true })).terms[2].value === ')'));
+  const bracket = rules.normalizeMathEquationConfig({ terms: [n(4), s('×'), s('('), n(3), s('+'), n(5), s(')'), s('='), n(32, { missing: true })] });
+  check('4 × (3 + 5) = ?: 32, the brackets first', tap(bracket, {}, 'number_32').type === 'place' && rules.countMathEquationCompletions(bracket) === 1);
+  check('and the first wrong card is 17, the brackets left out (4 × 3 + 5)', numbers(bracket).includes(17) && tap(bracket, {}, 'number_17').type === 'wrong', numbers(bracket).join());
+  check('without brackets × still comes first: 4 × 3 + 5 is 17', ways(n(4), s('×'), n(3), s('+'), n(5), s('='), n(17, { missing: true })) === 1);
+  const distributive = (missing) => [n(4), s('×'), s('('), n(3), s('+'), n(5), s(')'), s('='), n(4), s('×'), n(3), s('+'), n(4), s('×'), n(5, missing ? { missing: true } : {})];
+  check('4 × (3 + 5) = 4 × 3 + 4 × 5 is true, and fifteen rows', distributive(true).length === 15 && ways(...distributive(true)) === 1);
+  check('(2 × 3) × 8 = 2 × (3 × 8): the brackets move, the product stays', ways(s('('), n(2), s('×'), n(3), s(')'), s('×'), n(8), s('='), n(2), s('×'), s('('), n(3), s('×'), n(8, { missing: true }), s(')')) === 1);
+  const sameAnyway = rules.normalizeMathEquationConfig({ terms: [s('('), n(2), s('×'), n(3), s(')'), s('×'), n(8), s('='), n(48, { missing: true })] });
+  check('brackets that change nothing offer no slip of their own: 48 is never a wrong card', numbers(sameAnyway).filter((value) => value === 48).length === 1
+    && rules.countMathEquationCompletions(sameAnyway) === 1);
+  check('10 − (3 + 5) is 2; a bracket below zero is no example: (3 − 5) + 4', ways(n(10), s('-'), s('('), n(3), s('+'), n(5), s(')'), s('='), n(2, { missing: true })) === 1
+    && ways(s('('), n(3), s('-'), n(5), s(')'), s('+'), n(4), s('='), n(2, { missing: true })) === 0);
+  check('brackets inside brackets: 2 × ((1 + 2) × 3) is 18', ways(n(2), s('×'), s('('), s('('), n(1), s('+'), n(2), s(')'), s('×'), n(3), s(')'), s('='), n(18, { missing: true })) === 1);
+  check('a bracket left open, closed twice or round the comparison is no example',
+    ways(n(4), s('×'), s('('), n(3), s('+'), n(5), s('='), n(32, { missing: true })) === 0
+      && ways(n(4), s('×'), n(3), s(')'), s('='), n(12, { missing: true })) === 0
+      && ways(s('('), n(2), s('='), n(2, { missing: true }), s(')')) === 0
+      && ways(s('('), s(')'), s('='), n(0, { missing: true })) === 0);
+  check('a bracket is never a place to fill', example(n(4), s('×'), s('(', { missing: true }), n(3), s('+'), n(5), s(')'), s('='), n(32)).terms[2].missing === false);
+  const signInBracket = example(n(4), s('×'), s('('), n(3), s('+', { missing: true }), n(5), s(')'), s('='), n(32));
+  check('a sign missing inside a bracket offers all four, and only + is right', values(signInBracket).join('') === '+-×÷'
+    && tap(signInBracket, {}, 'sign_+').type === 'place' && tap(signInBracket, {}, 'sign_×').type === 'wrong');
+  check('the shape of an example is read apart from its numbers', rules.isMathExampleShape(example(...distributive(true)).terms)
+    && rules.isMathExampleShape(example(n(2), s('-'), n(5), s('='), n(0)).terms)
+    && !rules.isMathExampleShape(example(n(4), s('×'), s('('), n(3), s('='), n(12)).terms)
+    && !rules.isMathExampleShape(example(n(4), s('+'), s('='), n(12)).terms)
+    && !rules.isMathExampleShape(example(n(4), s('<'), n(5), s('<'), n(6)).terms));
 
   // Glyphs, pieces and the layout.
   check('a number is written digit by digit', rules.mathNumberGlyphs(15).join() === '1,5' && rules.mathNumberGlyphs(0).join() === '0');
@@ -1474,6 +1516,35 @@ section('math_equation: an example with a place or two to fill');
     && pieces15.every((p) => within(p.box)) && Math.abs(pieces15[0].box.left) < 1e-9 && Math.abs(pieces15[1].box.left + pieces15[1].box.width - 1) < 1e-9);
   const centred3 = rules.mathEquationPieces({ kind: 'number', value: 3 }, 1.6)[0].box;
   check('a one-digit card in a two-digit place sits in the middle', Math.abs(centred3.left - (1 - centred3.width) / 2) < 1e-9);
+
+  // A long number in groups of three: 44 294, 396 425; four digits together.
+  const E = rules.MATH_EQUATION_LAYOUT;
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  check('four digits share their width evenly, as before', near(rules.mathDigitsUnits(4), 4 * E.digit)
+    && rules.mathDigitSpans(4).every((span, i) => near(span.left, i / 4) && near(span.width, 1 / 4)));
+  const between = (spans, i) => spans[i + 1].left - (spans[i].left + spans[i].width);
+  const five = rules.mathDigitSpans(5);
+  check('five digits: a thin space after the thousands', near(rules.mathDigitsUnits(5), 5 * E.digit + E.groupGap)
+    && near(between(five, 0), 0) && between(five, 1) > 0 && near(between(five, 2), 0) && near(five[4].left + five[4].width, 1));
+  const six = rules.mathDigitSpans(6);
+  check('six digits: three and three', between(six, 2) > 0 && [0, 1, 3, 4].every((i) => near(between(six, i), 0)));
+  const seven = rules.mathDigitSpans(7);
+  check('a million: 1 000 000, two thin spaces', near(rules.mathDigitsUnits(7), 7 * E.digit + 2 * E.groupGap) && between(seven, 0) > 0 && between(seven, 3) > 0);
+  const bigItem = { kind: 'number', value: 44294 };
+  const pieces44 = rules.mathEquationPieces(bigItem, rules.mathEquationItemUnits(bigItem));
+  check('44 294 is drawn as five digits with the space after 44, filling its box', pieces44.map((p) => p.glyph).join('') === '44294'
+    && pieces44.every((p) => within(p.box)) && near(pieces44[0].box.left, 0) && near(pieces44[4].box.left + pieces44[4].box.width, 1)
+    && pieces44[2].box.left - (pieces44[1].box.left + pieces44[1].box.width) > 0.05);
+  const typed = rules.mathEquationPieces({ kind: 'number', value: 1679 }, rules.mathDigitsUnits(5));
+  check('four digits typed into a five-digit place stay together, in its middle', typed.length === 4
+    && near(between(typed.map((p) => p.box), 0), 0) && near(typed[0].box.left, 1 - (typed[3].box.left + typed[3].box.width)));
+  check('a number as text: 44 294 and 396 425 with the thin no-break space, 2974 as it is', rules.formatMathNumber(44294) === '44 294'
+    && rules.formatMathNumber(396425) === '396 425' && rules.formatMathNumber(2974) === '2974' && rules.formatMathNumber(1000000) === '1 000 000'
+    && rules.MATH_NUMBER_SPACE === ' ');
+  const bracketPiece = rules.mathEquationPieces({ kind: 'sign', value: '(' }, rules.mathEquationItemUnits({ kind: 'sign', value: '(' }));
+  check('a bracket is narrow and as tall as the row', near(rules.mathEquationItemUnits({ kind: 'sign', value: ')' }), E.bracket) && E.bracket < E.sign
+    && bracketPiece.length === 1 && bracketPiece[0].glyph === '(' && near(bracketPiece[0].box.height, E.bracketHeight) && within(bracketPiece[0].box));
+  check('inside a bracket the places stand closer: 4 × (3 + 5)', rules.mathEquationGaps(bracket.terms).join() === [E.gap, E.gap, E.bracketGap, E.gap, E.gap, E.bracketGap, E.gap, E.gap].join());
   const sevenItem = { kind: 'number', value: 7, image: url('cow') };
   const small = rules.MATH_EQUATION_LAYOUT.pictureSmall;
   const sevenCows = rules.mathEquationPieces(sevenItem, rules.mathEquationItemUnits(sevenItem, small), small);
@@ -1495,7 +1566,8 @@ section('math_equation: an example with a place or two to fill');
   const inStage = (rect, w, h, insets = {}) => rect.left >= (insets.left || 0) - 1e-6 && rect.top >= (insets.top || 0) - 1e-6
     && rect.left + rect.width <= w - (insets.right || 0) + 1e-6 && rect.top + rect.height <= h - (insets.bottom || 0) + 1e-6;
   const stages = [[844, 322, { top: 68 }], [1250, 750, {}], [390, 700, {}], [1024, 768, {}], [667, 300, { top: 60 }]];
-  const configs = [plus, greater, compare, two, mixed, cows, big, asPictures, times, divide, whichSign, hundreds, thousands];
+  const fifteen = rules.normalizeMathEquationConfig({ terms: distributive(true), choice_count: 4 });
+  const configs = [plus, greater, compare, two, mixed, cows, big, asPictures, times, divide, whichSign, hundreds, thousands, column, bracket, fifteen, signInBracket];
   let whole = true;
   stages.forEach(([w, h, insets]) => configs.forEach((config, index) => {
     const layout = rules.layoutMathEquation(w, h, config, insets);
@@ -1520,6 +1592,14 @@ section('math_equation: an example with a place or two to fill');
   check('an empty place is as wide as the widest card', Math.abs(blank.units - phone.contentUnits) < 1e-9);
   const desk = rules.layoutMathEquation(2400, 1400, plus);
   check('the row stops growing on a big screen', desk.row === rules.MATH_EQUATION_LAYOUT.maxRow);
+  const sideways = { top: 56, left: 59, right: 59, bottom: 21 };
+  const longRow = rules.layoutMathEquation(852, 393, fifteen, sideways);
+  const columnRow = rules.layoutMathEquation(852, 393, column, sideways);
+  check('on a phone on its side fifteen rows still read: a digit 30 px high or more', longRow.row >= 30, String(longRow.row));
+  check('and five-digit numbers bigger still', columnRow.row >= 40, String(columnRow.row));
+  const termsOf = rules.layoutMathEquation(852, 393, bracket, sideways).terms;
+  check('the places follow one another with the gaps between them', termsOf.every((rect, i) => i === 0
+    || near(rect.left - (termsOf[i - 1].left + termsOf[i - 1].width), rules.mathEquationGaps(bracket.terms)[i - 1] * rect.height)));
   check('nothing to draw, nothing laid out', rules.layoutMathEquation(0, 0, plus) === null);
 
   const t = rules.GAME_TIMINGS.mathEquation;
@@ -1817,6 +1897,11 @@ section('math_input: an example whose answer is typed');
     && make([n(348), s('+'), n(125), s('='), n(473, { missing: true })]).maxDigits === 3
     && make([n(50), s('+'), n(50), s('='), n(100, { missing: true })]).maxDigits === 3
     && make([n(2500), s('+'), n(3750), s('='), n(6250, { missing: true })]).maxDigits === 4);
+  const column = make([n(44294), s('-'), n(27499), s('='), n(16795, { missing: true })]);
+  const million = make([n(396425), s('+'), n(408767), s('='), n(805192, { missing: true })]);
+  check('five digits for 44 294 − 27 499, six for 396 425 + 408 767', column.maxDigits === 5 && million.maxDigits === 6);
+  const distributed = make([n(4), s('×'), s('('), n(3), s('+'), n(5), s(')'), s('='), n(4), s('×'), n(3), s('+'), n(4), s('×'), n(5, { missing: true })]);
+  const bracketed = make([n(4), s('×'), s('('), n(3), s('+'), n(5), s(')'), s('='), n(32, { missing: true })]);
 
   const press = rules.pressMathInputKey;
   check('digits are typed one after another', press(press('', '5', 2), '6', 2) === '56');
@@ -1839,13 +1924,19 @@ section('math_input: an example whose answer is typed');
     && enter(make([n(12), s('÷'), n(3, { missing: true }), s('='), n(4)]), '0').type === 'wrong');
   check('the order of working is the example\'s: 2 + 3 × 4 = 14', enter(make([n(2), s('+'), n(3), s('×'), n(4), s('='), n(14, { missing: true })]), '14').type === 'right'
     && enter(make([n(2), s('+'), n(3), s('×'), n(4), s('='), n(14, { missing: true })]), '20').type === 'wrong');
+  check('16795 is typed into 44 294 − 27 499, and it is right; 16805 is not', enter(column, '16795').type === 'right' && enter(column, '16805').type === 'wrong'
+    && ['1', '6', '7', '9', '5', '0'].reduce((entry, key) => press(entry, key, column.maxDigits), '') === '16795');
+  check('six digits are typed, and 805 192 is right', enter(million, '805192').type === 'right' && press('80519', '2', million.maxDigits) === '805192' && press('805192', '3', million.maxDigits) === '805192');
+  check('brackets first: 4 × (3 + 5) = 32, not 17', enter(bracketed, '32').type === 'right' && enter(bracketed, '17').type === 'wrong');
+  check('4 × (3 + 5) = 4 × 3 + 4 × ?: 5', enter(distributed, '5').type === 'right' && enter(distributed, '8').type === 'wrong');
 
   const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
     && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
   const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
     && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
   const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
-  const configs = [times, greater, factor, cows, make([n(348), s('+'), n(125), s('='), n(473, { missing: true })]), make([n(2500), s('+'), n(3750), s('='), n(6250, { missing: true })])];
+  const configs = [times, greater, factor, cows, make([n(348), s('+'), n(125), s('='), n(473, { missing: true })]), make([n(2500), s('+'), n(3750), s('='), n(6250, { missing: true })]),
+    column, million, distributed, bracketed];
   let whole = true;
   let detail = '';
   stages.forEach(([w, h, insets]) => configs.forEach((config, index) => {
@@ -1880,6 +1971,12 @@ section('math_input: an example whose answer is typed');
   check('where there is little height the example gives way and the keys stay hittable', low.keys[0].height >= rules.MATH_INPUT_LAYOUT.minKey - 1 && inside(low.pad, { left: 0, top: 60, width: 667, height: 190 }), JSON.stringify([low.row, low.keys[0].height]));
   const blankRect = phone.terms.find((rect) => rect.id === times.blankId);
   check('the place is as wide as the digits it takes', Math.abs(blankRect.units - times.maxDigits * rules.MATH_EQUATION_LAYOUT.digit) < 1e-9);
+  const columnPhone = rules.layoutMathInput(852, 393, column, { top: 56, left: 59, right: 59, bottom: 21 });
+  const columnBlank = columnPhone.terms.find((rect) => rect.id === column.blankId);
+  check('a five-digit place has room for its thin space', Math.abs(columnBlank.units - rules.mathDigitsUnits(5)) < 1e-9);
+  const longPhone = rules.layoutMathInput(852, 393, distributed, { top: 56, left: 59, right: 59, bottom: 21 });
+  check('on a phone on its side the long examples still read, the keys still hittable', columnPhone.row >= 28 && longPhone.row >= 28
+    && columnPhone.keys[0].height >= rules.MATH_INPUT_LAYOUT.minKey && longPhone.keys[0].height >= rules.MATH_INPUT_LAYOUT.minKey, JSON.stringify([columnPhone.row, longPhone.row]));
   check('no example, no game', rules.layoutMathInput(852, 393, make([]), {}) === null);
   check('the timings and the gesture are there', rules.GAME_TIMINGS.mathInput.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['math-input'] === rules.GAME_TIMINGS.mathInput && rules.GAME_GESTURES['math-input'] === 'pick');
 }
@@ -2216,7 +2313,18 @@ section('word_problem: a problem in words, its answer typed');
   check('as many as the answer has', rules.normalizeWordProblemConfig({ text, answer: 1250 }).maxDigits === 4);
   check('defaults: lives 3, the background to preload', game.lives === 3 && game.time_limit === 90 && game.imageUris.join() === 'https://x/bg-garden.webp');
   check('the problem may come as problem, its line breaks as spaces', rules.normalizeWordProblemConfig({ problem: ' a\nb  c ', answer: '3' }).text === 'a b c' && rules.normalizeWordProblemConfig({ problem: 'a', answer: '3' }).answer === 3);
-  check('an answer past 9999, negative or missing is none', [10000, -2, undefined, 'x'].every((answer) => rules.normalizeWordProblemConfig({ text, answer }).answer === -1));
+  check('an answer past 999 999, negative or missing is none', [1000000, -2, undefined, 'x'].every((answer) => rules.normalizeWordProblemConfig({ text, answer }).answer === -1));
+  const big = rules.normalizeWordProblemConfig({ text: 'ქალაქში 396425 ადამიანი ცხოვრობს, სოფელში — 2974. რამდენია სულ?', answer: 399399 });
+  check('an answer of six digits, 399 399, is typed in six', big.answer === 399399 && big.maxDigits === 6);
+  check('a long number of the text is written in groups, 2974 as it is', big.text === 'ქალაქში 396 425 ადამიანი ცხოვრობს, სოფელში — 2974. რამდენია სულ?', big.text);
+  const group = rules.groupMathNumbersInText;
+  check('written with spaces it is grouped the same, and four digits are left as written', group('44 294 и 44 294') === '44 294 и 44 294'
+    && group('2 974 и 2974') === '2 974 и 2974' && group('805192.') === '805 192.' && group('1000000') === '1 000 000');
+  check('a price, a decimal or a phone number is left alone', group('12.50 и 3,75') === '12.50 и 3,75' && group('0.123456') === '0.123456');
+  check('a line never breaks inside a long number', rules.breakTextLines('aaaa 396 425 bbbb cccc', 4).every((line) => !line.startsWith('425'))
+    && rules.breakTextLines('aaaa 396 425 bbbb cccc', 4).length === 4);
+  check('the thin space is narrower than a word\'s and is no word space', rules.textCharAdvance(' ') < rules.textCharAdvance(' ')
+    && rules.isWordSpace(' ') && !rules.isWordSpace(' ') && !rules.isWordSpace('a'));
 
   const enter = rules.resolveWordProblemEntry;
   check('the answer is right', JSON.stringify(enter(game, '7')) === '{"type":"right","value":7}');
@@ -2235,7 +2343,8 @@ section('word_problem: a problem in words, its answer typed');
   const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
   let whole = true;
   let detail = '';
-  stages.forEach(([w, h, insets]) => [game, russian, english].forEach((config, index) => {
+  const million = rules.normalizeWordProblemConfig({ text: 'В городе живут 396425 человек, а в селе 2974. Сколько всего?', answer: 399399, unit: 'человек' });
+  stages.forEach(([w, h, insets]) => [game, russian, english, big, million].forEach((config, index) => {
     const layout = rules.layoutWordProblem(w, h, config, insets);
     const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
     const answers = [layout && layout.answer, layout && layout.unit, layout && layout.pad].filter(Boolean);

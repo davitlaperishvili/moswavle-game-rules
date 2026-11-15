@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TEXT_TRACKING = exports.TEXT_UNKNOWN_ADVANCE = exports.LETTER_PICTURE_PREFIX = exports.LETTER_PICTURE_PX = exports.TEXT_ART_LOOK = exports.LETTER_ART = exports.OUTLINE_EM = exports.LETTER_SETS = void 0;
+exports.TEXT_THIN_SPACE_ADVANCE = exports.TEXT_TRACKING = exports.TEXT_UNKNOWN_ADVANCE = exports.LETTER_PICTURE_PREFIX = exports.LETTER_PICTURE_PX = exports.TEXT_ART_LOOK = exports.LETTER_ART = exports.OUTLINE_EM = exports.LETTER_SETS = void 0;
 exports.glyphShape = glyphShape;
 exports.letterSetOf = letterSetOf;
 exports.letterArt = letterArt;
@@ -145,8 +145,18 @@ function letterPictureUri(char, tone) {
 exports.TEXT_UNKNOWN_ADVANCE = 0.82;
 /** The room added after every character of a line, in ems: the letters wear an outline. */
 exports.TEXT_TRACKING = 0.03;
+/**
+ * The thin spaces, which have no outline of ours: the narrow no-break space
+ * between the thousands and the units of a long number (`396 425`) and the
+ * thin space. Narrower than a word's space, in ems.
+ */
+exports.TEXT_THIN_SPACE_ADVANCE = 0.14;
+const TEXT_THIN_SPACES = new Set([" ", " "]);
 /** How far the pen moves on after a character, in ems, the room for its outline included. */
 function textCharAdvance(char) {
+    if (TEXT_THIN_SPACES.has(char)) {
+        return exports.TEXT_THIN_SPACE_ADVANCE + exports.TEXT_TRACKING;
+    }
     const shape = glyphShape(char);
     return (shape ? shape.advance / letterOutlines_js_1.OUTLINE_EM : exports.TEXT_UNKNOWN_ADVANCE) + exports.TEXT_TRACKING;
 }

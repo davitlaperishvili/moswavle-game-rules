@@ -25,8 +25,8 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHAIN = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = void 0;
+exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_NUMBER_SPACE = exports.MATH_EQUATION_TERMS_MAX = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHAIN = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -92,18 +92,27 @@ exports.layoutConnectPairs = layoutConnectPairs;
 exports.connectPairsLink = connectPairsLink;
 exports.isMathComparison = isMathComparison;
 exports.isMathProduct = isMathProduct;
+exports.isMathBracket = isMathBracket;
 exports.mathNumberGlyphs = mathNumberGlyphs;
+exports.mathDigitsGrouped = mathDigitsGrouped;
+exports.mathDigitsUnits = mathDigitsUnits;
+exports.mathDigitSpans = mathDigitSpans;
+exports.formatMathNumber = formatMathNumber;
+exports.groupMathNumbersInText = groupMathNumbersInText;
+exports.isMathExampleShape = isMathExampleShape;
 exports.countMathEquationCompletions = countMathEquationCompletions;
 exports.normalizeMathEquationConfig = normalizeMathEquationConfig;
 exports.nextMathEquationBlank = nextMathEquationBlank;
 exports.resolveMathEquationTap = resolveMathEquationTap;
 exports.mathEquationPictureCell = mathEquationPictureCell;
 exports.mathEquationItemUnits = mathEquationItemUnits;
+exports.mathEquationGaps = mathEquationGaps;
 exports.mathEquationPieces = mathEquationPieces;
 exports.layoutMathEquation = layoutMathEquation;
 exports.letterToneIndex = letterToneIndex;
 exports.textLineAdvance = textLineAdvance;
 exports.textLineUnits = textLineUnits;
+exports.isWordSpace = isWordSpace;
 exports.breakTextLines = breakTextLines;
 exports.normalizeTextChoiceConfig = normalizeTextChoiceConfig;
 exports.resolveTextChoiceTap = resolveTextChoiceTap;
@@ -3920,8 +3929,18 @@ exports.MATH_EQUATION_CHOICES_MIN = 2;
 exports.MATH_EQUATION_CHOICES_MAX = 4;
 /** The most copies of a picture one number shows: counting to ten. */
 exports.MATH_EQUATION_PICTURES_MAX = 10;
-/** The largest number an example holds: four digits is what its row and its cards have room for. */
-exports.MATH_EQUATION_NUMBER_MAX = 9999;
+/**
+ * The largest number an example holds, and a typed answer: six digits, the
+ * fourth grade's numbers to a million (owner, 2026-11-15; 9999 before). A
+ * number of five digits or more is written in groups of three with a thin
+ * space between (`44 294`), as the Georgian and Russian textbooks write it.
+ */
+exports.MATH_EQUATION_NUMBER_MAX = 999999;
+/**
+ * The most rows an example has, brackets counted: `4 × (3 + 5) = 4 × 3 + 4 × 5`
+ * is fifteen. The server's import refuses more (its twin, `me_terms` rows).
+ */
+exports.MATH_EQUATION_TERMS_MAX = 15;
 /** The signs a missing `+` or `−` is chosen among… */
 const MATH_SUMS = ["+", "-"];
 /** …and the ones offered once the example multiplies or divides anywhere. */
@@ -3929,7 +3948,7 @@ const MATH_OPERATIONS = ["+", "-", "×", "÷"];
 const MATH_COMPARISONS = ["<", "=", ">"];
 const MATH_SIGN_ORDER = ["+", "-", "×", "÷", "<", "=", ">"];
 const MATH_GLYPHS = [
-    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "-", "×", "÷", "=", "<", ">", "?",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "-", "×", "÷", "=", "<", ">", "(", ")", "?",
 ];
 /** Whether a sign compares the two sides (`<`, `=`, `>`) rather than working a number out. */
 function isMathComparison(sign) {
@@ -3938,6 +3957,10 @@ function isMathComparison(sign) {
 /** Whether a sign multiplies or divides: done before the adding and taking away around it. */
 function isMathProduct(sign) {
     return sign === "×" || sign === "÷";
+}
+/** Whether a sign is a bracket, `(` or `)`: what it holds is worked out first. Never a place to fill. */
+function isMathBracket(sign) {
+    return sign === "(" || sign === ")";
 }
 function normalizeMathSign(value) {
     const text = extractText(value);
@@ -3951,6 +3974,8 @@ function normalizeMathSign(value) {
         "×": "×", "*": "×", "x": "×", "X": "×", "х": "×", "Х": "×", "·": "×", "⋅": "×", "∙": "×",
         // Divided by: the obelus, the slash and the colon.
         "÷": "÷", "/": "÷", ":": "÷", "∶": "÷",
+        // Brackets, round or square.
+        "(": "(", ")": ")", "[": "(", "]": ")",
     };
     if (symbols[raw])
         return symbols[raw];
@@ -3969,91 +3994,232 @@ function normalizeMathSign(value) {
         return "<";
     if (["greater", "greater_than", "gt", "more", "more_than", "bigger"].includes(word))
         return ">";
+    if (["open", "open_bracket", "bracket_open", "left_bracket", "opening_bracket", "lparen"].includes(word))
+        return "(";
+    if (["close", "close_bracket", "bracket_close", "right_bracket", "closing_bracket", "rparen"].includes(word))
+        return ")";
     return null;
 }
-/** The glyphs a number is written with: 15 is "1" then "5". */
+/** The glyphs a number is written with: 15 is "1" then "5". The thin space of a long number is not one: see `mathDigitSpans`. */
 function mathNumberGlyphs(value) {
     return String(Math.max(0, Math.floor(value))).split("");
+}
+/** Whether a number of so many digits is written in groups of three: from five digits (`44 294`); four stay together (`2974`). */
+function mathDigitsGrouped(count) {
+    return count >= 5;
+}
+/**
+ * How wide so many digits are written, as a share of their height: a digit's
+ * cell each (`MATH_EQUATION_LAYOUT.digit`) and, in a number of five digits or
+ * more, a thin space between its thousands and its units.
+ */
+function mathDigitsUnits(count) {
+    const digits = Math.max(0, Math.floor(count));
+    const groups = mathDigitsGrouped(digits) ? Math.ceil(digits / 3) : 1;
+    return digits * exports.MATH_EQUATION_LAYOUT.digit + (groups - 1) * exports.MATH_EQUATION_LAYOUT.groupGap;
+}
+/**
+ * Where each of so many digits stands, left to right, in fractions of the
+ * width `mathDigitsUnits(count)`: four digits share it evenly; from five, the
+ * groups of three counted from the right stand a thin space apart. Both
+ * players write every number with it, so `396 425` is the same on a card,
+ * in an example and on a pad's place.
+ */
+function mathDigitSpans(count) {
+    const digits = Math.max(0, Math.floor(count));
+    const width = Math.max(mathDigitsUnits(digits), 1e-6);
+    const { digit, groupGap } = exports.MATH_EQUATION_LAYOUT;
+    const grouped = mathDigitsGrouped(digits);
+    let x = 0;
+    return Array.from({ length: digits }, (_, index) => {
+        // A thin space before every group of three, counted from the right.
+        if (grouped && index > 0 && (digits - index) % 3 === 0)
+            x += groupGap;
+        const span = { left: x / width, width: digit / width };
+        x += digit;
+        return span;
+    });
+}
+/**
+ * A number as text, as the players write it: `44 294`, `396 425`, `2974`. The
+ * space is the narrow no-break one (U+202F), so a line never breaks inside a
+ * number (`MATH_NUMBER_SPACE`).
+ */
+function formatMathNumber(value) {
+    const text = String(Math.max(0, Math.floor(value)));
+    return mathDigitsGrouped(text.length) ? text.replace(/\B(?=(\d{3})+$)/g, exports.MATH_NUMBER_SPACE) : text;
+}
+/** The thin space between the thousands and the units of a long number: narrow and no-break. */
+exports.MATH_NUMBER_SPACE = " ";
+/**
+ * A text with its long numbers written as the players write them: a number of
+ * five digits or more in groups of three a thin space apart, whether the
+ * author wrote it whole (`396425`) or with spaces (`396 425`). Four digits
+ * stay together (`2974`, `2 974` as written). A word problem's text is
+ * written so.
+ */
+function groupMathNumbersInText(text) {
+    // No lookbehind: the app's engine is older than the site's. What stands before is caught and put back.
+    return text
+        .replace(/(^|[^\d.,])(\d{1,3}(?:[    ]\d{3})+)(?!\d|[.,]\d)/g, (match, before, number) => {
+        const digits = number.replace(/\D/g, "");
+        return mathDigitsGrouped(digits.length) ? before + formatMathNumber(Number(digits)) : match;
+    })
+        .replace(/(^|[^\d.,])(\d{5,15})(?!\d|[.,]\d)/g, (_match, before, number) => before + formatMathNumber(Number(number)));
 }
 /** A number drawn as pictures: only a count a child can see, one to ten. */
 function mathPictureFor(image, value) {
     return image && value >= 1 && value <= exports.MATH_EQUATION_PICTURES_MAX ? image : null;
 }
 /**
- * Whether an example reads true, the way a child reckons it: numbers and signs
- * alternate and there is exactly one comparison. On each side the multiplying
- * and dividing is done first, left to right, then the adding and taking away,
+ * One side of an example worked out the way a child reckons it, from `start`:
+ * brackets first, then the multiplying and dividing, left to right, then the
+ * adding and taking away, left to right. Null when it is no sum — a number
+ * missing, a bracket left open, a division with a remainder or by zero, a
+ * total that goes below zero on the way — and `end` where the reading stopped.
+ * With `reckon` false only the shape is read: the numbers are not worked out.
+ */
+function readMathSide(values, start, reckon = true) {
+    let at = start;
+    const signAt = (index) => {
+        const item = values[index];
+        return item && item.kind === "sign" ? item.value : null;
+    };
+    // A number, or a bracket and what it holds.
+    const factor = () => {
+        const item = values[at];
+        if (!item)
+            return null;
+        if (item.kind === "number") {
+            at += 1;
+            return item.value;
+        }
+        if (item.value !== "(")
+            return null;
+        at += 1;
+        const inner = sum();
+        if (inner === null || signAt(at) !== ")")
+            return null;
+        at += 1;
+        return inner;
+    };
+    // Factors joined by × and ÷.
+    const product = () => {
+        let value = factor();
+        while (value !== null) {
+            const sign = signAt(at);
+            if (sign === null || !isMathProduct(sign))
+                break;
+            at += 1;
+            const next = factor();
+            if (next === null)
+                return null;
+            if (!reckon)
+                continue;
+            if (sign === "×") {
+                value *= next;
+            }
+            else {
+                if (next === 0 || value % next !== 0)
+                    return null;
+                value /= next;
+            }
+        }
+        return value;
+    };
+    // Products joined by + and −; never below zero on the way.
+    const sum = () => {
+        let value = product();
+        while (value !== null) {
+            const sign = signAt(at);
+            if (sign !== "+" && sign !== "-")
+                break;
+            at += 1;
+            const next = product();
+            if (next === null)
+                return null;
+            if (!reckon)
+                continue;
+            value = sign === "+" ? value + next : value - next;
+            if (value < 0)
+                return null;
+        }
+        return value;
+    };
+    const value = sum();
+    return value === null ? null : { value, end: at };
+}
+/**
+ * Whether an example reads true, the way a child reckons it: two sides and
+ * exactly one comparison between them, never inside a bracket. Each side is
+ * worked out as at school — brackets first, then × and ÷, then + and −, each
  * left to right. A division that leaves a remainder, or by zero, is no
  * example, and neither is one whose running total goes below zero.
  */
 function isMathStatementTrue(values) {
-    if (values.length < 3 || values.length % 2 === 0) {
+    const left = readMathSide(values, 0);
+    const comparison = left ? values[left.end] : undefined;
+    if (!left || !comparison || comparison.kind !== "sign" || !isMathComparison(comparison.value)) {
         return false;
     }
-    let comparison = null;
-    let left = 0;
-    // The side being read: what is added up so far, and the product still open.
-    let total = 0;
-    let product = 0;
-    let sum = "+";
-    let operation = "+";
-    // The open product joins the total; false when that takes it below zero.
-    const close = () => {
-        total = sum === "-" ? total - product : total + product;
-        return total >= 0;
-    };
-    for (let index = 0; index < values.length; index += 1) {
-        const item = values[index];
-        if (index % 2 === 0) {
-            if (item.kind !== "number")
-                return false;
-            if (operation === "×") {
-                product *= item.value;
-            }
-            else if (operation === "÷") {
-                if (item.value === 0 || product % item.value !== 0)
-                    return false;
-                product /= item.value;
-            }
-            else {
-                product = item.value;
-            }
-            continue;
-        }
-        if (item.kind !== "sign")
-            return false;
-        if (isMathProduct(item.value)) {
-            operation = item.value;
-            continue;
-        }
-        if (!close())
-            return false;
-        if (isMathComparison(item.value)) {
-            if (comparison)
-                return false;
-            comparison = item.value;
-            left = total;
-            total = 0;
-            sum = "+";
-        }
-        else {
-            sum = item.value;
-        }
-        operation = "+";
-    }
-    if (!comparison || !close()) {
+    const right = readMathSide(values, left.end + 1);
+    if (!right || right.end !== values.length) {
         return false;
     }
-    return comparison === "=" ? left === total : comparison === "<" ? left < total : left > total;
+    const sign = comparison.value;
+    return sign === "=" ? left.value === right.value : sign === "<" ? left.value < right.value : left.value > right.value;
+}
+/**
+ * Whether the terms are an example at all, whatever their numbers: two sides
+ * around one comparison, every bracket closed, numbers and signs where a
+ * child expects them. What the import's Check asks first.
+ */
+function isMathExampleShape(terms) {
+    const values = terms.map((term) => term.kind === "number" ? { kind: "number", value: Number(term.value) } : { kind: "sign", value: term.value });
+    const left = readMathSide(values, 0, false);
+    const comparison = left ? values[left.end] : undefined;
+    if (!left || !comparison || comparison.kind !== "sign" || !isMathComparison(comparison.value)) {
+        return false;
+    }
+    const right = readMathSide(values, left.end + 1, false);
+    return Boolean(right && right.end === values.length);
+}
+/**
+ * What an example worked out with its brackets taken away: `4 × (3 + 5)` read
+ * as `4 × 3 + 5`, 17 — the slip a child makes who does not do the brackets
+ * first. Null when there are no brackets or it is no sum.
+ */
+function mathWithoutBrackets(values) {
+    const bare = values.filter((item) => item.kind !== "sign" || !isMathBracket(item.value));
+    if (bare.length === values.length)
+        return null;
+    const side = readMathSide(bare, 0);
+    return side && side.end === bare.length ? side.value : null;
 }
 /**
  * Wrong answers worth offering before the numbers next to the right one, the
- * likeliest first. For a product asked for (`7 × 8 = ?`) its neighbours in the
+ * likeliest first. For an example with brackets whose answer stands alone on
+ * its side, what it comes to with the brackets left out (`4 × (3 + 5) = ?`
+ * answered 17). For a product asked for (`7 × 8 = ?`) its neighbours in the
  * times table; for an answer past twenty the number a ten away, past two
- * hundred the one a hundred away. None for the small sums a child counts out.
+ * hundred the one a hundred away, past two thousand a thousand away and past
+ * twenty thousand ten thousand away. None for the small sums a child counts out.
  */
 function mathSlips(terms, answers) {
     const slips = [];
+    const values = terms.map((term) => term.kind === "number" ? { kind: "number", value: term.value } : { kind: "sign", value: term.value });
+    const comparisonAt = values.findIndex((item) => item.kind === "sign" && isMathComparison(item.value));
+    if (comparisonAt > 0 && terms[comparisonAt].value === "=") {
+        const sides = [terms.slice(0, comparisonAt), terms.slice(comparisonAt + 1)];
+        sides.forEach((_side, index) => {
+            const other = sides[1 - index];
+            if (other.length !== 1 || other[0].kind !== "number" || !other[0].missing)
+                return;
+            const slip = mathWithoutBrackets(index === 0 ? values.slice(0, comparisonAt) : values.slice(comparisonAt + 1));
+            if (slip !== null)
+                slips.push(slip);
+        });
+    }
     terms.forEach((term, index) => {
         const sign = terms[index + 1];
         const other = terms[index + 2];
@@ -4068,6 +4234,10 @@ function mathSlips(terms, answers) {
             slips.push(answer - 10, answer + 10);
         if (answer >= 200)
             slips.push(answer - 100, answer + 100);
+        if (answer >= 2000)
+            slips.push(answer - 1000, answer + 1000);
+        if (answer >= 20000)
+            slips.push(answer - 10000, answer + 10000);
     });
     return slips.filter((value, index) => value >= 0 && !answers.includes(value) && slips.indexOf(value) === index);
 }
@@ -4153,7 +4323,8 @@ function readMathTerms(source) {
         const missing = record ? extractBoolean(record.missing) ?? false : false;
         const sign = type === "number" ? null : normalizeMathSign(rawValue);
         if (sign) {
-            terms.push({ id, kind: "sign", value: sign, missing });
+            // A bracket stands in the example; it is never a place to fill.
+            terms.push({ id, kind: "sign", value: sign, missing: missing && !isMathBracket(sign) });
             return;
         }
         const number = type === "sign" ? null : extractNumber(rawValue);
@@ -4319,9 +4490,14 @@ function resolveMathEquationTap(config, placed, cardId) {
 exports.MATH_EQUATION_LAYOUT = {
     /** One digit's cell. The library digits are about 0.65–0.8 as wide as they are high. */
     digit: 0.8,
+    /** The thin space between the groups of three of a number of five digits or more: `44 294`. */
+    groupGap: 0.3,
     /** A sign's cell, and the height its picture is fitted into. */
     sign: 0.78,
     signHeight: 0.62,
+    /** A bracket's cell: narrow, and as tall as the row, so it stands a little over the digits it holds. */
+    bracket: 0.5,
+    bracketHeight: 1,
     /** The "?" in an empty place. */
     blankMark: 0.62,
     /**
@@ -4333,8 +4509,9 @@ exports.MATH_EQUATION_LAYOUT = {
     pictureLarge: 0.9,
     pictureSmall: 0.5,
     pictureLargeUpTo: 3,
-    /** Space between two places of the example. */
+    /** Space between two places of the example; inside a bracket, next to it, less: `(3 + 5)`. */
     gap: 0.16,
+    bracketGap: 0.04,
     /** The panel's padding around the example. */
     pad: 0.18,
     /** The row never grows past this, in px… */
@@ -4370,12 +4547,27 @@ function mathPictureRows(count, cell) {
 }
 /** How wide an item is drawn, as a share of its height; `pictureCell` from `mathEquationPictureCell`. */
 function mathEquationItemUnits(item, pictureCell = exports.MATH_EQUATION_LAYOUT.pictureLarge) {
+    if (item.kind === "sign" && isMathBracket(item.value)) {
+        return exports.MATH_EQUATION_LAYOUT.bracket;
+    }
     if (item.kind === "sign" || item.kind === "blank") {
         return exports.MATH_EQUATION_LAYOUT.sign;
     }
     return item.image
         ? Math.max(...mathPictureRows(item.value, pictureCell)) * pictureCell
-        : mathNumberGlyphs(item.value).length * exports.MATH_EQUATION_LAYOUT.digit;
+        : mathDigitsUnits(mathNumberGlyphs(item.value).length);
+}
+/**
+ * The space after each place of an example but the last, as a share of the
+ * row's height: `MATH_EQUATION_LAYOUT.gap`, and less just inside a bracket,
+ * so `(3 + 5)` holds together.
+ */
+function mathEquationGaps(terms) {
+    const { gap, bracketGap } = exports.MATH_EQUATION_LAYOUT;
+    return terms.slice(0, -1).map((term, index) => {
+        const next = terms[index + 1];
+        return (term.kind === "sign" && term.value === "(") || (next.kind === "sign" && next.value === ")") ? bracketGap : gap;
+    });
 }
 /**
  * Where each picture of an item goes in a box `units` times as wide as it is
@@ -4384,7 +4576,7 @@ function mathEquationItemUnits(item, pictureCell = exports.MATH_EQUATION_LAYOUT.
  */
 function mathEquationPieces(item, units, pictureCell = exports.MATH_EQUATION_LAYOUT.pictureLarge) {
     const width = Math.max(units, 1e-6);
-    const { digit, sign, signHeight, blankMark } = exports.MATH_EQUATION_LAYOUT;
+    const { sign, signHeight, blankMark, bracket, bracketHeight } = exports.MATH_EQUATION_LAYOUT;
     const centred = (glyph, w, h, key) => ({
         key,
         glyph,
@@ -4393,6 +4585,9 @@ function mathEquationPieces(item, units, pictureCell = exports.MATH_EQUATION_LAY
     });
     if (item.kind === "blank") {
         return [centred("?", Math.min(sign, width), blankMark, "blank")];
+    }
+    if (item.kind === "sign" && isMathBracket(item.value)) {
+        return [centred(item.value, Math.min(bracket, width), bracketHeight, `sign-${item.value}`)];
     }
     if (item.kind === "sign") {
         return [centred(item.value, Math.min(sign, width), signHeight, `sign-${item.value}`)];
@@ -4418,13 +4613,16 @@ function mathEquationPieces(item, units, pictureCell = exports.MATH_EQUATION_LAY
             }));
         });
     }
+    // The digits, a thin space between the groups of a long number, in the middle of the box.
     const glyphs = mathNumberGlyphs(item.value);
-    const start = (width - glyphs.length * digit) / 2;
+    const written = mathDigitsUnits(glyphs.length);
+    const start = (width - written) / 2;
+    const spans = mathDigitSpans(glyphs.length);
     return glyphs.map((glyph, index) => ({
         key: `digit-${index}`,
         glyph,
         image: null,
-        box: { left: (start + index * digit) / width, top: 0, width: digit / width, height: 1 },
+        box: { left: (start + spans[index].left * written) / width, top: 0, width: (spans[index].width * written) / width, height: 1 },
     }));
 }
 /**
@@ -4455,7 +4653,8 @@ function layoutMathEquation(stageWidth, stageHeight, config, insets = {}) {
     const termUnits = config.terms.map((term) => term.missing ? (term.kind === "number" ? numberSlot : L.sign) : mathEquationItemUnits(term, pictureCell));
     const contentUnits = Math.max(L.sign, ...cardUnits);
     const count = config.cards.length;
-    const rowUnits = termUnits.reduce((sum, units) => sum + units, 0) + L.gap * (termUnits.length - 1) + L.pad * 2;
+    const gaps = mathEquationGaps(config.terms);
+    const rowUnits = termUnits.reduce((sum, units) => sum + units, 0) + gaps.reduce((sum, units) => sum + units, 0) + L.pad * 2;
     const panelUnitsHigh = 1 + L.pad * 2;
     const cardFrame = 2 * (L.cardPad + L.tilePad);
     const trayFixedWidth = count > 0 ? 2 * L.trayPad + L.cardGap * (count - 1) + count * cardFrame : 0;
@@ -4489,7 +4688,7 @@ function layoutMathEquation(stageWidth, stageHeight, config, insets = {}) {
     let x = panel.left + L.pad * row;
     const terms = config.terms.map((term, index) => {
         const rect = { id: term.id, units: termUnits[index], left: x, top: panel.top + L.pad * row, width: termUnits[index] * row, height: row };
-        x += rect.width + L.gap * row;
+        x += rect.width + (gaps[index] ?? 0) * row;
         return rect;
     });
     const tray = {
@@ -4560,12 +4759,21 @@ function textLineUnits(text) {
     return (textLineAdvance(text) + exports.TEXT_ART.pad * 2) / exports.TEXT_ART.lineHeight;
 }
 /**
+ * Whether a character ends a word of a line of writing: a space, but never
+ * the thin one inside a long number (`396 425`, `MATH_NUMBER_SPACE`). The
+ * players colour a sentence word by word with it.
+ */
+function isWordSpace(char) {
+    return char !== exports.MATH_NUMBER_SPACE && /^\s$/.test(char);
+}
+/**
  * A text broken into at most `maxLines` lines at its spaces, as evenly as
  * it goes: of every way to break it the one whose longest line is shortest.
- * A text of fewer words has fewer lines; a word is never split.
+ * A text of fewer words has fewer lines; a word is never split, nor a long
+ * number at its thin space.
  */
 function breakTextLines(text, maxLines) {
-    const words = text.trim().split(/\s+/).filter(Boolean);
+    const words = text.trim().split(/[^\S ]+/).filter(Boolean);
     const lines = Math.max(1, Math.min(Math.floor(maxLines), words.length));
     if (words.length === 0) {
         return [];
@@ -4937,8 +5145,9 @@ function layoutMathInput(stageWidth, stageHeight, config, insets = {}) {
     const areaWidth = Math.max(usableWidth - edge * 2, 1);
     const areaHeight = Math.max(usableHeight - edge * 2, 1);
     const pictureCell = mathEquationPictureCell({ terms: config.terms, cards: [] });
-    const termUnits = config.terms.map((term) => term.missing ? config.maxDigits * E.digit : mathEquationItemUnits(term, pictureCell));
-    const rowUnits = termUnits.reduce((sum, units) => sum + units, 0) + E.gap * (termUnits.length - 1) + E.pad * 2;
+    const termUnits = config.terms.map((term) => term.missing ? mathDigitsUnits(config.maxDigits) : mathEquationItemUnits(term, pictureCell));
+    const gaps = mathEquationGaps(config.terms);
+    const rowUnits = termUnits.reduce((sum, units) => sum + units, 0) + gaps.reduce((sum, units) => sum + units, 0) + E.pad * 2;
     const panelUnitsHigh = 1 + E.pad * 2;
     // The keys of a grid, given the height the example leaves them.
     const keysFor = (columns, rows, height) => {
@@ -4978,7 +5187,7 @@ function layoutMathInput(stageWidth, stageHeight, config, insets = {}) {
     let x = panel.left + E.pad * row;
     const terms = config.terms.map((term, index) => {
         const rect = { id: term.id, units: termUnits[index], left: x, top: panel.top + E.pad * row, width: termUnits[index] * row, height: row };
-        x += rect.width + E.gap * row;
+        x += rect.width + (gaps[index] ?? 0) * row;
         return rect;
     });
     const pad = {
@@ -5792,7 +6001,8 @@ function normalizeWordProblemConfig(config) {
     const valid = Number.isFinite(answer) && answer >= 0 && answer <= exports.MATH_EQUATION_NUMBER_MAX;
     const bg = normalizeBackground(config);
     return {
-        text: (extractText(config.text) ?? extractText(config.problem) ?? "").replace(/\s+/g, " ").trim(),
+        // Its long numbers as the answer is written: `396 425`, never broken over two lines.
+        text: groupMathNumbersInText((extractText(config.text) ?? extractText(config.problem) ?? "").replace(/\s+/g, " ").trim()),
         answer: valid ? answer : -1,
         unit: (extractText(config.unit) ?? "").replace(/\s+/g, " ").trim(),
         maxDigits: Math.max(exports.MATH_INPUT_DIGITS_MIN, valid ? String(answer).length : exports.MATH_INPUT_DIGITS_MIN),
@@ -5873,7 +6083,7 @@ function layoutWordProblem(stageWidth, stageHeight, config, insets = {}) {
     const areaHeight = Math.max(usableHeight - edge * 2, 1);
     const unitUnits = config.unit === "" ? 0 : textLineUnits(config.unit);
     // The place's width for its height: the digits with a little room either side.
-    const answerUnits = config.maxDigits * E.digit + E.pad * 2;
+    const answerUnits = mathDigitsUnits(config.maxDigits) + E.pad * 2;
     let best = null;
     const tryArrangement = (arrangement, share) => {
         const slot = arrangement === "side"
