@@ -25,8 +25,8 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_NUMBER_SPACE = exports.MATH_EQUATION_TERMS_MAX = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHAIN = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = void 0;
+exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.MEMORY_CARD_FACE = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_NUMBER_SPACE = exports.MATH_EQUATION_TERMS_MAX = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHAIN = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
+exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -114,6 +114,11 @@ exports.textLineAdvance = textLineAdvance;
 exports.textLineUnits = textLineUnits;
 exports.isWordSpace = isWordSpace;
 exports.breakTextLines = breakTextLines;
+exports.keepNumbersWhole = keepNumbersWhole;
+exports.fitTextInCircle = fitTextInCircle;
+exports.fitTextInBox = fitTextInBox;
+exports.catchLabelFontSize = catchLabelFontSize;
+exports.memoryCardTextFit = memoryCardTextFit;
 exports.normalizeTextChoiceConfig = normalizeTextChoiceConfig;
 exports.resolveTextChoiceTap = resolveTextChoiceTap;
 exports.layoutTextChoice = layoutTextChoice;
@@ -4809,6 +4814,100 @@ function breakTextLines(text, maxLines) {
         start = end;
     }
     return result;
+}
+// --- A label kept whole -----------------------------------------------------
+//
+// A falling circle of the catch game and a card of the memory game may hold
+// words or a number instead of a picture. Game Forge writes a number with a
+// plain space between its groups (`375 900`, `45 000`, `5 000 + 300`), where a
+// line may break, and a child then reads `375` over `900`: two numbers. Both
+// players pass such a label through `keepNumbersWhole` and set it at the size
+// and in the lines a fit below gives, so it stays inside its circle or card.
+/**
+ * A label with its numbers kept whole: a long number in groups of three a thin
+ * no-break space apart, however the author spaced it (`groupMathNumbersInText`),
+ * and a four-digit one an author wrote with a space (`5 000`) joined by the same
+ * space — the thousands stay apart, as they were written, and the line never
+ * breaks there. `2974` stays as it is. A picture's address is left untouched.
+ */
+function keepNumbersWhole(label) {
+    if (typeof label !== "string" || isImageReference(label)) {
+        return label;
+    }
+    // No lookbehind: the app's engine is older than the site's. What stands before is caught and put back.
+    return groupMathNumbersInText(label).replace(/(^|[^\d., ])(\d)[   ](\d{3})(?![\d ]|[.,]\d|[   ]\d{3}(?!\d))/g, (_match, before, thousands, units) => `${before}${thousands}${exports.MATH_NUMBER_SPACE}${units}`);
+}
+/** How tall the ink of a line is around its middle, in ems: a digit, a capital, a Georgian letter's body. */
+const LABEL_INK_HEIGHT = 0.8;
+/** A line is taken on only if it makes the letters this much bigger: one line reads best. */
+const LABEL_LINE_GAIN = 1.1;
+function pickTextFit(text, maxFontSize, maxLines, lineHeight, sizeFor) {
+    const ceiling = Math.max(1, Number.isFinite(maxFontSize) ? maxFontSize : 1);
+    let best = { fontSize: ceiling, lines: text.trim() ? [text.trim()] : [], lineHeight };
+    let bestSize = -1;
+    for (let count = 1; count <= Math.max(1, Math.floor(maxLines)); count += 1) {
+        const lines = breakTextLines(text, count);
+        if (lines.length < count)
+            break;
+        const size = Math.min(ceiling, Math.max(0, sizeFor(lines)));
+        if (bestSize < 0 || size > bestSize * LABEL_LINE_GAIN) {
+            best = { fontSize: size, lines, lineHeight };
+            bestSize = size;
+        }
+        if (size >= ceiling)
+            break;
+    }
+    return { ...best, fontSize: Math.max(1, Math.floor(best.fontSize * 10) / 10) };
+}
+/**
+ * A label set in a circle `diameter` across: the biggest size up to
+ * `maxFontSize` at which it fits, on one line or broken at its word spaces into
+ * as many as `maxLines` (`5 000` over `+ 300`), a little off the rim. Each line's
+ * ink is a box around its middle whose far corners must lie inside the circle.
+ * Widths are our letters' (`textLineAdvance`), a hair wider than a phone's own
+ * bold digits, so what is fitted here fits there.
+ */
+function fitTextInCircle(text, diameter, maxFontSize, { maxLines = 3, lineHeight = 1.1 } = {}) {
+    const radius = (Math.max(0, diameter) / 2) * 0.92;
+    return pickTextFit(text, maxFontSize, maxLines, lineHeight, (lines) => lines.reduce((size, line, index) => {
+        const halfWidth = textLineAdvance(line) / 2;
+        const farEdge = Math.abs(index - (lines.length - 1) / 2) * lineHeight + LABEL_INK_HEIGHT / 2;
+        return Math.min(size, radius / Math.hypot(halfWidth, farEdge));
+    }, Number.POSITIVE_INFINITY));
+}
+/**
+ * A label set in a box `width` by `height`: the biggest size up to
+ * `maxFontSize` at which its lines, as many as `maxLines`, fit both ways.
+ */
+function fitTextInBox(text, width, height, maxFontSize, { maxLines = 4, lineHeight = 1.25 } = {}) {
+    return pickTextFit(text, maxFontSize, maxLines, lineHeight, (lines) => {
+        const widest = Math.max(...lines.map((line) => textLineAdvance(line)), 1e-6);
+        return Math.min(Math.max(0, width) / widest, Math.max(0, height) / (lines.length * lineHeight));
+    });
+}
+/**
+ * The size a falling label of the catch game is set at, at most, on a stage so
+ * big: a share of its short side, a little smaller on a wide, shallow stage (a
+ * phone on its side), where its circles are smaller too. `fitTextInCircle`
+ * makes a long label smaller still.
+ */
+function catchLabelFontSize(width, height) {
+    const shortestSide = Math.max(Math.min(width, height), 1);
+    const compact = height < width * 0.58 || shortestSide < width * 0.34;
+    return Math.round(shortestSide * (compact ? 0.09 : 0.096));
+}
+/**
+ * A memory card, the same in both players, in shares of its short side: the
+ * white rim of its face (never under 3 px), the room inside it, and its words —
+ * `text` at most, never under `textMin` unless a long label needs it.
+ */
+exports.MEMORY_CARD_FACE = { rim: 0.045, rimMin: 3, padding: 0.05, text: 0.17, textMin: 15, lineHeight: 1.25 };
+/** A memory card's words fitted to its face, inside its rim and room: see `MEMORY_CARD_FACE`. */
+function memoryCardTextFit(text, width, height) {
+    const side = Math.max(0, Math.min(width, height));
+    const face = exports.MEMORY_CARD_FACE;
+    const edge = Math.max(face.rimMin, Math.round(side * face.rim)) + side * face.padding;
+    return fitTextInBox(text, (width - edge * 2) * 0.92, height - edge * 2, Math.max(face.textMin, side * face.text), { maxLines: 4, lineHeight: face.lineHeight });
 }
 // --- Text choice ------------------------------------------------------------
 //

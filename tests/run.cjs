@@ -3484,5 +3484,63 @@ section('coloring pages');
   check('a screen not measured yet breaks nothing', rules.layoutColoringScreen(0, 0, page).paper.width === 0);
 }
 
+section('a label kept whole: catch circles and memory cards');
+{
+  const NB = ' ';
+  const whole = rules.keepNumbersWhole;
+  check('Game Forge\'s plain spaces in a long number become the thin no-break one',
+    whole('375 900') === `375${NB}900` && whole('45 000') === `45${NB}000` && whole('1 000 000') === `1${NB}000${NB}000`);
+  check('a number written whole is grouped as the players write it', whole('375900') === `375${NB}900` && whole('45000') === `45${NB}000`);
+  check('four digits written with a space are joined, written whole they stay whole',
+    whole('5 304') === `5${NB}304` && whole('5 000') === `5${NB}000` && whole('2974') === '2974');
+  check('a sum keeps its word spaces around the signs and each number whole',
+    whole('30 000 + 5 000 + 200') === `30${NB}000 + 5${NB}000 + 200` && whole('5 000 + 300') === `5${NB}000 + 300`);
+  check('words, a short number, a price and a decimal are left alone',
+    ['кошка', 'ძაღლი', '8', '450', '12.50', '0,375', '3 + 4', 'A'].every((label) => whole(label) === label));
+  check('a picture\'s address is never touched', whole('https://x/2026/09/45000.webp') === 'https://x/2026/09/45000.webp'
+    && whole('/wp-content/uploads/12 345.png') === '/wp-content/uploads/12 345.png');
+  check('done twice it changes nothing more', whole(whole('30 000 + 5 000 + 200')) === whole('30 000 + 5 000 + 200'));
+
+  const hasNumberSplit = (fit) => fit.lines.some((line) => /^\d{3}(?!\d)/.test(line) && fit.lines.indexOf(line) > 0
+    && /\d$/.test(fit.lines[fit.lines.indexOf(line) - 1]));
+  const insideCircle = (fit, diameter) => fit.lines.every((line, index) => {
+    const halfWidth = (rules.textLineAdvance(line) * fit.fontSize) / 2;
+    const far = (Math.abs(index - (fit.lines.length - 1) / 2) * fit.lineHeight + 0.4) * fit.fontSize;
+    return Math.hypot(halfWidth, far) <= diameter / 2 + 1e-6;
+  });
+
+  // The site on a phone on its side, 852 × 393: a circle of 118 with a rim of 4, 110 inside, at 35 px.
+  const phone = rules.catchLabelFontSize(852, 393);
+  check('a catch label is set at a share of the stage: 35 px on a phone on its side, 72 on a desktop',
+    phone === 35 && rules.catchLabelFontSize(1250, 750) === 72);
+  const six = rules.fitTextInCircle(whole('375 900'), 110, phone);
+  check('six digits stand on one line inside the circle, smaller than a short label', six.lines.length === 1
+    && six.lines[0] === `375${NB}900` && six.fontSize < phone && six.fontSize >= 24 && insideCircle(six, 110), JSON.stringify(six));
+  check('a short label keeps its full size', rules.fitTextInCircle('7', 110, phone).fontSize === phone
+    && rules.fitTextInCircle(whole('5 304'), 110, phone).fontSize === phone);
+  const sum = rules.fitTextInCircle(whole('5 000 + 300'), 110, phone);
+  check('a sum too wide for one line breaks at a sign, never in a number', sum.lines.length === 2
+    && sum.lines.join('|') === `5${NB}000|+ 300` && !hasNumberSplit(sum) && insideCircle(sum, 110), JSON.stringify(sum));
+  check('every fit lies inside its circle, on a phone and a desktop',
+    ['375 900', '45 000', '30 000 + 5 000 + 200', '999 999', 'გამოთვალე', 'кошка и собака', 'A']
+      .every((label) => [[110, 35], [166, 72], [60, 20]].every(([d, max]) => insideCircle(rules.fitTextInCircle(whole(label), d, max), d))));
+  check('a circle not measured yet breaks nothing', rules.fitTextInCircle('375 900', 0, 35).fontSize === 1
+    && rules.fitTextInCircle('', 110, 35).lines.length === 0);
+
+  const card = rules.memoryCardTextFit(whole('30 000 + 5 000 + 200'), 90, 110);
+  check('a memory card\'s three-term sum: each number on its own line whole, as a column',
+    card.lines.join('|') === `30${NB}000|+ 5${NB}000|+ 200`, JSON.stringify(card));
+  const face = rules.MEMORY_CARD_FACE;
+  check('a card\'s words stay at its size when they fit, under it when a number would not',
+    Math.abs(rules.memoryCardTextFit('кот', 120, 140).fontSize - 120 * face.text) < 0.11
+      && rules.memoryCardTextFit(whole('999 999'), 60, 70).fontSize < face.textMin);
+  check('every fitted line is within the face\'s room', [[60, 70], [90, 110], [140, 140]].every(([w, h]) => {
+    const side = Math.min(w, h);
+    const room = w - 2 * (Math.max(face.rimMin, Math.round(side * face.rim)) + side * face.padding);
+    const fit = rules.memoryCardTextFit(whole('30 000 + 5 000 + 200'), w, h);
+    return fit.lines.every((line) => rules.textLineAdvance(line) * fit.fontSize <= room);
+  }));
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

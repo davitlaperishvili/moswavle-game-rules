@@ -1929,6 +1929,65 @@ export declare function isWordSpace(char: string): boolean;
  * number at its thin space.
  */
 export declare function breakTextLines(text: string, maxLines: number): string[];
+/**
+ * A label with its numbers kept whole: a long number in groups of three a thin
+ * no-break space apart, however the author spaced it (`groupMathNumbersInText`),
+ * and a four-digit one an author wrote with a space (`5 000`) joined by the same
+ * space — the thousands stay apart, as they were written, and the line never
+ * breaks there. `2974` stays as it is. A picture's address is left untouched.
+ */
+export declare function keepNumbersWhole(label: string): string;
+/** A label set to fit: its size and its lines, broken at word spaces and never inside a number. */
+export type TextFit = {
+    /** The size of its letters, in the same units as the room it was fitted to. */
+    fontSize: number;
+    /** One entry a line, top to bottom. */
+    lines: string[];
+    /** How far apart the lines stand, in ems: the player sets them so. */
+    lineHeight: number;
+};
+/**
+ * A label set in a circle `diameter` across: the biggest size up to
+ * `maxFontSize` at which it fits, on one line or broken at its word spaces into
+ * as many as `maxLines` (`5 000` over `+ 300`), a little off the rim. Each line's
+ * ink is a box around its middle whose far corners must lie inside the circle.
+ * Widths are our letters' (`textLineAdvance`), a hair wider than a phone's own
+ * bold digits, so what is fitted here fits there.
+ */
+export declare function fitTextInCircle(text: string, diameter: number, maxFontSize: number, { maxLines, lineHeight }?: {
+    maxLines?: number;
+    lineHeight?: number;
+}): TextFit;
+/**
+ * A label set in a box `width` by `height`: the biggest size up to
+ * `maxFontSize` at which its lines, as many as `maxLines`, fit both ways.
+ */
+export declare function fitTextInBox(text: string, width: number, height: number, maxFontSize: number, { maxLines, lineHeight }?: {
+    maxLines?: number;
+    lineHeight?: number;
+}): TextFit;
+/**
+ * The size a falling label of the catch game is set at, at most, on a stage so
+ * big: a share of its short side, a little smaller on a wide, shallow stage (a
+ * phone on its side), where its circles are smaller too. `fitTextInCircle`
+ * makes a long label smaller still.
+ */
+export declare function catchLabelFontSize(width: number, height: number): number;
+/**
+ * A memory card, the same in both players, in shares of its short side: the
+ * white rim of its face (never under 3 px), the room inside it, and its words —
+ * `text` at most, never under `textMin` unless a long label needs it.
+ */
+export declare const MEMORY_CARD_FACE: {
+    readonly rim: 0.045;
+    readonly rimMin: 3;
+    readonly padding: 0.05;
+    readonly text: 0.17;
+    readonly textMin: 15;
+    readonly lineHeight: 1.25;
+};
+/** A memory card's words fitted to its face, inside its rim and room: see `MEMORY_CARD_FACE`. */
+export declare function memoryCardTextFit(text: string, width: number, height: number): TextFit;
 export declare const TEXT_CHOICE_ANSWERS_MIN = 2;
 /** More than four answers in words do not fit a phone at a size a child reads. */
 export declare const TEXT_CHOICE_ANSWERS_MAX = 4;
