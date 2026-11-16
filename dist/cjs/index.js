@@ -4936,7 +4936,8 @@ function normalizeTextChoiceConfig(game, config) {
         }
         return {
             id: record ? extractText(record.id) ?? `${game.id}-answer-${index}` : `${game.id}-answer-${index}`,
-            text,
+            // A number is never split: `120 500` is not `120` over `500` (keepNumbersWhole).
+            text: keepNumbersWhole(text),
             isCorrect: record ? extractBoolean(record.is_correct) ?? extractBoolean(record.correct) ?? false : false,
         };
     })
@@ -4947,7 +4948,7 @@ function normalizeTextChoiceConfig(game, config) {
     const questionImage = extractMediaUrl(config.question_image);
     const bg = normalizeBackground(config);
     return {
-        question: extractText(config.question)?.trim() ?? "",
+        question: keepNumbersWhole(extractText(config.question)?.trim() ?? ""),
         questionImage,
         bg_image: bg,
         answers,
@@ -5873,7 +5874,7 @@ function normalizeReadingTextConfig(game, config) {
         if (!record) {
             return null;
         }
-        const question = (extractText(record.question) ?? extractText(record.text) ?? "").trim();
+        const question = keepNumbersWhole((extractText(record.question) ?? extractText(record.text) ?? "").trim());
         const id = extractText(record.id) ?? `${game.id}-question-${questionIndex}`;
         const rawAnswers = Array.isArray(record.answers) ? record.answers : [];
         const answers = rawAnswers
@@ -5885,7 +5886,7 @@ function normalizeReadingTextConfig(game, config) {
             }
             return {
                 id: item ? extractText(item.id) ?? `${id}-answer-${index}` : `${id}-answer-${index}`,
-                text,
+                text: keepNumbersWhole(text),
                 isCorrect: item ? extractBoolean(item.is_correct) ?? extractBoolean(item.correct) ?? false : false,
             };
         })
@@ -5904,7 +5905,8 @@ function normalizeReadingTextConfig(game, config) {
         .slice(0, exports.READING_TEXT_QUESTIONS_MAX);
     const bg = normalizeBackground(config);
     return {
-        text: (extractText(config.text) ?? extractText(config.passage) ?? "").replace(/\s+/g, " ").trim(),
+        // The collapse reads U+202F as a space too; keepNumbersWhole puts it back, so a number is never split.
+        text: keepNumbersWhole((extractText(config.text) ?? extractText(config.passage) ?? "").replace(/\s+/g, " ").trim()),
         questions,
         bg_image: bg,
         time_limit: extractNumber(config.time_limit),
@@ -6101,7 +6103,8 @@ function normalizeWordProblemConfig(config) {
     const bg = normalizeBackground(config);
     return {
         // Its long numbers as the answer is written: `396 425`, never broken over two lines.
-        text: groupMathNumbersInText((extractText(config.text) ?? extractText(config.problem) ?? "").replace(/\s+/g, " ").trim()),
+        // Four digits written with a space (`5 000`) are joined too, so no number is split.
+        text: keepNumbersWhole((extractText(config.text) ?? extractText(config.problem) ?? "").replace(/\s+/g, " ").trim()),
         answer: valid ? answer : -1,
         unit: (extractText(config.unit) ?? "").replace(/\s+/g, " ").trim(),
         maxDigits: Math.max(exports.MATH_INPUT_DIGITS_MIN, valid ? String(answer).length : exports.MATH_INPUT_DIGITS_MIN),
@@ -7493,14 +7496,15 @@ function normalizeWordSortConfig(config) {
     const rows = (Array.isArray(config.words) ? config.words : [])
         .map((row) => asRecord(row))
         .filter((row) => row !== null)
-        .map((row) => ({ word: (extractText(row.word) ?? "").replace(/\s+/g, " ").trim(), bin: binIndex(row.bin) }))
+        .map((row) => ({ word: keepNumbersWhole((extractText(row.word) ?? "").replace(/\s+/g, " ").trim()), bin: binIndex(row.bin) }))
         .filter((row) => row.word !== "" && row.bin >= 0 && rawBins[row.bin])
         .slice(0, exports.WORD_SORT_WORDS.max);
     const used = new Set(rows.map((row) => row.bin));
     const bins = rawBins
         .map((label, index) => ({ id: `bin_${index + 1}`, label: label ?? "", index }))
         .filter((bin) => bin.label !== "" && used.has(bin.index))
-        .map(({ id, label }) => ({ id, label }));
+        // Matched to the words as written above; shown with its numbers whole.
+        .map(({ id, label }) => ({ id, label: keepNumbersWhole(label) }));
     if (bins.length < exports.WORD_SORT_BINS.min || rows.length < exports.WORD_SORT_WORDS.min) {
         return { bins: [], words: [], bg_image: bg, time_limit: extractNumber(config.time_limit), lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)), imageUris: bg ? [bg] : [] };
     }
@@ -7812,7 +7816,9 @@ function normalizeTrueFalseConfig(config) {
         .map((row) => asRecord(row))
         .filter((row) => row !== null)
         .map((row) => ({
-        text: (extractText(row.text) ?? "").replace(/\s+/g, " ").trim(),
+        // The collapse reads U+202F as a space too; keepNumbersWhole puts it back, so `120 500` is never
+        // `120` over `500`, nor drawn as two words of two colours.
+        text: keepNumbersWhole((extractText(row.text) ?? "").replace(/\s+/g, " ").trim()),
         image: extractMediaUrl(row.image),
         answer: readTruth(row.answer),
     }))

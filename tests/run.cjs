@@ -3542,5 +3542,61 @@ section('a label kept whole: catch circles and memory cards');
   }));
 }
 
+section('the text games keep a long number whole: true_false, text_choice, reading_text, word_problem, word_sort');
+{
+  const NB = ' ';
+  // Every number of the text, as written with plain spaces, stands whole in one of the lines.
+  const numbersWhole = (text, lines) => (text.match(/\d{1,3}(?: \d{3})+/g) ?? [])
+    .every((number) => lines.some((line) => line.includes(number.replace(/ /g, NB))));
+  // Grade 4 of «Логика и математика», as Game Forge wrote it (G90872, G90896, G90920), and one long enough to wrap.
+  const statements = [
+    '48 999, ათიათასეულებამდე დამრგვალებული, 40 000-ია.',
+    '120 500 − 20 000 = 118 500',
+    '870 000 + 50 000 = 820 000',
+    'Число 305 020 больше числа 350 020, а 5 000 меньше, чем 45 000.',
+  ];
+  const series = rules.normalizeTrueFalseConfig({ statements: statements.map((text) => ({ text, answer: false })) });
+  check('a statement keeps its words and its numbers, each number with the thin no-break space',
+    series.statements.map((s) => s.text).join('|') === statements.map((text) => text.replace(/(\d) (\d{3})/g, `$1${NB}$2`)).join('|'));
+  check('a statement the SQL already wrote with U+202F is not undone by the collapse of its spaces',
+    rules.normalizeTrueFalseConfig({ statements: [1, 2, 3].map(() => ({ text: `120${NB}500  −\n20${NB}000`, answer: true })) }).statements[0].text === `120${NB}500 − 20${NB}000`);
+  check('on a phone on its side and a desktop, no statement is broken inside a number (5 over 000 was)',
+    [[852, 342, { left: 59, right: 59, bottom: 21 }], [640, 300, {}], [812, 544, {}], [390, 700, {}]].every(([w, h, insets]) =>
+      series.statements.every((statement, at) => {
+        const layout = rules.layoutTrueFalse(w, h, series, at, insets);
+        return layout && numbersWhole(statements[at], layout.lines.map((line) => line.text));
+      })));
+
+  const choice = rules.normalizeTextChoiceConfig({ id: 1 }, {
+    question: 'Какое число больше 120 500?',
+    answers: [{ text: '125 000', is_correct: true }, { text: '119 999', is_correct: false }, { text: '5 000', is_correct: false }],
+  });
+  check('text_choice: the question and every answer keep their numbers whole',
+    choice.question === `Какое число больше 120${NB}500?` && choice.answers.every((answer) => !/\d \d/.test(answer.text))
+      && choice.answers.some((answer) => answer.text === `5${NB}000`));
+
+  const reading = rules.normalizeReadingTextConfig({ id: 2 }, {
+    text: 'В городе живут 396 425 человек,\nа в селе — 2 974.',
+    questions: [{ question: 'Сколько живут в городе: 396 425 или 369 425?', answers: [{ text: '396 425', correct: true }, { text: '369 425' }] }],
+  });
+  check('reading_text: the text, its question and its answers keep their numbers whole',
+    reading.text === `В городе живут 396${NB}425 человек, а в селе — 2${NB}974.`
+      && reading.questions[0].question.includes(`396${NB}425 или 369${NB}425`)
+      && reading.questions[0].answers.every((answer) => answer.text.includes(NB)));
+
+  check('word_problem: four digits written with a space are joined too, five or more grouped as before',
+    rules.normalizeWordProblemConfig({ text: 'Было 5 000 листов и 120500 тетрадей.', answer: 3 }).text === `Было 5${NB}000 листов и 120${NB}500 тетрадей.`);
+
+  const sort = rules.normalizeWordSortConfig({
+    bins: ['больше 100 000', 'меньше 100 000'],
+    words: [['120 500', 'больше 100 000'], ['99 999', 2], ['450 000', 1], ['5 000', 'меньше 100 000']].map(([word, bin]) => ({ word, bin })),
+  });
+  check('word_sort: a card and a basket keep their numbers whole, and a word still finds its basket by the name as written',
+    sort.words.length === 4 && sort.words.every((word) => !/\d \d/.test(word.word))
+      && sort.bins.every((bin) => bin.label.endsWith(`100${NB}000`))
+      && sort.words.find((word) => word.word === `120${NB}500`)?.bin === sort.bins[0].id
+      && sort.words.find((word) => word.word === `5${NB}000`)?.bin === sort.bins[1].id);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);
