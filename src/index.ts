@@ -13596,3 +13596,6 @@ export * from "./letters.js";
 
 // The coloring pages: the crayons, what a drawing is and how the screen is divided.
 export * from "./coloring.js";
+
+// A journey street's panorama: its camera and where a point of the picture is on the screen.
+export * as panorama from "./panorama.js";

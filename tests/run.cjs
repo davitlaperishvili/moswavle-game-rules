@@ -3598,5 +3598,31 @@ section('the text games keep a long number whole: true_false, text_choice, readi
       && sort.words.find((word) => word.word === `5${NB}000`)?.bin === sort.bins[1].id);
 }
 
+section('a journey street: the same point of the picture on the same point of the screen');
+{
+  const p = rules.panorama;
+  // Abanotubani: all the way round, 8064 × 1152, the horizon at 660.
+  const round = { W: 8064, H: 1152, span: 360, horizon: 660, view: { x: 4032, y: 600, zoom: 1.15 } };
+  const part = { W: 4000, H: 1000, span: 120, horizon: 500 };
+  const view = { width: 1000, height: 500 };
+  const cam = { x: 4032, y: 600, zoom: 1.2, round: 1, depth: 0, dolly: 0, swing: 0, vx: 0, vy: 0 };
+  const u = p.uniformsOf(round, cam, { x: 0, y: 0 }, view, 0);
+  const middle = p.sceneToScreen([4032, 600], round, u, view);
+  check('the point looked at is in the middle of the screen', Math.abs(middle[0] - 500) < 0.5 && Math.abs(middle[1] - 250) < 0.5);
+  const back = p.screenToScene(700, 300, round, u, view);
+  const again = p.sceneToScreen(back, round, u, view);
+  check('a point of the screen read back lands where it was', Math.abs(again[0] - 700) < 0.5 && Math.abs(again[1] - 300) < 0.5);
+  check('what is behind the viewer is not on the screen', p.sceneToScreen([8064, 600], round, u, view) === null);
+  check('a full panorama goes round; a part stops at its edges',
+    Math.abs(p.clampCam({ x: -100, y: 600, zoom: 1.2, round: 1 }, round, view).x - 7964) < 0.001
+      && p.clampCam({ x: 0, y: 0, zoom: 1.2, round: 1 }, part, view).x > 0);
+  check('the view never comes nearer than 2.6 times', p.clampCam({ x: 0, y: 0, zoom: 9, round: 1 }, part, view).zoom === 2.6);
+  check('a turn goes the shortest way round', Math.abs(p.nearestX(100, 7900, round) - (100 - 264)) < 0.001 && p.nearestX(100, 3900, part) === 3900);
+  check('a street opens on its own view', p.homeCam(round, view).x === 4032 && p.homeCam(round, view).zoom === 1.15);
+  const depth = { width: 2, height: 1, pixels: new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 0, 255]) };
+  check('the depth map is 16-bit: high byte red, low byte green, far is 1',
+    p.depthAt(depth, part, 0, 0) === 0 && p.depthAt(depth, part, 4000, 0) === 1 && p.nearnessAt(depth, part, 0, 0) === 1);
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

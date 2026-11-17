@@ -1,0 +1,226 @@
+// A journey's street is seen first-person (docs/journey-streets.md of the platform's plugin): a
+// painted panorama on a cylinder round the viewer (all the way round, or a part), turned by a finger.
+// Every pixel is also moved by how near it is (its depth map), more as the view swings: near things
+// slide past far ones, which is what makes a flat picture deep. Both players turn a street with
+// these functions (the site's features/journeys, the app's journeys screens): the same point of the
+// picture lands on the same point of the screen. Exported as `panorama`.
+
+export type Point = [number, number];
+
+export interface PanoramaScene {
+  /** The picture's width and height, pixels. */
+  W: number;
+  H: number;
+  /** How much of the circle the picture holds, degrees (360: all the way round). */
+  span: number;
+  /** The row of the picture at the eye's height. */
+  horizon: number;
+  /** The view the street opens on. */
+  view?: { x?: number; y?: number; zoom?: number } | null;
+}
+
+/**
+ * Where the viewer looks: `x` the column of the picture in the middle of the screen (pixels),
+ * `y` the row there, `zoom` (1 = the picture's height fills the screen), how round the view is
+ * (0 = flat, as a clip's frame; 1 = the cylinder), how deep (0 = no depth, as a clip), and the
+ * push of a dolly (near things grow faster than far ones). `swing` is the sway of a turn, `vx`
+ * and `vy` how fast it turns (pixels of the picture a millisecond).
+ */
+export interface Cam {
+  x: number;
+  y: number;
+  zoom: number;
+  round: number;
+  depth: number;
+  dolly: number;
+  swing: number;
+  vx: number;
+  vy: number;
+}
+
+export type CamTarget = Partial<Pick<Cam, "x" | "y" | "zoom" | "round" | "depth" | "dolly">>;
+
+export interface Viewport {
+  width: number;
+  height: number;
+}
+
+/** A tilt of the phone or the mouse: a window looked through, -1..1 each way. */
+export interface Look {
+  x: number;
+  y: number;
+}
+
+/** What the shader is given, and what the screen's points are measured by. */
+export interface Uniforms {
+  cam1: [number, number, number, number];
+  cam2: [number, number, number, number];
+  wrap: number;
+  par: [number, number];
+  dolly: number;
+  focus: number;
+}
+
+/** The depth map's pixels: 16-bit, the high byte in red and the low byte in green; far is 1. */
+export interface DepthField {
+  width: number;
+  height: number;
+  pixels: Uint8ClampedArray;
+}
+
+export const FOCUS = 0.42;
+export const ZOOM_MIN = 1;
+export const ZOOM_MAX = 2.6;
+
+export const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
+export const lerp = (from: number, to: number, t: number) => from + (to - from) * t;
+
+const aspectOf = (view: Viewport) => view.width / Math.max(1, view.height);
+
+/** The scene as a cylinder: its radius in pixels of the picture, whether it goes all the way round. */
+export function geometry(scene: PanoramaScene) {
+  const span = ((scene.span || 120) * Math.PI) / 180;
+  return { R: scene.W / span, wrap: (scene.span || 120) >= 360, v0: scene.horizon / scene.H };
+}
+
+/** tan of half the field up and down at a zoom: at zoom 1 the picture's height just fits. */
+export function tanUp(scene: PanoramaScene, zoom: number) {
+  return scene.H / 2 / geometry(scene).R / zoom;
+}
+
+/** Keeps the view inside the picture: up and down always, across unless it goes all the way round. */
+export function clampCam<T extends Pick<Cam, "x" | "y" | "zoom" | "round">>(c: T, scene: PanoramaScene, view: Viewport): T {
+  const { R, wrap } = geometry(scene);
+  c.zoom = clamp(c.zoom, ZOOM_MIN, ZOOM_MAX);
+  const halfH = tanUp(scene, c.zoom) * R;
+  c.y = clamp(c.y, halfH, scene.H - halfH);
+  if (wrap) {
+    c.x = ((c.x % scene.W) + scene.W) % scene.W;
+  } else {
+    const tanAcross = tanUp(scene, c.zoom) * aspectOf(view);
+    const halfW = lerp(tanAcross, Math.atan(tanAcross), c.round) * R;
+    c.x = scene.W > 2 * halfW ? clamp(c.x, halfW, scene.W - halfW) : scene.W / 2;
+  }
+  return c;
+}
+
+/** The camera that shows a frame of the scene (16:9 unless it says its height) as a video covers the screen. */
+export function frameCam(rect: { x: number; y: number; w: number; h?: number }, scene: PanoramaScene, view: Viewport) {
+  const ratio = rect.h ? rect.w / rect.h : 16 / 9;
+  const frameHeight = rect.w / ratio;
+  const a = aspectOf(view);
+  const shownHeight = a >= ratio ? rect.w / a : frameHeight;
+  return { x: rect.x + rect.w / 2, y: rect.y + frameHeight / 2, zoom: scene.H / shownHeight, round: 0, depth: 0, dolly: 0 };
+}
+
+/** The view a street opens on: its own, or the middle of the picture, a little nearer than all of it. */
+export function homeCam(scene: PanoramaScene, view: Viewport) {
+  const home = scene.view || {};
+  return clampCam({ x: home.x ?? scene.W / 2, y: home.y ?? scene.H / 2, zoom: home.zoom ?? 1.15, round: 1, depth: 1, dolly: 0 }, scene, view);
+}
+
+/** How far (0 near … 1 far) the picture is at a point of it. */
+export function depthAt(depth: DepthField, scene: PanoramaScene, x: number, y: number) {
+  const u = geometry(scene).wrap ? (((x / scene.W) % 1) + 1) % 1 : clamp(x / scene.W, 0, 1);
+  const px = clamp(Math.round(u * (depth.width - 1)), 0, depth.width - 1);
+  const py = clamp(Math.round((y / scene.H) * (depth.height - 1)), 0, depth.height - 1);
+  const at = (py * depth.width + px) * 4;
+  return (depth.pixels[at] * 256 + depth.pixels[at + 1]) / 65535;
+}
+
+export const nearnessAt = (depth: DepthField, scene: PanoramaScene, x: number, y: number) => 1 - depthAt(depth, scene, x, y);
+
+/**
+ * The shader's numbers now. The sway of a turn, the tilt of the phone and a slow breath move near
+ * things against far ones: a twentieth of the view's width at most, in the picture's own measure.
+ */
+export function uniformsOf(scene: PanoramaScene, cam: Cam, look: Look, view: Viewport, seconds: number): Uniforms {
+  const { R, wrap, v0 } = geometry(scene);
+  const tanY = tanUp(scene, cam.zoom);
+  const tanX = tanY * aspectOf(view);
+  const shiftY = (cam.y - scene.horizon) / R;
+  const viewU = (2 * tanX * R) / scene.W;
+  const sx = (cam.swing * 0.05 + look.x * 0.018 + Math.sin(seconds * 0.55) * 0.004) * cam.depth;
+  const sy = (look.y * 0.012 + Math.cos(seconds * 0.41) * 0.0025) * cam.depth;
+  return {
+    cam1: [cam.x / scene.W, tanX, tanY, shiftY],
+    cam2: [R / scene.W, R / scene.H, v0, cam.round],
+    wrap: wrap ? 1 : 0,
+    par: [sx * viewU, (sy * 2 * tanY * R) / scene.H],
+    dolly: cam.dolly * cam.depth,
+    focus: FOCUS,
+  };
+}
+
+/**
+ * Where a point of the picture is on the screen, as the shader draws it (its depth's shift taken
+ * back once); null when it is behind the viewer. `nearness` is left out for a point drawn flat.
+ */
+export function sceneToScreen(
+  [px, py]: Point,
+  scene: PanoramaScene,
+  u: Uniforms,
+  view: Viewport,
+  nearness?: (x: number, y: number) => number,
+): Point | null {
+  const [cu, tanX, tanY, shiftY] = u.cam1;
+  const [rw, rh, v0, round] = u.cam2;
+  const place = (qx: number, qy: number): Point | null => {
+    let du = qx / scene.W - cu;
+    if (u.wrap) du -= Math.round(du);
+    const angle = du / rw;
+    if (Math.abs(angle) > 1.45) return null;
+    const x = lerp(angle, Math.tan(angle), round);
+    const cosA = lerp(1, Math.cos(Math.atan(x)), round);
+    const y = (qy / scene.H - v0) / rh / cosA;
+    return [x / tanX, (y - shiftY) / tanY];
+  };
+  let s = place(px, py);
+  if (!s) return null;
+  if (nearness) {
+    const k = nearness(px, py) - u.focus;
+    const relU = s[0] * tanX * rw;
+    const relV = s[1] * tanY * rh;
+    const offU = u.par[0] * k - relU * u.dolly * k;
+    const offV = u.par[1] * k - relV * u.dolly * k;
+    s = place(px - offU * scene.W, py - offV * scene.H) || s;
+  }
+  return [((s[0] + 1) / 2) * view.width, ((s[1] + 1) / 2) * view.height];
+}
+
+/** The point of the picture under a point of the screen (its depth's shift taken in once). */
+export function screenToScene(
+  sx: number,
+  sy: number,
+  scene: PanoramaScene,
+  u: Uniforms,
+  view: Viewport,
+  nearness?: (x: number, y: number) => number,
+): Point {
+  const [cu, tanX, tanY, shiftY] = u.cam1;
+  const [rw, rh, v0, round] = u.cam2;
+  const s = [(sx / view.width) * 2 - 1, (sy / view.height) * 2 - 1];
+  const x = s[0] * tanX;
+  const a = Math.atan(x);
+  const y = s[1] * tanY + shiftY;
+  let uu = lerp(cu + x * rw, cu + a * rw, round);
+  let vv = lerp(v0 + y * rh, v0 + y * Math.cos(a) * rh, round);
+  if (nearness) {
+    const k = nearness(uu * scene.W, vv * scene.H) - u.focus;
+    uu += u.par[0] * k - x * rw * u.dolly * k;
+    vv += u.par[1] * k - s[1] * tanY * rh * u.dolly * k;
+  }
+  if (u.wrap) uu = ((uu % 1) + 1) % 1;
+  return [uu * scene.W, vv * scene.H];
+}
+
+/** Screen pixels to a pixel of the picture, about the middle of the screen. */
+export function scenePx(scene: PanoramaScene, zoom: number, view: Viewport) {
+  return view.height / (2 * tanUp(scene, zoom) * geometry(scene).R);
+}
+
+/** Where a camera move ends across: the shortest way round a full panorama. */
+export function nearestX(fromX: number, toX: number, scene: PanoramaScene) {
+  if (!geometry(scene).wrap) return toX;
+  return fromX + ((((toX - fromX) % scene.W) + 1.5 * scene.W) % scene.W) - scene.W / 2;
+}
