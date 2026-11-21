@@ -3214,9 +3214,13 @@ function isImageReference(value) {
 // --- Catch Correct ----------------------------------------------------------
 /** Spawn interval floor: below this the screen fills faster than a child can look. */
 exports.CATCH_CORRECT_MIN_FREQUENCY_MS = 500;
-/** Fall duration bounds: faster is unplayable, slower is boring. */
+/**
+ * Fall duration bounds: faster is unplayable, slower is boring. The slowest was 6840 ms, so
+ * every speed under about 66 fell alike and an author's slower 50–60 did nothing; 9000 ms lets
+ * them be slower (owner, 2026-11-21: «подними предел до 9 секунд»).
+ */
 exports.CATCH_CORRECT_MIN_FALL_MS = 2400;
-exports.CATCH_CORRECT_MAX_FALL_MS = 6840;
+exports.CATCH_CORRECT_MAX_FALL_MS = 9000;
 /** Demo items for a game authored without any, so it is still playable. */
 exports.DEFAULT_CATCH_CORRECT_ITEMS = [
     { label: "🍎", correct: true },

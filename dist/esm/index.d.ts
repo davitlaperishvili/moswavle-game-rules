@@ -991,9 +991,13 @@ export declare function shouldPlayHalfway(next: number, total: number): boolean;
 export declare function isImageReference(value: unknown): value is string;
 /** Spawn interval floor: below this the screen fills faster than a child can look. */
 export declare const CATCH_CORRECT_MIN_FREQUENCY_MS = 500;
-/** Fall duration bounds: faster is unplayable, slower is boring. */
+/**
+ * Fall duration bounds: faster is unplayable, slower is boring. The slowest was 6840 ms, so
+ * every speed under about 66 fell alike and an author's slower 50–60 did nothing; 9000 ms lets
+ * them be slower (owner, 2026-11-21: «подними предел до 9 секунд»).
+ */
 export declare const CATCH_CORRECT_MIN_FALL_MS = 2400;
-export declare const CATCH_CORRECT_MAX_FALL_MS = 6840;
+export declare const CATCH_CORRECT_MAX_FALL_MS = 9000;
 /** Demo items for a game authored without any, so it is still playable. */
 export declare const DEFAULT_CATCH_CORRECT_ITEMS: ReadonlyArray<{
     label: string;
