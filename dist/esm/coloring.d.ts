@@ -14,7 +14,36 @@ export declare const COLORING_COLORS: readonly ["#e53935", "#fb8c00", "#fdd835",
 /** The two magic crayons follow the plain ones: a picture for a colour, drawn the same way. */
 export declare const COLORING_RAINBOW: 18;
 export declare const COLORING_GLITTER: number;
+/** The crayons every child has: the plain colours and the two magic ones. */
+export declare const COLORING_FREE_CRAYON_COUNT: number;
+/**
+ * The crayons sold for a child's stars (owner, 2026-11-25), after the free ones and painted with a
+ * picture as the magic ones are. A key is its tile's name in both clients (`gold.webp`) and what the
+ * server sells it by; a crayon's number in a drawing is its place in the box, the first of them 20.
+ * A new one goes at the end: a number once drawn with never changes.
+ */
+export declare const COLORING_STAR_CRAYONS: readonly ["gold", "silver", "neon-pink", "neon-green", "neon-blue", "hearts", "stars"];
+export type ColoringStarCrayon = (typeof COLORING_STAR_CRAYONS)[number];
+export declare const COLORING_FIRST_STAR_CRAYON: number;
 export declare const COLORING_CRAYON_COUNT: number;
+/** A star crayon's own colour: its toy's, its sparks', and what it paints with while its tile is not there. */
+export declare const COLORING_STAR_CRAYON_TONES: Readonly<Record<ColoringStarCrayon, string>>;
+/** The star crayon of that number, or null for a free one (or none). */
+export declare function coloringStarCrayonKey(crayon: number): ColoringStarCrayon | null;
+/** The number of the star crayon of that key, or -1. */
+export declare function coloringStarCrayonIndex(key: string): number;
+/** The picture a crayon paints with — 'rainbow', 'glitter' or a star crayon's key — or null for a colour. */
+export declare function coloringCrayonTile(crayon: number): 'rainbow' | 'glitter' | ColoringStarCrayon | null;
+/** A crayon's plain colour: its own, the magic ones' gold, a star crayon's tone. */
+export declare function coloringCrayonTone(crayon: number): string;
+/**
+ * The box's rows for so many crayons: four a row for the free twenty, five a row once star crayons
+ * stand in it too, so a crayon stays big enough for a finger.
+ */
+export declare function coloringCrayonGrid(count: number): {
+    columns: number;
+    rows: number;
+};
 /** The colour of a stroke of the eraser: the paper's. */
 export declare const COLORING_ERASER = -1;
 /** A stroke's width, in the page's own units. */
@@ -102,4 +131,6 @@ export interface ColoringLayout {
 export declare function layoutColoringScreen(width: number, height: number, page: {
     w: number;
     h: number;
-}, insets?: ColoringInsets): ColoringLayout;
+}, insets?: ColoringInsets, 
+/** How many crayons the box holds: a fifth column makes it wider. */
+crayons?: number): ColoringLayout;

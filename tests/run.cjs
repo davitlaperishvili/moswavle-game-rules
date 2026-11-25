@@ -3444,7 +3444,16 @@ section('coloring pages');
     stroke(0, [20, 30, 25, 31], { j: 1 }),
   ];
 
-  check('20 crayons: 18 colours, the rainbow and the glitter', rules.COLORING_CRAYON_COUNT === 20 && rules.COLORING_RAINBOW === 18 && rules.COLORING_GLITTER === 19);
+  check('20 free crayons: 18 colours, the rainbow and the glitter', rules.COLORING_FREE_CRAYON_COUNT === 20 && rules.COLORING_RAINBOW === 18 && rules.COLORING_GLITTER === 19);
+  check('7 crayons for stars after them, 27 in all', rules.COLORING_FIRST_STAR_CRAYON === 20 && rules.COLORING_STAR_CRAYONS.length === 7 && rules.COLORING_CRAYON_COUNT === 27);
+  check('a star crayon by its number and back',
+    rules.coloringStarCrayonKey(20) === 'gold' && rules.coloringStarCrayonKey(26) === 'stars' && rules.coloringStarCrayonKey(19) === null && rules.coloringStarCrayonKey(27) === null
+    && rules.coloringStarCrayonIndex('hearts') === 25 && rules.coloringStarCrayonIndex('red') === -1);
+  check('what each crayon paints with',
+    rules.coloringCrayonTile(3) === null && rules.coloringCrayonTile(18) === 'rainbow' && rules.coloringCrayonTile(19) === 'glitter' && rules.coloringCrayonTile(22) === 'neon-pink');
+  check('every star crayon has a tone', rules.COLORING_STAR_CRAYONS.every((key, i) => /^#[0-9a-f]{6}$/.test(rules.coloringCrayonTone(20 + i))) && rules.coloringCrayonTone(0) === rules.COLORING_COLORS[0]);
+  check('the box: four a row for the free ones, five once star crayons stand in it',
+    JSON.stringify(rules.coloringCrayonGrid(20)) === '{"columns":4,"rows":5}' && JSON.stringify(rules.coloringCrayonGrid(27)) === '{"columns":5,"rows":6}' && JSON.stringify(rules.coloringCrayonGrid(23)) === '{"columns":5,"rows":5}');
   check('what came before a clean sheet is not kept', JSON.stringify(rules.compactColoringOps(ops)) === JSON.stringify(ops.slice(3)));
   check('a drawing with no clean sheet is kept whole', rules.compactColoringOps(ops.slice(0, 2)).length === 2);
   check('back takes a scribble of many pieces whole', rules.undoColoringOp(ops).length === 4);
@@ -3482,6 +3491,11 @@ section('coloring pages');
   check('nothing a child touches lies under the phone\'s edges',
     notched.tools.x >= 59 && notched.box.x + notched.box.width <= 852 - 59 && notched.tools.y + notched.tools.height <= 393 - 21);
   check('the toys stop growing on a big screen', rules.layoutColoringScreen(3840, 2160, page).unit === 1.8);
+  const wide = rules.layoutColoringScreen(800, 370, page, undefined, 27);
+  check('star crayons in the box make it a column wider, the sheet still between',
+    Math.abs(wide.box.width - phone.box.width - 37 * phone.unit) < 0.01 && wide.paper.x + wide.paper.width <= wide.box.x
+    && [[640, 360], [852, 393], [768, 1024]].every(([w, h]) => inside(rules.layoutColoringScreen(w, h, page, undefined, 27), w, h)));
+  check('the free twenty keep the box as it was', rules.layoutColoringScreen(800, 370, page, undefined, 20).box.width === phone.box.width);
   check('a screen not measured yet breaks nothing', rules.layoutColoringScreen(0, 0, page).paper.width === 0);
 }
 

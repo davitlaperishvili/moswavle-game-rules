@@ -35,7 +35,66 @@ export const COLORING_COLORS = [
 /** The two magic crayons follow the plain ones: a picture for a colour, drawn the same way. */
 export const COLORING_RAINBOW = COLORING_COLORS.length;
 export const COLORING_GLITTER = COLORING_RAINBOW + 1;
-export const COLORING_CRAYON_COUNT = COLORING_GLITTER + 1;
+
+/** The crayons every child has: the plain colours and the two magic ones. */
+export const COLORING_FREE_CRAYON_COUNT = COLORING_GLITTER + 1;
+
+/**
+ * The crayons sold for a child's stars (owner, 2026-11-25), after the free ones and painted with a
+ * picture as the magic ones are. A key is its tile's name in both clients (`gold.webp`) and what the
+ * server sells it by; a crayon's number in a drawing is its place in the box, the first of them 20.
+ * A new one goes at the end: a number once drawn with never changes.
+ */
+export const COLORING_STAR_CRAYONS = ['gold', 'silver', 'neon-pink', 'neon-green', 'neon-blue', 'hearts', 'stars'] as const;
+export type ColoringStarCrayon = (typeof COLORING_STAR_CRAYONS)[number];
+
+export const COLORING_FIRST_STAR_CRAYON = COLORING_FREE_CRAYON_COUNT;
+export const COLORING_CRAYON_COUNT = COLORING_FIRST_STAR_CRAYON + COLORING_STAR_CRAYONS.length;
+
+/** A star crayon's own colour: its toy's, its sparks', and what it paints with while its tile is not there. */
+export const COLORING_STAR_CRAYON_TONES: Readonly<Record<ColoringStarCrayon, string>> = {
+  gold: '#f2c02e',
+  silver: '#c9d1d8',
+  'neon-pink': '#ff1fc8',
+  'neon-green': '#2bff2b',
+  'neon-blue': '#00d5ff',
+  hearts: '#ff3d7f',
+  stars: '#2b3a99',
+};
+
+/** The star crayon of that number, or null for a free one (or none). */
+export function coloringStarCrayonKey(crayon: number): ColoringStarCrayon | null {
+  return COLORING_STAR_CRAYONS[crayon - COLORING_FIRST_STAR_CRAYON] ?? null;
+}
+
+/** The number of the star crayon of that key, or -1. */
+export function coloringStarCrayonIndex(key: string): number {
+  const place = (COLORING_STAR_CRAYONS as readonly string[]).indexOf(key);
+  return place < 0 ? -1 : COLORING_FIRST_STAR_CRAYON + place;
+}
+
+/** The picture a crayon paints with — 'rainbow', 'glitter' or a star crayon's key — or null for a colour. */
+export function coloringCrayonTile(crayon: number): 'rainbow' | 'glitter' | ColoringStarCrayon | null {
+  if (crayon === COLORING_RAINBOW) return 'rainbow';
+  if (crayon === COLORING_GLITTER) return 'glitter';
+  return coloringStarCrayonKey(crayon);
+}
+
+/** A crayon's plain colour: its own, the magic ones' gold, a star crayon's tone. */
+export function coloringCrayonTone(crayon: number): string {
+  const star = coloringStarCrayonKey(crayon);
+  if (star) return COLORING_STAR_CRAYON_TONES[star];
+  return crayon >= 0 && crayon < COLORING_COLORS.length ? COLORING_COLORS[crayon] : '#f5b81f';
+}
+
+/**
+ * The box's rows for so many crayons: four a row for the free twenty, five a row once star crayons
+ * stand in it too, so a crayon stays big enough for a finger.
+ */
+export function coloringCrayonGrid(count: number): { columns: number; rows: number } {
+  const columns = count > COLORING_FREE_CRAYON_COUNT ? 5 : 4;
+  return { columns, rows: Math.max(1, Math.ceil(count / columns)) };
+}
 
 /** The colour of a stroke of the eraser: the paper's. */
 export const COLORING_ERASER = -1;
@@ -212,7 +271,7 @@ export interface ColoringLayout {
   paper: ColoringRect;
 }
 
-const COLORING_ROOM = { width: 740, height: 360, gap: 8, tools: 54, box: 170, rim: 5, maxUnit: 1.8 };
+const COLORING_ROOM = { width: 740, height: 360, gap: 8, tools: 54, box: 170, column: 37, rim: 5, maxUnit: 1.8 };
 
 /**
  * How the screen is divided, from the room the page has: the toys grow with it
@@ -224,8 +283,11 @@ export function layoutColoringScreen(
   height: number,
   page: { w: number; h: number },
   insets: ColoringInsets = { top: 0, right: 0, bottom: 0, left: 0 },
+  /** How many crayons the box holds: a fifth column makes it wider. */
+  crayons: number = COLORING_FREE_CRAYON_COUNT,
 ): ColoringLayout {
-  const { gap, tools, box, rim } = COLORING_ROOM;
+  const { gap, tools, rim } = COLORING_ROOM;
+  const box = COLORING_ROOM.box + (coloringCrayonGrid(crayons).columns - 4) * COLORING_ROOM.column;
   const unit = Math.max(
     0.1,
     Math.min(

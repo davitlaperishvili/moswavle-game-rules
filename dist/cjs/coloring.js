@@ -11,7 +11,12 @@
  * (`includes/api/classes/ColoringHandler.php`): change the two together.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.COLORING_SAVE_EVERY_MS = exports.COLORING_SAVE_MAX_CHARS = exports.COLORING_PREVIEW_MAX_CHARS = exports.COLORING_PREVIEW_WIDTH = exports.COLORING_SPREAD_MS = exports.COLORING_PIECE = exports.COLORING_STEP = exports.COLORING_SIZES = exports.COLORING_ERASER = exports.COLORING_CRAYON_COUNT = exports.COLORING_GLITTER = exports.COLORING_RAINBOW = exports.COLORING_COLORS = void 0;
+exports.COLORING_SAVE_EVERY_MS = exports.COLORING_SAVE_MAX_CHARS = exports.COLORING_PREVIEW_MAX_CHARS = exports.COLORING_PREVIEW_WIDTH = exports.COLORING_SPREAD_MS = exports.COLORING_PIECE = exports.COLORING_STEP = exports.COLORING_SIZES = exports.COLORING_ERASER = exports.COLORING_STAR_CRAYON_TONES = exports.COLORING_CRAYON_COUNT = exports.COLORING_FIRST_STAR_CRAYON = exports.COLORING_STAR_CRAYONS = exports.COLORING_FREE_CRAYON_COUNT = exports.COLORING_GLITTER = exports.COLORING_RAINBOW = exports.COLORING_COLORS = void 0;
+exports.coloringStarCrayonKey = coloringStarCrayonKey;
+exports.coloringStarCrayonIndex = coloringStarCrayonIndex;
+exports.coloringCrayonTile = coloringCrayonTile;
+exports.coloringCrayonTone = coloringCrayonTone;
+exports.coloringCrayonGrid = coloringCrayonGrid;
 exports.compactColoringOps = compactColoringOps;
 exports.undoColoringOp = undoColoringOp;
 exports.packColoringOps = packColoringOps;
@@ -42,7 +47,59 @@ exports.COLORING_COLORS = [
 /** The two magic crayons follow the plain ones: a picture for a colour, drawn the same way. */
 exports.COLORING_RAINBOW = exports.COLORING_COLORS.length;
 exports.COLORING_GLITTER = exports.COLORING_RAINBOW + 1;
-exports.COLORING_CRAYON_COUNT = exports.COLORING_GLITTER + 1;
+/** The crayons every child has: the plain colours and the two magic ones. */
+exports.COLORING_FREE_CRAYON_COUNT = exports.COLORING_GLITTER + 1;
+/**
+ * The crayons sold for a child's stars (owner, 2026-11-25), after the free ones and painted with a
+ * picture as the magic ones are. A key is its tile's name in both clients (`gold.webp`) and what the
+ * server sells it by; a crayon's number in a drawing is its place in the box, the first of them 20.
+ * A new one goes at the end: a number once drawn with never changes.
+ */
+exports.COLORING_STAR_CRAYONS = ['gold', 'silver', 'neon-pink', 'neon-green', 'neon-blue', 'hearts', 'stars'];
+exports.COLORING_FIRST_STAR_CRAYON = exports.COLORING_FREE_CRAYON_COUNT;
+exports.COLORING_CRAYON_COUNT = exports.COLORING_FIRST_STAR_CRAYON + exports.COLORING_STAR_CRAYONS.length;
+/** A star crayon's own colour: its toy's, its sparks', and what it paints with while its tile is not there. */
+exports.COLORING_STAR_CRAYON_TONES = {
+    gold: '#f2c02e',
+    silver: '#c9d1d8',
+    'neon-pink': '#ff1fc8',
+    'neon-green': '#2bff2b',
+    'neon-blue': '#00d5ff',
+    hearts: '#ff3d7f',
+    stars: '#2b3a99',
+};
+/** The star crayon of that number, or null for a free one (or none). */
+function coloringStarCrayonKey(crayon) {
+    return exports.COLORING_STAR_CRAYONS[crayon - exports.COLORING_FIRST_STAR_CRAYON] ?? null;
+}
+/** The number of the star crayon of that key, or -1. */
+function coloringStarCrayonIndex(key) {
+    const place = exports.COLORING_STAR_CRAYONS.indexOf(key);
+    return place < 0 ? -1 : exports.COLORING_FIRST_STAR_CRAYON + place;
+}
+/** The picture a crayon paints with — 'rainbow', 'glitter' or a star crayon's key — or null for a colour. */
+function coloringCrayonTile(crayon) {
+    if (crayon === exports.COLORING_RAINBOW)
+        return 'rainbow';
+    if (crayon === exports.COLORING_GLITTER)
+        return 'glitter';
+    return coloringStarCrayonKey(crayon);
+}
+/** A crayon's plain colour: its own, the magic ones' gold, a star crayon's tone. */
+function coloringCrayonTone(crayon) {
+    const star = coloringStarCrayonKey(crayon);
+    if (star)
+        return exports.COLORING_STAR_CRAYON_TONES[star];
+    return crayon >= 0 && crayon < exports.COLORING_COLORS.length ? exports.COLORING_COLORS[crayon] : '#f5b81f';
+}
+/**
+ * The box's rows for so many crayons: four a row for the free twenty, five a row once star crayons
+ * stand in it too, so a crayon stays big enough for a finger.
+ */
+function coloringCrayonGrid(count) {
+    const columns = count > exports.COLORING_FREE_CRAYON_COUNT ? 5 : 4;
+    return { columns, rows: Math.max(1, Math.ceil(count / columns)) };
+}
 /** The colour of a stroke of the eraser: the paper's. */
 exports.COLORING_ERASER = -1;
 /** A stroke's width, in the page's own units. */
@@ -137,14 +194,17 @@ function coloringSavedOps(ops) {
     }
     return packColoringOps(kept);
 }
-const COLORING_ROOM = { width: 740, height: 360, gap: 8, tools: 54, box: 170, rim: 5, maxUnit: 1.8 };
+const COLORING_ROOM = { width: 740, height: 360, gap: 8, tools: 54, box: 170, column: 37, rim: 5, maxUnit: 1.8 };
 /**
  * How the screen is divided, from the room the page has: the toys grow with it
  * up to a limit and the sheet takes the rest, whole. A game measures its stage,
  * never the screen, and so does this.
  */
-function layoutColoringScreen(width, height, page, insets = { top: 0, right: 0, bottom: 0, left: 0 }) {
-    const { gap, tools, box, rim } = COLORING_ROOM;
+function layoutColoringScreen(width, height, page, insets = { top: 0, right: 0, bottom: 0, left: 0 }, 
+/** How many crayons the box holds: a fifth column makes it wider. */
+crayons = exports.COLORING_FREE_CRAYON_COUNT) {
+    const { gap, tools, rim } = COLORING_ROOM;
+    const box = COLORING_ROOM.box + (coloringCrayonGrid(crayons).columns - 4) * COLORING_ROOM.column;
     const unit = Math.max(0.1, Math.min(COLORING_ROOM.maxUnit, (width - insets.left - insets.right) / COLORING_ROOM.width, (height - insets.top - insets.bottom) / COLORING_ROOM.height));
     const left = Math.max(insets.left, gap * unit);
     const right = Math.max(insets.right, gap * unit);
