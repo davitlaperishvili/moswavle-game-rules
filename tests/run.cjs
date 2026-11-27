@@ -3557,6 +3557,37 @@ section('a label kept whole: catch circles and memory cards');
   }));
 }
 
+section('words on the cards of connect_pairs, memory_cards and catch_correct are drawn, every character of them');
+{
+  const NB = ' ';
+  // Every character production's text cards held on 2026-11-27 (843 cards of 1105 games): digits, the signs
+  // of a sum, the thin space of a long number and the three alphabets. The ellipsis of a letter left out
+  // ("…ოთოლი", six cards) waits for its outline from FiraGO.
+  const seen = '0123456789 +−×÷=()?' + NB + 'აბგდევზთიკლმნოპჟრსტუფქღყშჩცძწჭხჯჰ'
+    + 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя';
+  const missing = [...seen].filter((char) => char !== ' ' && char !== NB && rules.glyphShape(char) === null);
+  check('every one has an outline of ours: nothing falls back to the device\'s type', missing.length === 0, missing.join(' '));
+  check('a long number keeps its thin space, drawn as a narrow gap and no glyph',
+    rules.layoutTextLine(rules.keepNumbersWhole('5 000 + 303')).glyphs[1].char === NB
+      && rules.layoutTextLine(rules.keepNumbersWhole('5 000 + 303')).glyphs[1].path === null);
+
+  const face = rules.CONNECT_PAIRS_CARD;
+  const room = (card) => card * (1 - face.padding * 2);
+  const inside = (fit, card) => fit.lines.every((line) => rules.textLineAdvance(line) * fit.fontSize <= room(card) + 1e-6)
+    && fit.lines.length * fit.lineHeight * fit.fontSize <= room(card) + 1e-6;
+  check('a connect_pairs card: a lone letter as big as the card allows, a word smaller, inside its room',
+    rules.connectPairsTextFit('ა', 120).fontSize === Math.floor(120 * face.text * 10) / 10
+      && rules.connectPairsTextFit('ტელევიზორი', 120).fontSize < rules.connectPairsTextFit('კატა', 120).fontSize
+      && ['ა', 'კატა', 'ტელევიზორი', 'твёрдый знак', '6 × 7', '5 000 + 303', '…ოთოლი', '1000 − 260']
+        .every((label) => [60, 120, 200].every((card) => inside(rules.connectPairsTextFit(label, card), card))));
+  const two = rules.connectPairsTextFit('твёрдый знак', 120);
+  check('two words break at their space, a number never inside itself',
+    two.lines.join('|') === 'твёрдый|знак' && rules.connectPairsTextFit('5 000 + 303', 90).lines.every((line) => !/^\d{3}\b/.test(line) || line.startsWith('+')),
+    JSON.stringify(two));
+  check('a card not measured yet breaks nothing', rules.connectPairsTextFit('კატა', 0).fontSize === 1
+    && rules.connectPairsTextFit('', 120).lines.length === 0);
+}
+
 section('the text games keep a long number whole: true_false, text_choice, reading_text, word_problem, word_sort');
 {
   const NB = ' ';

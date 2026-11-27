@@ -47,8 +47,8 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.MEMORY_CARD_FACE = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_NUMBER_SPACE = exports.MATH_EQUATION_TERMS_MAX = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHAIN = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.panorama = exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = void 0;
+exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.MEMORY_CARD_FACE = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_NUMBER_SPACE = exports.MATH_EQUATION_TERMS_MAX = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_CARD = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHAIN = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
+exports.panorama = exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -111,6 +111,7 @@ exports.getSelectOptionItemRect = getSelectOptionItemRect;
 exports.layoutSelectOptionItems = layoutSelectOptionItems;
 exports.resolveConnectPairsTap = resolveConnectPairsTap;
 exports.layoutConnectPairs = layoutConnectPairs;
+exports.connectPairsTextFit = connectPairsTextFit;
 exports.connectPairsLink = connectPairsLink;
 exports.isMathComparison = isMathComparison;
 exports.isMathProduct = isMathProduct;
@@ -3930,6 +3931,30 @@ function layoutConnectPairs(width, height, count, insets = {}) {
         left: Array.from({ length: n }, (_, index) => slot(0, index)),
         right: Array.from({ length: n }, (_, index) => slot(1, index)),
     };
+}
+/**
+ * A card of connect_pairs that holds words instead of a picture — a word to a
+ * picture, a syllable to a syllable, `6 × 7` to `42` — the same in both
+ * players, in shares of its side: the room inside its edge, and its words,
+ * `text` at most (a lone letter as big as a picture of it), `maxLines` lines
+ * broken at word spaces only.
+ */
+exports.CONNECT_PAIRS_CARD = { padding: 0.08, text: 0.42, maxLines: 3, lineHeight: 1.2 };
+/**
+ * A connect_pairs card's words fitted inside its room, a card `card` across:
+ * its numbers kept whole (`keepNumbersWhole`), set as big as they fit. The
+ * players draw them with their letters (`DrawnText`), as wide as
+ * `textLineAdvance` says, so what fits here fits there (owner, 2026-11-27:
+ * words a child reads are drawn, never type — the reading course reads them
+ * on these cards).
+ */
+function connectPairsTextFit(text, card) {
+    const face = exports.CONNECT_PAIRS_CARD;
+    const room = Math.max(0, card * (1 - face.padding * 2));
+    return fitTextInBox(keepNumbersWhole(text), room * 0.92, room, Math.max(1, card * face.text), {
+        maxLines: face.maxLines,
+        lineHeight: face.lineHeight,
+    });
 }
 /**
  * The line that joins two connected cards: from the middle of the left card's

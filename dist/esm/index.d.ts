@@ -1659,6 +1659,28 @@ export type ConnectPairsLayout = {
  */
 export declare function layoutConnectPairs(width: number, height: number, count: number, insets?: SceneInsets): ConnectPairsLayout;
 /**
+ * A card of connect_pairs that holds words instead of a picture — a word to a
+ * picture, a syllable to a syllable, `6 × 7` to `42` — the same in both
+ * players, in shares of its side: the room inside its edge, and its words,
+ * `text` at most (a lone letter as big as a picture of it), `maxLines` lines
+ * broken at word spaces only.
+ */
+export declare const CONNECT_PAIRS_CARD: {
+    readonly padding: 0.08;
+    readonly text: 0.42;
+    readonly maxLines: 3;
+    readonly lineHeight: 1.2;
+};
+/**
+ * A connect_pairs card's words fitted inside its room, a card `card` across:
+ * its numbers kept whole (`keepNumbersWhole`), set as big as they fit. The
+ * players draw them with their letters (`DrawnText`), as wide as
+ * `textLineAdvance` says, so what fits here fits there (owner, 2026-11-27:
+ * words a child reads are drawn, never type — the reading course reads them
+ * on these cards).
+ */
+export declare function connectPairsTextFit(text: string, card: number): TextFit;
+/**
  * The line that joins two connected cards: from the middle of the left card's
  * edge facing the right group to the middle of the right card's facing edge.
  */

@@ -3702,6 +3702,30 @@ export function layoutConnectPairs(width, height, count, insets = {}) {
     };
 }
 /**
+ * A card of connect_pairs that holds words instead of a picture — a word to a
+ * picture, a syllable to a syllable, `6 × 7` to `42` — the same in both
+ * players, in shares of its side: the room inside its edge, and its words,
+ * `text` at most (a lone letter as big as a picture of it), `maxLines` lines
+ * broken at word spaces only.
+ */
+export const CONNECT_PAIRS_CARD = { padding: 0.08, text: 0.42, maxLines: 3, lineHeight: 1.2 };
+/**
+ * A connect_pairs card's words fitted inside its room, a card `card` across:
+ * its numbers kept whole (`keepNumbersWhole`), set as big as they fit. The
+ * players draw them with their letters (`DrawnText`), as wide as
+ * `textLineAdvance` says, so what fits here fits there (owner, 2026-11-27:
+ * words a child reads are drawn, never type — the reading course reads them
+ * on these cards).
+ */
+export function connectPairsTextFit(text, card) {
+    const face = CONNECT_PAIRS_CARD;
+    const room = Math.max(0, card * (1 - face.padding * 2));
+    return fitTextInBox(keepNumbersWhole(text), room * 0.92, room, Math.max(1, card * face.text), {
+        maxLines: face.maxLines,
+        lineHeight: face.lineHeight,
+    });
+}
+/**
  * The line that joins two connected cards: from the middle of the left card's
  * edge facing the right group to the middle of the right card's facing edge.
  */
