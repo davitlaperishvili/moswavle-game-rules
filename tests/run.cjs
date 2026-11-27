@@ -2762,6 +2762,100 @@ section('word_dictation: a word heard and typed');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.wordDictation.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-dictation'] === rules.GAME_TIMINGS.wordDictation && rules.GAME_GESTURES['word-dictation'] === 'pick');
 }
 
+section('letter_trace: a letter traced with a finger');
+
+{
+  ['letter_trace', 'trace_letter', 'Letter Trace'].forEach((type) => {
+    check(`${type} resolves to letter-trace`, rules.resolveGameKind(type, {}) === 'letter-trace');
+  });
+
+  const ka = rules.LETTER_SETS.ka;
+  const missing = [...ka].filter((char) => !rules.LETTER_STROKES[char] || rules.LETTER_STROKES[char].length === 0);
+  check('every Georgian letter has its strokes', missing.length === 0, missing.join(''));
+  let inBox = true;
+  let even = true;
+  let detail = '';
+  for (const char of ka) {
+    const shape = rules.glyphShape(char);
+    for (const flat of rules.LETTER_STROKES[char]) {
+      if (flat.length < 8 || flat.length % 2) { inBox = false; detail = `${char}: a stroke of ${flat.length / 2} points`; }
+      for (let k = 0; k + 1 < flat.length; k += 2) {
+        const [x, y] = [flat[k], flat[k + 1]];
+        // Inside the letter's ink box, a little round it for the pen's tip.
+        if (x < shape.box.x - 30 || x > shape.box.x + shape.box.width + 30 || y < shape.box.y - 30 || y > shape.box.y + shape.box.height + 30) { inBox = false; detail = `${char}: ${x},${y} outside`; }
+        if (k >= 2 && Math.hypot(x - flat[k - 2], y - flat[k - 1]) > 34) { even = false; detail = `${char}: points ${Math.round(Math.hypot(x - flat[k - 2], y - flat[k - 1]))} apart`; }
+      }
+    }
+  }
+  check('every stroke runs inside its letter, its points no more than a step apart', inBox && even, detail);
+  check('the letters of two strokes have two, the others one', [...'დლღტქჭჯ'].every((char) => rules.LETTER_STROKES[char].length === 2)
+    && [...ka].filter((char) => !'დლღტქჭჯ'.includes(char)).every((char) => rules.LETTER_STROKES[char].length === 1));
+
+  const one = rules.normalizeLetterTraceConfig({ text: 'ბ', question_image: 'https://x/frog.webp', bg_image: 'https://x/bg.webp', time_limit: 120 });
+  check('one letter: its strokes, twice over, the picture and the background to preload', one.text === 'ბ' && one.strokes.length === 1 && one.rounds === 2
+    && one.letters[0].x === 0 && one.letters[0].path.length > 20 && one.imageUris.join() === 'https://x/bg.webp,https://x/frog.webp');
+  const word = rules.normalizeLetterTraceConfig({ text: 'დედა!x' });
+  check('a short word: its letters side by side, every stroke of each in order; what has no strokes left out', word.text === 'დედა'
+    && word.letters.every((letter, index) => index === 0 || letter.x > word.letters[index - 1].x)
+    && word.strokes.length === 2 + 1 + 2 + 1 && word.strokes.map((stroke) => stroke.letter).join('') === '001223'
+    && word.strokes[2].points[0].x > word.letters[1].x - 50);
+  check('four letters at most; nothing known, nothing to trace', rules.normalizeLetterTraceConfig({ text: 'აბგდე' }).letters.length === 4
+    && rules.normalizeLetterTraceConfig({ text: 'cat' }).strokes.length === 0);
+
+  const game = rules.normalizeLetterTraceConfig({ text: 'ო' });
+  const pts = game.strokes[0].points;
+  const touch = rules.letterTraceTouch;
+  const move = rules.resolveLetterTraceMove;
+  check('a finger put down at the start takes the stroke up; far from it, not', touch(game, { stroke: 0, point: 0 }, pts[0]) && !touch(game, { stroke: 0, point: 0 }, pts[Math.floor(pts.length / 2)]));
+  check('and where the ink stopped, later', touch(game, { stroke: 0, point: 20 }, { x: pts[20].x + 40, y: pts[20].y }));
+  const ahead = move(game, { stroke: 0, point: 0 }, pts[5]);
+  check('along the line the ink goes on, as far as the finger', ahead.type === 'move' && ahead.point >= 5 && !ahead.done);
+  const back = move(game, { stroke: 0, point: 10 }, pts[3]);
+  check('never back', back.type === 'move' && back.point === 10);
+  const far = move(game, { stroke: 0, point: 0 }, { x: pts[0].x + 400, y: pts[0].y });
+  check('off the line: the ink stays where it was', far.type === 'off' && far.point === 0);
+  const jump = move(game, { stroke: 0, point: 0 }, pts[pts.length - 1]);
+  check('never jumping ahead to a part of the path far along it, however near on the screen', jump.point < 12);
+  let progress = { stroke: 0, point: 0 };
+  let done = false;
+  for (let index = 1; index < pts.length && !done; index++) {
+    const step = move(game, progress, pts[index]);
+    if (step.type === 'move') { progress = { stroke: 0, point: step.point }; done = step.done; }
+  }
+  check('followed to its end, the stroke is done', done);
+  const bowl = rules.normalizeLetterTraceConfig({ text: 'ბ' }).strokes[0].points;
+  const end = bowl[bowl.length - 1];
+  // ბ's bowl closes where it began: its last point is near the junction passed early on.
+  const early = bowl.findIndex((p) => Math.hypot(p.x - end.x, p.y - end.y) < 40);
+  check('a loop that closes on itself is not cut short where it passes its own end', early > 0 && early < bowl.length - 20
+    && move({ strokes: [{ letter: 0, points: bowl }] }, { stroke: 0, point: early }, end).point < early + 12);
+
+  const at = rules.letterTracePointAt;
+  check('the dot that shows the way starts at the start and ends at the end', Math.hypot(at(pts, 0).x - pts[0].x, at(pts, 0).y - pts[0].y) < 1e-6
+    && Math.hypot(at(pts, 1).x - pts[pts.length - 1].x, at(pts, 1).y - pts[pts.length - 1].y) < 1e-6);
+
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [1024, 768, {}], [667, 300, { top: 60 }], [390, 700, { top: 60 }]];
+  let fits = true;
+  stages.forEach(([w, h, insets]) => [one, word].forEach((config, index) => {
+    const layout = rules.layoutLetterTrace(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const first = rules.letterTraceToStage(layout, { x: 0, y: rules.LETTER_TRACE_LAYOUT.top });
+    const lastX = rules.letterTraceToStage(layout, { x: config.width, y: rules.LETTER_TRACE_LAYOUT.bottom });
+    const back = rules.letterTraceFromStage(layout, rules.letterTraceToStage(layout, { x: 123, y: -456 }));
+    const ok = layout && inside(layout.panel, stage) && layout.scale > 0
+      && first.x >= layout.panel.left && lastX.x <= layout.panel.left + layout.panel.width + 1e-6
+      && first.y >= layout.panel.top - 1e-6 && lastX.y <= layout.panel.top + layout.panel.height + 1e-6
+      && Math.abs(back.x - 123) < 1e-6 && Math.abs(back.y + 456) < 1e-6
+      && (config.questionImage ? inside(layout.picture, layout.panel) && layout.picture.left + layout.picture.width <= first.x : layout.picture === null);
+    if (!ok && fits) { fits = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the sheet, its lines and the letters inside the safe area, the picture before them', fits, detail);
+  check('nothing to trace, no layout', rules.layoutLetterTrace(852, 393, { width: 0, questionImage: null, letters: [] }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.letterTrace.demoMs > 0 && rules.GAME_TIMINGS_BY_KIND['letter-trace'] === rules.GAME_TIMINGS.letterTrace && rules.GAME_GESTURES['letter-trace'] === 'drag');
+}
+
 section('word_sort: words sorted into baskets');
 
 {

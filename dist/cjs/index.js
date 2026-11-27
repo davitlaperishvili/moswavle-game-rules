@@ -48,8 +48,8 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WORD_DICTATION_LAYOUT = exports.WORD_DICTATION_ENTER = exports.WORD_DICTATION_ERASE = exports.WORD_DICTATION_LETTERS = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.MEMORY_CARD_FACE = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_NUMBER_SPACE = exports.MATH_EQUATION_TERMS_MAX = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_CARD = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHAIN = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SYLLABLE_BUILD_LAYOUT = exports.SYLLABLE_BUILD_EXTRA_MAX = exports.SYLLABLE_BUILD_SYLLABLES = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = void 0;
-exports.panorama = exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = void 0;
+exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SYLLABLE_BUILD_LAYOUT = exports.SYLLABLE_BUILD_EXTRA_MAX = exports.SYLLABLE_BUILD_SYLLABLES = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.LETTER_TRACE_LAYOUT = exports.LETTER_TRACE = exports.LETTER_TRACE_GUIDES = exports.LETTER_TRACE_LETTERS_MAX = exports.LETTER_TRACE_ROUNDS = void 0;
+exports.panorama = exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -159,6 +159,14 @@ exports.normalizeWordDictationConfig = normalizeWordDictationConfig;
 exports.pressWordDictationKey = pressWordDictationKey;
 exports.resolveWordDictationEntry = resolveWordDictationEntry;
 exports.layoutWordDictation = layoutWordDictation;
+exports.normalizeLetterTraceConfig = normalizeLetterTraceConfig;
+exports.letterTraceTouch = letterTraceTouch;
+exports.resolveLetterTraceMove = resolveLetterTraceMove;
+exports.letterTraceToStage = letterTraceToStage;
+exports.letterTraceFromStage = letterTraceFromStage;
+exports.layoutLetterTrace = layoutLetterTrace;
+exports.letterTracePathData = letterTracePathData;
+exports.letterTracePointAt = letterTracePointAt;
 exports.normalizeLabelDiagramConfig = normalizeLabelDiagramConfig;
 exports.resolveLabelDiagramTap = resolveLabelDiagramTap;
 exports.layoutLabelDiagram = layoutLabelDiagram;
@@ -249,6 +257,7 @@ exports.gestureHintOf = gestureHintOf;
 exports.gestureHintTapStops = gestureHintTapStops;
 exports.gestureHintDragEnd = gestureHintDragEnd;
 const letters_js_1 = require("./letters.js");
+const letterStrokes_js_1 = require("./letterStrokes.js");
 const DEFAULT_ANSWER_CHOICE_TIME_LIMIT = 60;
 const DEFAULT_SELECT_OPTION_WIDTH = 16;
 const DEFAULT_SELECT_OPTION_HEIGHT = 24;
@@ -1136,6 +1145,15 @@ function resolveGameKind(type, config) {
         "type_the_word",
     ].includes(normalizedType)) {
         return "word-dictation";
+    }
+    if ([
+        "letter_trace",
+        "lettertrace",
+        "trace_letter",
+        "trace_the_letter",
+        "copybook",
+    ].includes(normalizedType)) {
+        return "letter-trace";
     }
     if ([
         "word_sort",
@@ -3825,6 +3843,11 @@ exports.GAME_TIMINGS = {
      */
     wordDictation: { wrongFeedbackMs: 1000, successSettleMs: 900, livesOutDelayMs: 600 },
     /**
+     * letter_trace: the dot runs a stroke in `demoMs` to show the way; a line left blinks for
+     * `wrongFeedbackMs`; a round traced stays `roundSettleMs` before the next; the last one `successSettleMs`.
+     */
+    letterTrace: { demoMs: 1600, wrongFeedbackMs: 600, roundSettleMs: 900, successSettleMs: 1200 },
+    /**
      * A right word flies into its basket over `flyMs` and the next comes;
      * a wrong tap shakes the card for `wrongFeedbackMs`. After the last word
      * the baskets are seen `successSettleMs`.
@@ -5779,6 +5802,181 @@ function layoutWordDictation(stageWidth, stageHeight, config, insets = {}) {
         pad: { left: padLeft, top: padTop, width: padRight - padLeft, height: padHeight },
         keys: placed,
     };
+}
+// --- letter_trace: a letter traced with a finger ------------------------------
+//
+// The copybook of the reading course «კითხვა და წერა» (owner, 2026-11-27): a
+// Georgian letter stands big on its lines, and the child traces it with a
+// finger along its strokes, in the order and the direction Georgian school
+// handwriting writes them (LETTER_STROKES, checked by the owner letter by
+// letter). Before each stroke a dot runs along it once to show the way, and
+// again when the child goes the wrong way (owner: yes, a dot shows it). The
+// letter is traced twice (owner): over a dotted line with the start's dot and
+// arrow, then once more with the letter's outline and the start's dot alone.
+// Going off the line costs nothing (owner): the ink stops there, the line
+// blinks, and the child goes on from the same place; it is noted as a mistake
+// for the first-try bonus, but there are no lives — only the clock. A short
+// word can be traced the same way, letter after letter.
+/** How many times the letter is traced (owner: twice — dotted, then by itself), and how many letters at most. */
+exports.LETTER_TRACE_ROUNDS = 2;
+exports.LETTER_TRACE_LETTERS_MAX = 4;
+exports.LETTER_TRACE_GUIDES = ["dots", "outline"];
+/**
+ * How near the finger has to keep, in the units of a letter's outline (a line
+ * is OUTLINE_EM tall): `tolerance` from the path to move along it, `off` to be
+ * counted off the line, `touch` from where it stopped to take the stroke up,
+ * `lookahead` points ahead (20 units apart) the finger may reach in one move,
+ * `endSlack` points short of the end that finish a stroke.
+ */
+exports.LETTER_TRACE = { tolerance: 115, off: 190, touch: 170, lookahead: 9, endSlack: 1 };
+/**
+ * The game as the players draw it. `text` (or `letter`) holds the letters to
+ * trace; a character LETTER_STROKES has no strokes for is left out. The
+ * letters stand side by side as a line of writing does (`layoutTextLine`).
+ */
+function normalizeLetterTraceConfig(config) {
+    const source = extractText(config.text ?? config.letter) ?? "";
+    const chars = [...source.trim()].filter((char) => Object.prototype.hasOwnProperty.call(letterStrokes_js_1.LETTER_STROKES, char)).slice(0, exports.LETTER_TRACE_LETTERS_MAX);
+    const text = chars.join("");
+    const line = (0, letters_js_1.layoutTextLine)(text);
+    const letters = chars.map((char, index) => ({
+        char,
+        x: line.glyphs[index].x * letters_js_1.OUTLINE_EM,
+        path: (0, letters_js_1.glyphShape)(char)?.path ?? "",
+    }));
+    const strokes = letters.flatMap((letter, index) => letterStrokes_js_1.LETTER_STROKES[letter.char].map((flat) => {
+        const points = [];
+        for (let k = 0; k + 1 < flat.length; k += 2)
+            points.push({ x: flat[k] + letter.x, y: flat[k + 1] });
+        return { letter: index, points };
+    }));
+    const questionImage = extractMediaUrl(config.question_image);
+    const bg = normalizeBackground(config);
+    return {
+        text,
+        letters,
+        strokes,
+        width: line.width * letters_js_1.OUTLINE_EM,
+        rounds: exports.LETTER_TRACE_ROUNDS,
+        questionImage,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        imageUris: [bg, questionImage].filter((uri) => Boolean(uri)),
+    };
+}
+const tracePointDistance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+/**
+ * Whether a finger put down at `p` (in the line's units) takes the stroke up:
+ * near where it stopped — its start, or where the ink ends.
+ */
+function letterTraceTouch(config, progress, p) {
+    const stroke = config.strokes[progress.stroke];
+    return Boolean(stroke) && tracePointDistance(p, stroke.points[Math.min(progress.point, stroke.points.length - 1)]) <= exports.LETTER_TRACE.touch;
+}
+/**
+ * What a finger moved to `p` does, in the middle of a stroke: the whole play
+ * rule, so both players follow it move for move. The ink goes on along the
+ * path, never back and never jumping a loop: only the next `lookahead` points
+ * can be reached, and the farthest of them within `tolerance` is.
+ */
+function resolveLetterTraceMove(config, progress, p) {
+    const T = exports.LETTER_TRACE;
+    const points = config.strokes[progress.stroke]?.points ?? [];
+    const last = points.length - 1;
+    const from = Math.min(progress.point, last);
+    let reached = from;
+    let nearest = Infinity;
+    for (let index = from; index <= Math.min(last, from + T.lookahead); index++) {
+        const distance = tracePointDistance(p, points[index]);
+        nearest = Math.min(nearest, distance);
+        if (distance <= T.tolerance)
+            reached = index;
+    }
+    if (nearest > T.off) {
+        return { type: "off", point: from };
+    }
+    return { type: "move", point: reached, done: reached >= last - T.endSlack };
+}
+/** Proportions of the board. Units are the letters' (a line is OUTLINE_EM tall). */
+exports.LETTER_TRACE_LAYOUT = {
+    /** The lines the letters stand on, in units from the baseline: up to the tallest, down to the deepest. */
+    top: -800,
+    bottom: 260,
+    /** The lines drawn: the top of a tall letter, the middle line, the baseline, the bottom of a deep one. */
+    lines: [-760, -533, 0, 230],
+    /** Room round the letters on the panel, in units. */
+    padX: 140,
+    padY: 60,
+    /** The picture: a square this many units high, with this much room before the letters. */
+    picture: 520,
+    pictureGap: 90,
+    /** A unit is never bigger than this, in px. */
+    maxScale: 0.62,
+};
+/** Where a point of the line (in units) stands on the stage, and back. */
+function letterTraceToStage(layout, p) {
+    return { x: layout.origin.x + p.x * layout.scale, y: layout.origin.y + p.y * layout.scale };
+}
+function letterTraceFromStage(layout, p) {
+    return { x: (p.x - layout.origin.x) / layout.scale, y: (p.y - layout.origin.y) / layout.scale };
+}
+/**
+ * Where the sheet with the letters goes: as big as the stage less `insets`
+ * holds it, centred, its picture at the letters' left when it has one.
+ */
+function layoutLetterTrace(stageWidth, stageHeight, config, insets = {}) {
+    const L = exports.LETTER_TRACE_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    if (usableWidth <= 0 || usableHeight <= 0 || config.letters.length === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const hasPicture = Boolean(config.questionImage);
+    const unitsWide = L.padX * 2 + config.width + (hasPicture ? L.picture + L.pictureGap : 0);
+    const unitsHigh = L.bottom - L.top + L.padY * 2;
+    const scale = Math.max(0.01, Math.min(L.maxScale, (usableWidth - edge * 2) / unitsWide, (usableHeight - edge * 2) / unitsHigh));
+    const panel = {
+        left: originX + (usableWidth - unitsWide * scale) / 2,
+        top: originY + (usableHeight - unitsHigh * scale) / 2,
+        width: unitsWide * scale,
+        height: unitsHigh * scale,
+    };
+    const lineLeft = panel.left + (L.padX + (hasPicture ? L.picture + L.pictureGap : 0)) * scale;
+    const baseline = panel.top + (L.padY - L.top) * scale;
+    const picture = hasPicture
+        ? { left: panel.left + L.padX * scale, top: baseline + ((L.top + L.bottom) / 2 - L.picture / 2) * scale, width: L.picture * scale, height: L.picture * scale }
+        : null;
+    return {
+        panel,
+        picture,
+        scale,
+        origin: { x: lineLeft, y: baseline },
+        lines: L.lines.map((y) => baseline + y * scale),
+    };
+}
+/** A path of points as an SVG path's text, in the line's units. */
+function letterTracePathData(points) {
+    return points.map((p, index) => `${index === 0 ? "M" : "L"}${Math.round(p.x)} ${Math.round(p.y)}`).join(" ");
+}
+/** Where along a stroke a running dot is, `t` from 0 to 1, by length: the dot that shows the way. */
+function letterTracePointAt(points, t) {
+    if (points.length === 0)
+        return { x: 0, y: 0 };
+    const lengths = [0];
+    for (let index = 1; index < points.length; index++)
+        lengths.push(lengths[index - 1] + tracePointDistance(points[index - 1], points[index]));
+    const target = Math.max(0, Math.min(1, t)) * lengths[lengths.length - 1];
+    for (let index = 1; index < points.length; index++) {
+        if (lengths[index] >= target) {
+            const span = lengths[index] - lengths[index - 1] || 1;
+            const f = (target - lengths[index - 1]) / span;
+            return { x: points[index - 1].x + (points[index].x - points[index - 1].x) * f, y: points[index - 1].y + (points[index].y - points[index - 1].y) * f };
+        }
+    }
+    return points[points.length - 1];
 }
 // --- Label diagram ----------------------------------------------------------
 //
@@ -10155,6 +10353,7 @@ exports.GAME_KIND_KEYS = {
     "sentence-build": "sentenceBuild",
     "syllable-build": "syllableBuild",
     "word-dictation": "wordDictation",
+    "letter-trace": "letterTrace",
     "word-sort": "wordSort",
     "number-line": "numberLine",
     "true-false": "trueFalse",
@@ -10195,6 +10394,7 @@ exports.GAME_TIMINGS_BY_KIND = {
     "sentence-build": exports.GAME_TIMINGS.sentenceBuild,
     "syllable-build": exports.GAME_TIMINGS.syllableBuild,
     "word-dictation": exports.GAME_TIMINGS.wordDictation,
+    "letter-trace": exports.GAME_TIMINGS.letterTrace,
     "word-sort": exports.GAME_TIMINGS.wordSort,
     "number-line": exports.GAME_TIMINGS.numberLine,
     "true-false": exports.GAME_TIMINGS.trueFalse,
@@ -10242,6 +10442,7 @@ exports.GAME_GESTURES = {
     "sentence-build": "tap",
     "syllable-build": "tap",
     "word-dictation": "pick",
+    "letter-trace": "drag",
     "word-sort": "tap",
     "number-line": "tap",
     "true-false": "pick",
@@ -10316,6 +10517,7 @@ function gestureHintDragEnd(from, towards) {
 __exportStar(require("./theme.js"), exports);
 // The letters drawn in code: their outlines and how a letter and a line are laid out.
 __exportStar(require("./letters.js"), exports);
+__exportStar(require("./letterStrokes.js"), exports);
 // The coloring pages: the crayons, what a drawing is and how the screen is divided.
 __exportStar(require("./coloring.js"), exports);
 // A journey street's panorama: its camera and where a point of the picture is on the screen.

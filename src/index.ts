@@ -10,7 +10,8 @@
  * game scores differently depending on the device it is played on.
  */
 
-import { OUTLINE_EM, glyphShape, textCharAdvance } from "./letters.js";
+import { OUTLINE_EM, glyphShape, layoutTextLine, textCharAdvance } from "./letters.js";
+import { LETTER_STROKES } from "./letterStrokes.js";
 
 /**
  * The bits of a game these rules actually read.
@@ -78,6 +79,7 @@ export type RuntimeGameKind =
   | "sentence-build"
   | "syllable-build"
   | "word-dictation"
+  | "letter-trace"
   | "word-sort"
   | "number-line"
   | "true-false"
@@ -1635,6 +1637,16 @@ export function resolveGameKind(
     "type_the_word",
   ].includes(normalizedType)) {
     return "word-dictation";
+  }
+
+  if ([
+    "letter_trace",
+    "lettertrace",
+    "trace_letter",
+    "trace_the_letter",
+    "copybook",
+  ].includes(normalizedType)) {
+    return "letter-trace";
   }
 
   if ([
@@ -5244,6 +5256,11 @@ export const GAME_TIMINGS = {
    */
   wordDictation: { wrongFeedbackMs: 1000, successSettleMs: 900, livesOutDelayMs: 600 },
   /**
+   * letter_trace: the dot runs a stroke in `demoMs` to show the way; a line left blinks for
+   * `wrongFeedbackMs`; a round traced stays `roundSettleMs` before the next; the last one `successSettleMs`.
+   */
+  letterTrace: { demoMs: 1600, wrongFeedbackMs: 600, roundSettleMs: 900, successSettleMs: 1200 },
+  /**
    * A right word flies into its basket over `flyMs` and the next comes;
    * a wrong tap shakes the card for `wrongFeedbackMs`. After the last word
    * the baskets are seen `successSettleMs`.
@@ -7813,6 +7830,264 @@ export function layoutWordDictation(
     pad: { left: padLeft, top: padTop, width: padRight - padLeft, height: padHeight },
     keys: placed,
   };
+}
+
+// --- letter_trace: a letter traced with a finger ------------------------------
+//
+// The copybook of the reading course «კითხვა და წერა» (owner, 2026-11-27): a
+// Georgian letter stands big on its lines, and the child traces it with a
+// finger along its strokes, in the order and the direction Georgian school
+// handwriting writes them (LETTER_STROKES, checked by the owner letter by
+// letter). Before each stroke a dot runs along it once to show the way, and
+// again when the child goes the wrong way (owner: yes, a dot shows it). The
+// letter is traced twice (owner): over a dotted line with the start's dot and
+// arrow, then once more with the letter's outline and the start's dot alone.
+// Going off the line costs nothing (owner): the ink stops there, the line
+// blinks, and the child goes on from the same place; it is noted as a mistake
+// for the first-try bonus, but there are no lives — only the clock. A short
+// word can be traced the same way, letter after letter.
+
+/** How many times the letter is traced (owner: twice — dotted, then by itself), and how many letters at most. */
+export const LETTER_TRACE_ROUNDS = 2;
+export const LETTER_TRACE_LETTERS_MAX = 4;
+
+/** What each round shows: the dotted path with its arrows, then the outline alone. */
+export type LetterTraceGuide = "dots" | "outline";
+export const LETTER_TRACE_GUIDES: readonly LetterTraceGuide[] = ["dots", "outline"];
+
+/**
+ * How near the finger has to keep, in the units of a letter's outline (a line
+ * is OUTLINE_EM tall): `tolerance` from the path to move along it, `off` to be
+ * counted off the line, `touch` from where it stopped to take the stroke up,
+ * `lookahead` points ahead (20 units apart) the finger may reach in one move,
+ * `endSlack` points short of the end that finish a stroke.
+ */
+export const LETTER_TRACE = { tolerance: 115, off: 190, touch: 170, lookahead: 9, endSlack: 1 } as const;
+
+export type LetterTracePoint = { x: number; y: number };
+
+export type LetterTraceStroke = {
+  /** Which letter of the text it belongs to. */
+  letter: number;
+  /** The pen's path, in the line's units: the letter's own points moved to where it stands in the line. */
+  points: LetterTracePoint[];
+};
+
+export type LetterTraceLetter = {
+  char: string;
+  /** Where the letter stands in the line: its pen's position, in units. */
+  x: number;
+  /** Its outline, in its own units (the baseline at 0, y down), to draw the guide with. */
+  path: string;
+};
+
+export type LetterTraceConfig = {
+  /** The letters to trace, in order: those LETTER_STROKES knows, up to LETTER_TRACE_LETTERS_MAX. */
+  text: string;
+  letters: LetterTraceLetter[];
+  /** Every stroke of every letter, in the order they are traced. */
+  strokes: LetterTraceStroke[];
+  /** The line's width, in units. */
+  width: number;
+  rounds: number;
+  /** A picture beside the letter (a thing whose name starts with it); null when there is none. */
+  questionImage: string | null;
+  bg_image: string | null;
+  time_limit: number | null;
+  /** The background and the picture: preload before the clock. */
+  imageUris: string[];
+};
+
+/**
+ * The game as the players draw it. `text` (or `letter`) holds the letters to
+ * trace; a character LETTER_STROKES has no strokes for is left out. The
+ * letters stand side by side as a line of writing does (`layoutTextLine`).
+ */
+export function normalizeLetterTraceConfig(config: Record<string, unknown>): LetterTraceConfig {
+  const source = extractText(config.text ?? config.letter) ?? "";
+  const chars = [...source.trim()].filter((char) => Object.prototype.hasOwnProperty.call(LETTER_STROKES, char)).slice(0, LETTER_TRACE_LETTERS_MAX);
+  const text = chars.join("");
+  const line = layoutTextLine(text);
+  const letters: LetterTraceLetter[] = chars.map((char, index) => ({
+    char,
+    x: line.glyphs[index].x * OUTLINE_EM,
+    path: glyphShape(char)?.path ?? "",
+  }));
+  const strokes = letters.flatMap((letter, index) =>
+    LETTER_STROKES[letter.char].map((flat): LetterTraceStroke => {
+      const points: LetterTracePoint[] = [];
+      for (let k = 0; k + 1 < flat.length; k += 2) points.push({ x: flat[k] + letter.x, y: flat[k + 1] });
+      return { letter: index, points };
+    }),
+  );
+  const questionImage = extractMediaUrl(config.question_image);
+  const bg = normalizeBackground(config);
+
+  return {
+    text,
+    letters,
+    strokes,
+    width: line.width * OUTLINE_EM,
+    rounds: LETTER_TRACE_ROUNDS,
+    questionImage,
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    imageUris: [bg, questionImage].filter((uri): uri is string => Boolean(uri)),
+  };
+}
+
+const tracePointDistance = (a: LetterTracePoint, b: LetterTracePoint) => Math.hypot(a.x - b.x, a.y - b.y);
+
+/** Where a round's tracing stands: the stroke traced now, and the last point of it reached. */
+export type LetterTraceProgress = { stroke: number; point: number };
+
+/**
+ * Whether a finger put down at `p` (in the line's units) takes the stroke up:
+ * near where it stopped — its start, or where the ink ends.
+ */
+export function letterTraceTouch(config: Pick<LetterTraceConfig, "strokes">, progress: LetterTraceProgress, p: LetterTracePoint): boolean {
+  const stroke = config.strokes[progress.stroke];
+  return Boolean(stroke) && tracePointDistance(p, stroke.points[Math.min(progress.point, stroke.points.length - 1)]) <= LETTER_TRACE.touch;
+}
+
+export type LetterTraceMoveResult =
+  /** The finger keeps to the line: the ink reaches `point`; `done` when the stroke is traced to its end. */
+  | { type: "move"; point: number; done: boolean }
+  /** The finger has left the line: the ink stays at `point`. */
+  | { type: "off"; point: number };
+
+/**
+ * What a finger moved to `p` does, in the middle of a stroke: the whole play
+ * rule, so both players follow it move for move. The ink goes on along the
+ * path, never back and never jumping a loop: only the next `lookahead` points
+ * can be reached, and the farthest of them within `tolerance` is.
+ */
+export function resolveLetterTraceMove(
+  config: Pick<LetterTraceConfig, "strokes">,
+  progress: LetterTraceProgress,
+  p: LetterTracePoint,
+): LetterTraceMoveResult {
+  const T = LETTER_TRACE;
+  const points = config.strokes[progress.stroke]?.points ?? [];
+  const last = points.length - 1;
+  const from = Math.min(progress.point, last);
+  let reached = from;
+  let nearest = Infinity;
+
+  for (let index = from; index <= Math.min(last, from + T.lookahead); index++) {
+    const distance = tracePointDistance(p, points[index]);
+    nearest = Math.min(nearest, distance);
+    if (distance <= T.tolerance) reached = index;
+  }
+
+  if (nearest > T.off) {
+    return { type: "off", point: from };
+  }
+
+  return { type: "move", point: reached, done: reached >= last - T.endSlack };
+}
+
+/** Proportions of the board. Units are the letters' (a line is OUTLINE_EM tall). */
+export const LETTER_TRACE_LAYOUT = {
+  /** The lines the letters stand on, in units from the baseline: up to the tallest, down to the deepest. */
+  top: -800,
+  bottom: 260,
+  /** The lines drawn: the top of a tall letter, the middle line, the baseline, the bottom of a deep one. */
+  lines: [-760, -533, 0, 230],
+  /** Room round the letters on the panel, in units. */
+  padX: 140,
+  padY: 60,
+  /** The picture: a square this many units high, with this much room before the letters. */
+  picture: 520,
+  pictureGap: 90,
+  /** A unit is never bigger than this, in px. */
+  maxScale: 0.62,
+} as const;
+
+export type LetterTraceLayout = {
+  /** The sheet the letters stand on. */
+  panel: BoardRect;
+  picture: BoardRect | null;
+  /** Pixels a unit, and where the line's origin (its start, on the baseline) is. */
+  scale: number;
+  origin: LetterTracePoint;
+  /** The lines across the sheet, in px from the stage's top. */
+  lines: number[];
+};
+
+/** Where a point of the line (in units) stands on the stage, and back. */
+export function letterTraceToStage(layout: Pick<LetterTraceLayout, "scale" | "origin">, p: LetterTracePoint): LetterTracePoint {
+  return { x: layout.origin.x + p.x * layout.scale, y: layout.origin.y + p.y * layout.scale };
+}
+export function letterTraceFromStage(layout: Pick<LetterTraceLayout, "scale" | "origin">, p: LetterTracePoint): LetterTracePoint {
+  return { x: (p.x - layout.origin.x) / layout.scale, y: (p.y - layout.origin.y) / layout.scale };
+}
+
+/**
+ * Where the sheet with the letters goes: as big as the stage less `insets`
+ * holds it, centred, its picture at the letters' left when it has one.
+ */
+export function layoutLetterTrace(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<LetterTraceConfig, "width" | "questionImage" | "letters">,
+  insets: SceneInsets = {},
+): LetterTraceLayout | null {
+  const L = LETTER_TRACE_LAYOUT;
+  const originX = insets.left ?? 0;
+  const originY = insets.top ?? 0;
+  const usableWidth = stageWidth - originX - (insets.right ?? 0);
+  const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+
+  if (usableWidth <= 0 || usableHeight <= 0 || config.letters.length === 0) {
+    return null;
+  }
+
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const hasPicture = Boolean(config.questionImage);
+  const unitsWide = L.padX * 2 + config.width + (hasPicture ? L.picture + L.pictureGap : 0);
+  const unitsHigh = L.bottom - L.top + L.padY * 2;
+  const scale = Math.max(0.01, Math.min(L.maxScale, (usableWidth - edge * 2) / unitsWide, (usableHeight - edge * 2) / unitsHigh));
+  const panel: BoardRect = {
+    left: originX + (usableWidth - unitsWide * scale) / 2,
+    top: originY + (usableHeight - unitsHigh * scale) / 2,
+    width: unitsWide * scale,
+    height: unitsHigh * scale,
+  };
+  const lineLeft = panel.left + (L.padX + (hasPicture ? L.picture + L.pictureGap : 0)) * scale;
+  const baseline = panel.top + (L.padY - L.top) * scale;
+  const picture: BoardRect | null = hasPicture
+    ? { left: panel.left + L.padX * scale, top: baseline + ((L.top + L.bottom) / 2 - L.picture / 2) * scale, width: L.picture * scale, height: L.picture * scale }
+    : null;
+
+  return {
+    panel,
+    picture,
+    scale,
+    origin: { x: lineLeft, y: baseline },
+    lines: L.lines.map((y) => baseline + y * scale),
+  };
+}
+
+/** A path of points as an SVG path's text, in the line's units. */
+export function letterTracePathData(points: readonly LetterTracePoint[]): string {
+  return points.map((p, index) => `${index === 0 ? "M" : "L"}${Math.round(p.x)} ${Math.round(p.y)}`).join(" ");
+}
+
+/** Where along a stroke a running dot is, `t` from 0 to 1, by length: the dot that shows the way. */
+export function letterTracePointAt(points: readonly LetterTracePoint[], t: number): LetterTracePoint {
+  if (points.length === 0) return { x: 0, y: 0 };
+  const lengths = [0];
+  for (let index = 1; index < points.length; index++) lengths.push(lengths[index - 1] + tracePointDistance(points[index - 1], points[index]));
+  const target = Math.max(0, Math.min(1, t)) * lengths[lengths.length - 1];
+  for (let index = 1; index < points.length; index++) {
+    if (lengths[index] >= target) {
+      const span = lengths[index] - lengths[index - 1] || 1;
+      const f = (target - lengths[index - 1]) / span;
+      return { x: points[index - 1].x + (points[index].x - points[index - 1].x) * f, y: points[index - 1].y + (points[index].y - points[index - 1].y) * f };
+    }
+  }
+  return points[points.length - 1];
 }
 
 // --- Label diagram ----------------------------------------------------------
@@ -13809,6 +14084,14 @@ export type WordDictationMetrics = BaseGameMetrics & {
   livesRemaining: number;
 };
 
+export type LetterTraceMetrics = BaseGameMetrics & {
+  /** Letters and strokes the game has; rounds traced to their end; times the finger left the line. */
+  letters: number;
+  strokes: number;
+  rounds: number;
+  offLine: number;
+};
+
 export type WordSortMetrics = BaseGameMetrics & {
   /** Words the game has, and how many of them were put away. */
   words: number;
@@ -13966,6 +14249,7 @@ export const GAME_KIND_KEYS = {
   "sentence-build": "sentenceBuild",
   "syllable-build": "syllableBuild",
   "word-dictation": "wordDictation",
+  "letter-trace": "letterTrace",
   "word-sort": "wordSort",
   "number-line": "numberLine",
   "true-false": "trueFalse",
@@ -14011,6 +14295,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "sentence-build": GAME_TIMINGS.sentenceBuild,
   "syllable-build": GAME_TIMINGS.syllableBuild,
   "word-dictation": GAME_TIMINGS.wordDictation,
+  "letter-trace": GAME_TIMINGS.letterTrace,
   "word-sort": GAME_TIMINGS.wordSort,
   "number-line": GAME_TIMINGS.numberLine,
   "true-false": GAME_TIMINGS.trueFalse,
@@ -14073,6 +14358,7 @@ export const GAME_GESTURES = {
   "sentence-build": "tap",
   "syllable-build": "tap",
   "word-dictation": "pick",
+  "letter-trace": "drag",
   "word-sort": "tap",
   "number-line": "tap",
   "true-false": "pick",
@@ -14180,6 +14466,7 @@ export type GameMetricsByKind = {
   "sentence-build": SentenceBuildMetrics;
   "syllable-build": SyllableBuildMetrics;
   "word-dictation": WordDictationMetrics;
+  "letter-trace": LetterTraceMetrics;
   "word-sort": WordSortMetrics;
   "number-line": NumberLineMetrics;
   "true-false": TrueFalseMetrics;
@@ -14214,6 +14501,7 @@ export * from "./theme.js";
 
 // The letters drawn in code: their outlines and how a letter and a line are laid out.
 export * from "./letters.js";
+export * from "./letterStrokes.js";
 
 // The coloring pages: the crayons, what a drawing is and how the screen is divided.
 export * from "./coloring.js";
