@@ -3207,19 +3207,19 @@ export declare function resolveSyllableBuildTap(config: Pick<SyllableBuildConfig
 /** Proportions of the word and its tiles. Shares are of a line of writing. */
 export declare const SYLLABLE_BUILD_LAYOUT: {
     /** A tile and the word's strip: this tall for a line, and a tile this much wider than its syllable. */
-    readonly tileHeight: 1.7;
-    readonly tilePadX: 0.8;
+    readonly tileHeight: 1.45;
+    readonly tilePadX: 0.6;
     /** The strip's room before its first letter and after its last. */
-    readonly stripPad: 0.45;
+    readonly stripPad: 0.4;
     /** A line of writing is never taller than this, in px. */
-    readonly maxLine: 56;
+    readonly maxLine: 84;
     /** Between tiles, and round the word on its panel. */
     readonly gap: 0.4;
-    readonly pad: 0.45;
+    readonly pad: 0.4;
     /** The picture: a square this many tiles high at the panel's left. */
-    readonly picture: 2;
+    readonly picture: 1.7;
     /** The most of the free height the word's panel takes. */
-    readonly maxPanelShare: 0.5;
+    readonly maxPanelShare: 0.55;
 };
 export type SyllableBuildLayout = {
     /** The panel the word sits on, floating on the background. */
