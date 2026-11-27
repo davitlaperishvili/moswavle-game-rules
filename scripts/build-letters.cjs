@@ -26,8 +26,9 @@ const SETS = {
   enLower: 'abcdefghijklmnopqrstuvwxyz',
 };
 
-// What a line of writing holds besides letters.
-const MARKS = ' 0123456789.,!?:;\'’"«»„“”()-–—+−×÷=<>/%№';
+// What a line of writing holds besides letters. The ellipsis stands for a letter left out of a word
+// on a card, "…ოთოლი" (owner, 2026-11-27: every word a child reads is drawn).
+const MARKS = ' 0123456789.,!?:;\'’"«»„“”()-–—+−×÷=<>/%№…';
 
 const fontFile = process.argv[2];
 if (!fontFile) {

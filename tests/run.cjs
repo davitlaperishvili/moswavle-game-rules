@@ -3694,12 +3694,14 @@ section('words on the cards of connect_pairs, memory_cards and catch_correct are
 {
   const NB = ' ';
   // Every character production's text cards held on 2026-11-27 (843 cards of 1105 games): digits, the signs
-  // of a sum, the thin space of a long number and the three alphabets. The ellipsis of a letter left out
-  // ("…ოთოლი", six cards) waits for its outline from FiraGO.
-  const seen = '0123456789 +−×÷=()?' + NB + 'აბგდევზთიკლმნოპჟრსტუფქღყშჩცძწჭხჯჰ'
+  // of a sum, the thin space of a long number, the ellipsis of a letter left out ("…ოთოლი") and the alphabets.
+  const seen = '0123456789 +−×÷=()?…' + NB + 'აბგდევზთიკლმნოპჟრსტუფქღყშჩცძწჭხჯჰ'
     + 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя';
   const missing = [...seen].filter((char) => char !== ' ' && char !== NB && rules.glyphShape(char) === null);
   check('every one has an outline of ours: nothing falls back to the device\'s type', missing.length === 0, missing.join(' '));
+  check('the ellipsis is a mark of a line, as wide as three dots and no wider',
+    rules.textLineAdvance('…') > rules.textLineAdvance('.') && rules.textLineAdvance('…') <= rules.textLineAdvance('...') + 0.01
+      && rules.layoutTextLine('…ოთოლი').glyphs[0].path !== null);
   check('a long number keeps its thin space, drawn as a narrow gap and no glyph',
     rules.layoutTextLine(rules.keepNumbersWhole('5 000 + 303')).glyphs[1].char === NB
       && rules.layoutTextLine(rules.keepNumbersWhole('5 000 + 303')).glyphs[1].path === null);
