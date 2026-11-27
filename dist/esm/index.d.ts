@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "syllable-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "story-scene" | "hidden-light" | "sound-match" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "syllable-build" | "word-dictation" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "story-scene" | "hidden-light" | "sound-match" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1484,6 +1484,15 @@ export declare const GAME_TIMINGS: {
         readonly livesOutDelayMs: 320;
     };
     /**
+     * word_dictation: a wrong word stays on its cells, its wrong letters red, for `wrongFeedbackMs`, then is
+     * wiped from the first of them. A right word stays `successSettleMs`.
+     */
+    readonly wordDictation: {
+        readonly wrongFeedbackMs: 1000;
+        readonly successSettleMs: 900;
+        readonly livesOutDelayMs: 600;
+    };
+    /**
      * A right word flies into its basket over `flyMs` and the next comes;
      * a wrong tap shakes the card for `wrongFeedbackMs`. After the last word
      * the baskets are seen `successSettleMs`.
@@ -2326,6 +2335,96 @@ export type WordBuildLayout = {
  * stage less `insets` and an edge margin.
  */
 export declare function layoutWordBuild(stageWidth: number, stageHeight: number, config: Pick<WordBuildConfig, "letters" | "tiles" | "questionImage">, insets?: SceneInsets): WordBuildLayout | null;
+/** A word has 2 to this many letters. */
+export declare const WORD_DICTATION_LETTERS: {
+    readonly min: 2;
+    readonly max: 10;
+};
+/** What a key of the pad types: a letter, or wiping the last one, or the tick. */
+export type WordDictationKey = string;
+export declare const WORD_DICTATION_ERASE = "erase";
+export declare const WORD_DICTATION_ENTER = "enter";
+export type WordDictationConfig = {
+    /** The word, a letter a cell, in small letters, in the language the game is played in. */
+    letters: string[];
+    /** The letter keys, in the alphabet's order: those given, and every letter of the word. */
+    keys: string[];
+    /** A picture of what the word names; null when the word is only heard. */
+    questionImage: string | null;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background and the picture: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `word` arrives in the language of the
+ * game; `keys` (a text — "ა ბ გ", or "აბგ" — or a list) are the letters of the
+ * pad, else the word's whole alphabet. Every letter of the word is a key even
+ * when the list forgot it; the keys stand in the alphabet's order.
+ */
+export declare function normalizeWordDictationConfig(config: Record<string, unknown>): WordDictationConfig;
+/**
+ * What is typed after a key: a letter fills the next cell while one is
+ * empty, wiping takes the last letter away. The tick changes nothing here:
+ * see `resolveWordDictationEntry`.
+ */
+export declare function pressWordDictationKey(entry: readonly string[], key: WordDictationKey, cells: number): string[];
+export type WordDictationEntryResult = 
+/** A cell is still empty: the tick does nothing yet. */
+{
+    type: "ignored";
+} | {
+    type: "right";
+}
+/** `wrongAt` are the cells whose letter is not the word's; `keep` how many letters stay — those before the first of them. */
+ | {
+    type: "wrong";
+    wrongAt: number[];
+    keep: number;
+};
+/** Whether the word typed is the word: asked by the tick, once every cell is filled. */
+export declare function resolveWordDictationEntry(config: Pick<WordDictationConfig, "letters">, entry: readonly string[]): WordDictationEntryResult;
+/** Proportions of the word's cells and the pad. Shares are of the height of a cell. */
+export declare const WORD_DICTATION_LAYOUT: {
+    /** A cell: this wide for its height, never higher than `maxCell` px. */
+    readonly cellAspect: 0.86;
+    readonly maxCell: 96;
+    /** Between two cells, and around the word on its panel. */
+    readonly cellGap: 0.1;
+    readonly pad: 0.18;
+    /** The picture: a square this many cells high, with this much room before the word. */
+    readonly picture: 1.45;
+    readonly pictureGap: 0.3;
+    /** The most of the free height the word's panel takes. */
+    readonly maxPanelShare: 0.36;
+    /** A key: this wide for its height, never higher than `maxKey` px; under `minKey` the word gives up height first. */
+    readonly keyAspect: 0.92;
+    readonly maxKey: 84;
+    readonly minKey: 40;
+    /** In px: between keys. */
+    readonly keyGap: 8;
+};
+export type WordDictationKeyRect = BoardRect & {
+    key: WordDictationKey;
+};
+export type WordDictationLayout = {
+    /** The panel the word sits on, floating on the background. */
+    panel: BoardRect;
+    picture: BoardRect | null;
+    /** A cell for every letter of the word, left to right. */
+    cells: BoardRect[];
+    /** The pad, and its keys: the letters in their order, then wiping and the tick, at the end of the last row. */
+    pad: BoardRect;
+    keys: WordDictationKeyRect[];
+};
+/**
+ * Where everything of a dictation goes on its stage. The background covers
+ * the whole stage; the word's cells sit on a panel above — its picture at
+ * their left when it has one — and the pad below, in as many rows as stand its
+ * keys biggest: two safe areas a gap apart, inside the stage less `insets`.
+ */
+export declare function layoutWordDictation(stageWidth: number, stageHeight: number, config: Pick<WordDictationConfig, "letters" | "keys" | "questionImage">, insets?: SceneInsets): WordDictationLayout | null;
 export declare const LABEL_DIAGRAM_PARTS_MIN = 2;
 /** More pins than this and their names do not fit a phone at a size a child reads. */
 export declare const LABEL_DIAGRAM_PARTS_MAX = 6;
@@ -4567,6 +4666,12 @@ export type SyllableBuildMetrics = BaseGameMetrics & {
     placed: number;
     livesRemaining: number;
 };
+export type WordDictationMetrics = BaseGameMetrics & {
+    /** Letters the word has; how many times the tick was pressed with every cell filled. */
+    letters: number;
+    attempts: number;
+    livesRemaining: number;
+};
 export type WordSortMetrics = BaseGameMetrics & {
     /** Words the game has, and how many of them were put away. */
     words: number;
@@ -4701,6 +4806,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "fraction-pick": "fractionPick";
     readonly "sentence-build": "sentenceBuild";
     readonly "syllable-build": "syllableBuild";
+    readonly "word-dictation": "wordDictation";
     readonly "word-sort": "wordSort";
     readonly "number-line": "numberLine";
     readonly "true-false": "trueFalse";
@@ -4760,6 +4866,7 @@ export declare const GAME_GESTURES: {
     readonly "fraction-pick": "pick";
     readonly "sentence-build": "tap";
     readonly "syllable-build": "tap";
+    readonly "word-dictation": "pick";
     readonly "word-sort": "tap";
     readonly "number-line": "tap";
     readonly "true-false": "pick";
@@ -4843,6 +4950,7 @@ export type GameMetricsByKind = {
     "fraction-pick": FractionPickMetrics;
     "sentence-build": SentenceBuildMetrics;
     "syllable-build": SyllableBuildMetrics;
+    "word-dictation": WordDictationMetrics;
     "word-sort": WordSortMetrics;
     "number-line": NumberLineMetrics;
     "true-false": TrueFalseMetrics;

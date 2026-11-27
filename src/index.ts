@@ -77,6 +77,7 @@ export type RuntimeGameKind =
   | "fraction-pick"
   | "sentence-build"
   | "syllable-build"
+  | "word-dictation"
   | "word-sort"
   | "number-line"
   | "true-false"
@@ -1624,6 +1625,16 @@ export function resolveGameKind(
     "word_from_syllables",
   ].includes(normalizedType)) {
     return "syllable-build";
+  }
+
+  if ([
+    "word_dictation",
+    "worddictation",
+    "dictation",
+    "word_dictate",
+    "type_the_word",
+  ].includes(normalizedType)) {
+    return "word-dictation";
   }
 
   if ([
@@ -5228,6 +5239,11 @@ export const GAME_TIMINGS = {
    */
   syllableBuild: { wrongFeedbackMs: 520, flyMs: 460, successSettleMs: 1100, livesOutDelayMs: 320 },
   /**
+   * word_dictation: a wrong word stays on its cells, its wrong letters red, for `wrongFeedbackMs`, then is
+   * wiped from the first of them. A right word stays `successSettleMs`.
+   */
+  wordDictation: { wrongFeedbackMs: 1000, successSettleMs: 900, livesOutDelayMs: 600 },
+  /**
    * A right word flies into its basket over `flyMs` and the next comes;
    * a wrong tap shakes the card for `wrongFeedbackMs`. After the last word
    * the baskets are seen `successSettleMs`.
@@ -7549,6 +7565,253 @@ export function layoutWordBuild(
     slots,
     tray: { left: trayLeft, top: trayTop, width: trayRight - trayLeft, height: trayHeight },
     tiles,
+  };
+}
+
+// --- word_dictation: a word heard and typed ----------------------------------
+//
+// The «კარნახი» of the first grade (owner, 2026-11-27): the voice says a word —
+// «დაწერე სიტყვა: დათვი» — and the child types it on a pad of letter keys,
+// with nothing of the word laid out to pick from. A cell stands for every
+// letter (owner: cells always, the word's length is a fair hint at this age);
+// what is typed fills them left to right, the arrow wipes the last letter, and
+// the tick — once every cell is filled — checks the word (owner: checked at
+// the end, as a dictation is). A wrong word costs a life: its wrong letters
+// turn red, and the word is wiped from the first of them, so the child writes
+// on from there. The keys are the letters the author lists (a reading course
+// gives those already opened) or the word's whole alphabet, in the alphabet's
+// order, never a computer's keyboard; every letter of the word is among them.
+
+/** A word has 2 to this many letters. */
+export const WORD_DICTATION_LETTERS = { min: 2, max: 10 } as const;
+
+/** What a key of the pad types: a letter, or wiping the last one, or the tick. */
+export type WordDictationKey = string;
+export const WORD_DICTATION_ERASE = "erase";
+export const WORD_DICTATION_ENTER = "enter";
+
+export type WordDictationConfig = {
+  /** The word, a letter a cell, in small letters, in the language the game is played in. */
+  letters: string[];
+  /** The letter keys, in the alphabet's order: those given, and every letter of the word. */
+  keys: string[];
+  /** A picture of what the word names; null when the word is only heard. */
+  questionImage: string | null;
+  bg_image: string | null;
+  time_limit: number | null;
+  lives: number;
+  /** The background and the picture: preload before the clock. */
+  imageUris: string[];
+};
+
+/**
+ * The game as the players draw it. `word` arrives in the language of the
+ * game; `keys` (a text — "ა ბ გ", or "აბგ" — or a list) are the letters of the
+ * pad, else the word's whole alphabet. Every letter of the word is a key even
+ * when the list forgot it; the keys stand in the alphabet's order.
+ */
+export function normalizeWordDictationConfig(config: Record<string, unknown>): WordDictationConfig {
+  const read = readWordLetters(config.word);
+  const letters = read.length >= WORD_DICTATION_LETTERS.min ? read.slice(0, WORD_DICTATION_LETTERS.max) : [];
+  const alphabet = Object.values(LETTER_ALPHABETS).find((set) => letters.length > 0 && set.includes(letters[0])) ?? "";
+  const given = readWordLetters(Array.isArray(config.keys) ? config.keys.join("") : config.keys).filter((char) => alphabet.includes(char));
+  const wanted = new Set(given.length > 0 ? [...given, ...letters] : [...alphabet]);
+  const keys = letters.length > 0 ? [...alphabet].filter((char) => wanted.has(char)) : [];
+
+  const questionImage = extractMediaUrl(config.question_image);
+  const bg = normalizeBackground(config);
+
+  return {
+    letters,
+    keys,
+    questionImage,
+    bg_image: bg,
+    time_limit: extractNumber(config.time_limit),
+    lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+    imageUris: [bg, questionImage].filter((uri): uri is string => Boolean(uri)),
+  };
+}
+
+/**
+ * What is typed after a key: a letter fills the next cell while one is
+ * empty, wiping takes the last letter away. The tick changes nothing here:
+ * see `resolveWordDictationEntry`.
+ */
+export function pressWordDictationKey(entry: readonly string[], key: WordDictationKey, cells: number): string[] {
+  if (key === WORD_DICTATION_ENTER) {
+    return [...entry];
+  }
+  if (key === WORD_DICTATION_ERASE) {
+    return entry.slice(0, -1);
+  }
+  return entry.length < cells ? [...entry, key] : [...entry];
+}
+
+export type WordDictationEntryResult =
+  /** A cell is still empty: the tick does nothing yet. */
+  | { type: "ignored" }
+  | { type: "right" }
+  /** `wrongAt` are the cells whose letter is not the word's; `keep` how many letters stay — those before the first of them. */
+  | { type: "wrong"; wrongAt: number[]; keep: number };
+
+/** Whether the word typed is the word: asked by the tick, once every cell is filled. */
+export function resolveWordDictationEntry(
+  config: Pick<WordDictationConfig, "letters">,
+  entry: readonly string[],
+): WordDictationEntryResult {
+  if (config.letters.length === 0 || entry.length < config.letters.length) {
+    return { type: "ignored" };
+  }
+
+  const wrongAt = config.letters.map((letter, index) => (entry[index] === letter ? -1 : index)).filter((index) => index >= 0);
+
+  return wrongAt.length === 0 ? { type: "right" } : { type: "wrong", wrongAt, keep: wrongAt[0] };
+}
+
+/** Proportions of the word's cells and the pad. Shares are of the height of a cell. */
+export const WORD_DICTATION_LAYOUT = {
+  /** A cell: this wide for its height, never higher than `maxCell` px. */
+  cellAspect: 0.86,
+  maxCell: 96,
+  /** Between two cells, and around the word on its panel. */
+  cellGap: 0.1,
+  pad: 0.18,
+  /** The picture: a square this many cells high, with this much room before the word. */
+  picture: 1.45,
+  pictureGap: 0.3,
+  /** The most of the free height the word's panel takes. */
+  maxPanelShare: 0.36,
+  /** A key: this wide for its height, never higher than `maxKey` px; under `minKey` the word gives up height first. */
+  keyAspect: 0.92,
+  maxKey: 84,
+  minKey: 40,
+  /** In px: between keys. */
+  keyGap: 8,
+} as const;
+
+export type WordDictationKeyRect = BoardRect & { key: WordDictationKey };
+
+export type WordDictationLayout = {
+  /** The panel the word sits on, floating on the background. */
+  panel: BoardRect;
+  picture: BoardRect | null;
+  /** A cell for every letter of the word, left to right. */
+  cells: BoardRect[];
+  /** The pad, and its keys: the letters in their order, then wiping and the tick, at the end of the last row. */
+  pad: BoardRect;
+  keys: WordDictationKeyRect[];
+};
+
+/**
+ * Where everything of a dictation goes on its stage. The background covers
+ * the whole stage; the word's cells sit on a panel above — its picture at
+ * their left when it has one — and the pad below, in as many rows as stand its
+ * keys biggest: two safe areas a gap apart, inside the stage less `insets`.
+ */
+export function layoutWordDictation(
+  stageWidth: number,
+  stageHeight: number,
+  config: Pick<WordDictationConfig, "letters" | "keys" | "questionImage">,
+  insets: SceneInsets = {},
+): WordDictationLayout | null {
+  const L = WORD_DICTATION_LAYOUT;
+  const originX = insets.left ?? 0;
+  const originY = insets.top ?? 0;
+  const usableWidth = stageWidth - originX - (insets.right ?? 0);
+  const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+  const count = config.letters.length;
+  const keys: WordDictationKey[] = [...config.keys, WORD_DICTATION_ERASE, WORD_DICTATION_ENTER];
+
+  if (usableWidth <= 0 || usableHeight <= 0 || count === 0 || config.keys.length === 0) {
+    return null;
+  }
+
+  const edge = sceneEdge(stageWidth, stageHeight);
+  const gap = sceneGap(stageWidth, stageHeight);
+  const areaWidth = Math.max(usableWidth - edge * 2, 1);
+  const areaHeight = Math.max(usableHeight - edge * 2, 1);
+  const hasPicture = Boolean(config.questionImage);
+
+  // The panel in cells: as wide and as high as its picture and its word ask.
+  const unitsWide = (hasPicture ? L.picture + L.pictureGap : 0) + count * L.cellAspect + (count - 1) * L.cellGap + L.pad * 2;
+  const unitsHigh = (hasPicture ? L.picture : 1) + L.pad * 2;
+
+  // The keys, given the height the word leaves them: the number of columns that stands them biggest.
+  const keysFor = (height: number) => {
+    let best = { columns: keys.length, rows: 1, size: 0 };
+    for (let columns = Math.ceil(keys.length / 6); columns <= keys.length; columns += 1) {
+      const rows = Math.ceil(keys.length / columns);
+      const size = Math.min(
+        L.maxKey,
+        (height - L.keyGap * (rows - 1)) / rows,
+        (areaWidth - L.keyGap * (columns - 1)) / columns / L.keyAspect,
+      );
+      // The bigger keys win; of two as big, the fewer rows.
+      if (size > best.size + 0.5) {
+        best = { columns, rows, size };
+      }
+    }
+    return best;
+  };
+
+  let cell = Math.min(L.maxCell, areaWidth / unitsWide, (areaHeight * L.maxPanelShare) / unitsHigh);
+  let grid = keysFor(areaHeight - cell * unitsHigh - gap);
+
+  // Keys too small to hit: the word gives up height until they are not, or it has given up half.
+  if (grid.size < L.minKey) {
+    const wanted = grid.rows * L.minKey + L.keyGap * (grid.rows - 1);
+    cell = Math.max(cell * 0.5, Math.min(cell, (areaHeight - gap - wanted) / unitsHigh));
+    grid = keysFor(areaHeight - cell * unitsHigh - gap);
+  }
+  cell = Math.max(cell, 1);
+
+  const key = Math.max(grid.size, 1);
+  const keyWidth = key * L.keyAspect;
+  const panelWidth = cell * unitsWide;
+  const panelHeight = cell * unitsHigh;
+  const padHeight = grid.rows * key + L.keyGap * (grid.rows - 1);
+  const free = Math.max(0, areaHeight - panelHeight - padHeight - gap);
+
+  const panel: BoardRect = {
+    left: originX + edge + (areaWidth - panelWidth) / 2,
+    top: originY + edge + free * 0.4,
+    width: panelWidth,
+    height: panelHeight,
+  };
+  const picture: BoardRect | null = hasPicture
+    ? { left: panel.left + L.pad * cell, top: panel.top + L.pad * cell, width: L.picture * cell, height: L.picture * cell }
+    : null;
+  const wordLeft = panel.left + L.pad * cell + (hasPicture ? (L.picture + L.pictureGap) * cell : 0);
+  const cells = config.letters.map((_, index): BoardRect => ({
+    left: wordLeft + index * (L.cellAspect + L.cellGap) * cell,
+    top: panel.top + (panelHeight - cell) / 2,
+    width: L.cellAspect * cell,
+    height: cell,
+  }));
+
+  const padTop = panel.top + panelHeight + gap + free * 0.3;
+  const placed = keys.map((name, index): WordDictationKeyRect => {
+    const row = Math.floor(index / grid.columns);
+    // The last row may hold fewer keys: it is centred like the others.
+    const inRow = Math.min(grid.columns, keys.length - row * grid.columns);
+    const rowWidth = inRow * keyWidth + L.keyGap * (inRow - 1);
+    return {
+      key: name,
+      left: originX + edge + (areaWidth - rowWidth) / 2 + (index - row * grid.columns) * (keyWidth + L.keyGap),
+      top: padTop + row * (key + L.keyGap),
+      width: keyWidth,
+      height: key,
+    };
+  });
+  const padLeft = Math.min(...placed.map((rect) => rect.left));
+  const padRight = Math.max(...placed.map((rect) => rect.left + rect.width));
+
+  return {
+    panel,
+    picture,
+    cells,
+    pad: { left: padLeft, top: padTop, width: padRight - padLeft, height: padHeight },
+    keys: placed,
   };
 }
 
@@ -13539,6 +13802,13 @@ export type SyllableBuildMetrics = BaseGameMetrics & {
   livesRemaining: number;
 };
 
+export type WordDictationMetrics = BaseGameMetrics & {
+  /** Letters the word has; how many times the tick was pressed with every cell filled. */
+  letters: number;
+  attempts: number;
+  livesRemaining: number;
+};
+
 export type WordSortMetrics = BaseGameMetrics & {
   /** Words the game has, and how many of them were put away. */
   words: number;
@@ -13695,6 +13965,7 @@ export const GAME_KIND_KEYS = {
   "fraction-pick": "fractionPick",
   "sentence-build": "sentenceBuild",
   "syllable-build": "syllableBuild",
+  "word-dictation": "wordDictation",
   "word-sort": "wordSort",
   "number-line": "numberLine",
   "true-false": "trueFalse",
@@ -13739,6 +14010,7 @@ export const GAME_TIMINGS_BY_KIND: {
   "fraction-pick": GAME_TIMINGS.fractionPick,
   "sentence-build": GAME_TIMINGS.sentenceBuild,
   "syllable-build": GAME_TIMINGS.syllableBuild,
+  "word-dictation": GAME_TIMINGS.wordDictation,
   "word-sort": GAME_TIMINGS.wordSort,
   "number-line": GAME_TIMINGS.numberLine,
   "true-false": GAME_TIMINGS.trueFalse,
@@ -13800,6 +14072,7 @@ export const GAME_GESTURES = {
   "fraction-pick": "pick",
   "sentence-build": "tap",
   "syllable-build": "tap",
+  "word-dictation": "pick",
   "word-sort": "tap",
   "number-line": "tap",
   "true-false": "pick",
@@ -13906,6 +14179,7 @@ export type GameMetricsByKind = {
   "fraction-pick": FractionPickMetrics;
   "sentence-build": SentenceBuildMetrics;
   "syllable-build": SyllableBuildMetrics;
+  "word-dictation": WordDictationMetrics;
   "word-sort": WordSortMetrics;
   "number-line": NumberLineMetrics;
   "true-false": TrueFalseMetrics;

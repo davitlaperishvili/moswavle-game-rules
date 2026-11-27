@@ -2705,6 +2705,63 @@ section('syllable_build: a word put together from its syllables');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.syllableBuild.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['syllable-build'] === rules.GAME_TIMINGS.syllableBuild && rules.GAME_GESTURES['syllable-build'] === 'tap');
 }
 
+section('word_dictation: a word heard and typed');
+
+{
+  ['word_dictation', 'dictation', 'Word Dictation'].forEach((type) => {
+    check(`${type} resolves to word-dictation`, rules.resolveGameKind(type, {}) === 'word-dictation');
+  });
+  check('a typed example is still its own game', rules.resolveGameKind('math_input', {}) === 'math-input');
+
+  const ka = rules.normalizeWordDictationConfig({ word: ' დათვი ', keys: 'ა ბ გ დ ე ვ თ', question_image: 'https://x/bear.webp', bg_image: 'https://x/bg.webp', time_limit: 120 });
+  check('the word a letter a cell', ka.letters.join('') === 'დათვი');
+  check('the keys given, every letter of the word among them, in the alphabet\'s order', ka.keys.join('') === 'აბგდევთი');
+  check('defaults: lives 3, the background and the picture to preload', ka.lives === 3 && ka.time_limit === 120 && ka.imageUris.join() === 'https://x/bg.webp,https://x/bear.webp');
+  check('no keys given: the word\'s whole alphabet', rules.normalizeWordDictationConfig({ word: 'кот' }).keys.join('') === rules.LETTER_ALPHABETS.ru
+    && rules.normalizeWordDictationConfig({ word: 'ბავშვი' }).keys.length === 33);
+  check('keys written together, as a list, or with a capital, all read; another alphabet\'s left out', rules.normalizeWordDictationConfig({ word: 'Мама', keys: ['Мп', 'аzо'] }).keys.join('') === 'амоп');
+  check('a word of one letter is no game', rules.normalizeWordDictationConfig({ word: 'а' }).letters.length === 0 && rules.normalizeWordDictationConfig({ word: 'а' }).keys.length === 0);
+
+  const press = rules.pressWordDictationKey;
+  check('a letter fills the next cell while one is empty, and no more', press(['д'], 'а', 3).join('') === 'да' && press(['д', 'а', 'м'], 'а', 3).join('') === 'дам');
+  check('the arrow wipes the last letter; the tick types nothing', press(['д', 'а'], rules.WORD_DICTATION_ERASE, 3).join('') === 'д' && press([], rules.WORD_DICTATION_ERASE, 3).length === 0
+    && press(['д'], rules.WORD_DICTATION_ENTER, 3).join('') === 'д');
+
+  const entry = rules.resolveWordDictationEntry;
+  const word = { letters: ['ლ', 'ო', 'მ', 'ი'] };
+  check('the tick asks nothing while a cell is empty', entry(word, ['ლ', 'ო']).type === 'ignored');
+  check('the word is right letter for letter', entry(word, ['ლ', 'ო', 'მ', 'ი']).type === 'right');
+  check('a wrong word: its wrong letters, and what stays — the letters before the first of them',
+    JSON.stringify(entry(word, ['ლ', 'ი', 'მ', 'ო'])) === '{"type":"wrong","wrongAt":[1,3],"keep":1}'
+    && JSON.stringify(entry(word, ['ა', 'ო', 'მ', 'ი'])) === '{"type":"wrong","wrongAt":[0],"keep":0}');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const all = rules.normalizeWordDictationConfig({ word: 'ბავშვი', question_image: 'https://x/c.webp' });
+  const long = rules.normalizeWordDictationConfig({ word: 'სამზარეულო' });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [1024, 768, {}], [667, 300, { top: 60 }], [740, 340, { top: 56 }]];
+  let whole = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [ka, all, long].forEach((config, index) => {
+    const layout = rules.layoutWordDictation(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout && inside(layout.panel, stage) && inside(layout.pad, stage) && !overlap(layout.panel, layout.pad)
+      && layout.cells.length === config.letters.length && layout.cells.every((cell) => inside(cell, layout.panel))
+      && layout.cells.every((a, i) => layout.cells.every((b, j) => i === j || !overlap(a, b)))
+      && layout.keys.length === config.keys.length + 2 && layout.keys.every((key) => inside(key, layout.pad) && key.height >= 36)
+      && layout.keys.every((a, i) => layout.keys.every((b, j) => i === j || !overlap(a, b)))
+      // The letters first, in the alphabet's order; wiping and the tick last.
+      && layout.keys.map((key) => key.key).join('|') === [...config.keys, 'erase', 'enter'].join('|')
+      && (config.questionImage ? inside(layout.picture, layout.panel) && !layout.cells.some((cell) => overlap(cell, layout.picture)) : layout.picture === null);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the cells and the picture on the panel, the pad below — all 33 letters too — apart, inside the safe area and big enough to hit', whole, detail);
+  check('no word, no layout', rules.layoutWordDictation(852, 393, { letters: [], keys: [], questionImage: null }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.wordDictation.wrongFeedbackMs > 0 && rules.GAME_TIMINGS_BY_KIND['word-dictation'] === rules.GAME_TIMINGS.wordDictation && rules.GAME_GESTURES['word-dictation'] === 'pick');
+}
+
 section('word_sort: words sorted into baskets');
 
 {
