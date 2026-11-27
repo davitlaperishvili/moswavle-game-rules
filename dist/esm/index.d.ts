@@ -43,7 +43,7 @@ export type SuccessState = {
     pointsBase: number;
     isFirstAttemptBonus: boolean;
 };
-export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "story-scene" | "hidden-light" | "sound-match" | "generic";
+export type RuntimeGameKind = "catch-correct" | "shadow-match" | "memory-cards" | "images_order" | "drag-drop-match" | "select-option" | "answer-choice" | "svg-assemble" | "jigsaw" | "count-pick" | "pattern-next" | "sort-bins" | "size-order" | "connect-pairs" | "math-equation" | "text-choice" | "math-input" | "word-build" | "label-diagram" | "reading-text" | "word-problem" | "money-pay" | "clock-set" | "fraction-pick" | "sentence-build" | "syllable-build" | "word-sort" | "number-line" | "true-false" | "grid-route" | "chart-read" | "find-in-scene" | "map-place" | "story-scene" | "hidden-light" | "sound-match" | "generic";
 export type AnswerChoiceOption = {
     id: string;
     image: string;
@@ -1470,6 +1470,16 @@ export declare const GAME_TIMINGS: {
     readonly sentenceBuild: {
         readonly wrongFeedbackMs: 520;
         readonly flyMs: 420;
+        readonly successSettleMs: 1100;
+        readonly livesOutDelayMs: 320;
+    };
+    /**
+     * syllable_build: a syllable out of its turn shakes for `wrongFeedbackMs`; a right one flies to its
+     * place for `flyMs`, its tile fading as it lands. The word stays `successSettleMs` once whole.
+     */
+    readonly syllableBuild: {
+        readonly wrongFeedbackMs: 520;
+        readonly flyMs: 460;
         readonly successSettleMs: 1100;
         readonly livesOutDelayMs: 320;
     };
@@ -3138,6 +3148,108 @@ export type SentenceBuildLayout = {
  * apart, inside the stage less `insets`.
  */
 export declare function layoutSentenceBuild(stageWidth: number, stageHeight: number, config: Pick<SentenceBuildConfig, "words" | "tiles" | "ending" | "questionImage">, insets?: SceneInsets): SentenceBuildLayout | null;
+/** A word has 2 to this many syllables, and at most this many that do not belong lie among them. */
+export declare const SYLLABLE_BUILD_SYLLABLES: {
+    readonly min: 2;
+    readonly max: 6;
+};
+export declare const SYLLABLE_BUILD_EXTRA_MAX = 3;
+export type SyllableBuildTile = {
+    id: string;
+    syllable: string;
+};
+export type SyllableBuildConfig = {
+    /** The word, a syllable a place, in small letters, in the language the game is played in. */
+    syllables: string[];
+    /** The word whole, as its syllables written together. */
+    word: string;
+    /** Its syllables and the ones that do not belong, mixed so that they do not already read as the word. */
+    tiles: SyllableBuildTile[];
+    /** A picture of what the word names; null when the word is only said. */
+    questionImage: string | null;
+    bg_image: string | null;
+    time_limit: number | null;
+    lives: number;
+    /** The background and the picture: preload before the clock. */
+    imageUris: string[];
+};
+/**
+ * The game as the players draw it. `word` arrives already in the language of
+ * the game, its syllables split by hyphens ("ბა-ყა-ყი"); `extra_syllables`
+ * (a text, or a list) are the ones that do not belong — none of them a
+ * syllable of the word. The tiles are mixed so that they do not already read
+ * as the word. A word of one syllable is nothing to build: no places, no tiles.
+ */
+export declare function normalizeSyllableBuildConfig(config: Record<string, unknown>): SyllableBuildConfig;
+export type SyllableBuildTapResult = 
+/** The word is built already, the tile is in it, or the game does not have it. */
+{
+    type: "ignored";
+}
+/** The syllable that comes next: it goes to `slot`; `complete` when that was the last. */
+ | {
+    type: "place";
+    slot: number;
+    complete: boolean;
+}
+/** Not the syllable that comes next: a mistake. */
+ | {
+    type: "wrong";
+    slot: number;
+};
+/**
+ * What a tap on a tile does: the whole play rule, so both players follow it
+ * tap for tap. The word is built left to right; `placed` are the tiles in it
+ * so far, in order. Any tile of the right syllable is right — "მა-მა" has two
+ * of it, and either goes first.
+ */
+export declare function resolveSyllableBuildTap(config: Pick<SyllableBuildConfig, "syllables" | "tiles">, placed: readonly string[], tileId: string): SyllableBuildTapResult;
+/** Proportions of the word and its tiles. Shares are of a line of writing. */
+export declare const SYLLABLE_BUILD_LAYOUT: {
+    /** A tile and the word's strip: this tall for a line, and a tile this much wider than its syllable. */
+    readonly tileHeight: 1.7;
+    readonly tilePadX: 0.8;
+    /** The strip's room before its first letter and after its last. */
+    readonly stripPad: 0.45;
+    /** A line of writing is never taller than this, in px. */
+    readonly maxLine: 56;
+    /** Between tiles, and round the word on its panel. */
+    readonly gap: 0.4;
+    readonly pad: 0.45;
+    /** The picture: a square this many tiles high at the panel's left. */
+    readonly picture: 2;
+    /** The most of the free height the word's panel takes. */
+    readonly maxPanelShare: 0.5;
+};
+export type SyllableBuildLayout = {
+    /** The panel the word sits on, floating on the background. */
+    panel: BoardRect;
+    picture: BoardRect | null;
+    /** The word's one strip, its places side by side inside it. */
+    strip: BoardRect;
+    /** A place for every syllable, in order, touching: the strip cut at the seams between the syllables. */
+    slots: BoardRect[];
+    /**
+     * Where each syllable's writing stands once in the word: a line's box as
+     * `DrawnText` draws it, `textLineUnits(syllable) × line` wide — the boxes
+     * overlap by their padding, so the letters stand where the whole word has them.
+     */
+    slotTexts: BoardRect[];
+    /** Around the tiles, each tile in `tiles` order, and its writing in it (centred, as wide as above). */
+    tray: BoardRect;
+    tiles: BoardRect[];
+    tileTexts: BoardRect[];
+    /** The height of a line of writing on a tile and in the word. */
+    line: number;
+};
+/**
+ * Where everything of a word to build from its syllables goes. The background
+ * covers the stage; the word's strip sits on a panel above, its picture at its
+ * left when it has one; the tiles below, in rows. One size of writing for
+ * both — the biggest at which they fit — two safe areas a gap apart, inside
+ * the stage less `insets`.
+ */
+export declare function layoutSyllableBuild(stageWidth: number, stageHeight: number, config: Pick<SyllableBuildConfig, "syllables" | "tiles" | "questionImage">, insets?: SceneInsets): SyllableBuildLayout | null;
 /** Baskets: two or three. Words: four to eight. */
 export declare const WORD_SORT_BINS: {
     readonly min: 2;
@@ -4449,6 +4561,12 @@ export type SentenceBuildMetrics = BaseGameMetrics & {
     placed: number;
     livesRemaining: number;
 };
+export type SyllableBuildMetrics = BaseGameMetrics & {
+    /** Syllables the word has, and how many of them stand in it. */
+    syllables: number;
+    placed: number;
+    livesRemaining: number;
+};
 export type WordSortMetrics = BaseGameMetrics & {
     /** Words the game has, and how many of them were put away. */
     words: number;
@@ -4582,6 +4700,7 @@ export declare const GAME_KIND_KEYS: {
     readonly "clock-set": "clockSet";
     readonly "fraction-pick": "fractionPick";
     readonly "sentence-build": "sentenceBuild";
+    readonly "syllable-build": "syllableBuild";
     readonly "word-sort": "wordSort";
     readonly "number-line": "numberLine";
     readonly "true-false": "trueFalse";
@@ -4640,6 +4759,7 @@ export declare const GAME_GESTURES: {
     readonly "clock-set": "tap";
     readonly "fraction-pick": "pick";
     readonly "sentence-build": "tap";
+    readonly "syllable-build": "tap";
     readonly "word-sort": "tap";
     readonly "number-line": "tap";
     readonly "true-false": "pick";
@@ -4722,6 +4842,7 @@ export type GameMetricsByKind = {
     "clock-set": ClockSetMetrics;
     "fraction-pick": FractionPickMetrics;
     "sentence-build": SentenceBuildMetrics;
+    "syllable-build": SyllableBuildMetrics;
     "word-sort": WordSortMetrics;
     "number-line": NumberLineMetrics;
     "true-false": TrueFalseMetrics;

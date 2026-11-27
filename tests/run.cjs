@@ -2629,6 +2629,82 @@ section('sentence_build: a sentence put together from its words');
   check('the timings and the gesture are there', rules.GAME_TIMINGS.sentenceBuild.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['sentence-build'] === rules.GAME_TIMINGS.sentenceBuild && rules.GAME_GESTURES['sentence-build'] === 'tap');
 }
 
+section('syllable_build: a word put together from its syllables');
+
+{
+  ['syllable_build', 'build_syllables', 'Syllable Build'].forEach((type) => {
+    check(`${type} resolves to syllable-build`, rules.resolveGameKind(type, {}) === 'syllable-build');
+  });
+  check('a word of letters and a sentence of words are still their own games', rules.resolveGameKind('word_build', {}) === 'word-build' && rules.resolveGameKind('sentence_build', {}) === 'sentence-build');
+
+  const ka = rules.normalizeSyllableBuildConfig({ word: ' ბა-ყა-ყი ', extra_syllables: 'ყუ, ბი ყა', question_image: 'https://x/frog.webp', bg_image: 'https://x/bg.webp', time_limit: 90 });
+  check('the word cut at its hyphens, a syllable a place, and whole', ka.syllables.join('|') === 'ბა|ყა|ყი' && ka.word === 'ბაყაყი');
+  check('the tiles: its syllables and the ones that do not belong — none of them a syllable of it', ka.tiles.length === 5 && ka.tiles.map((tile) => tile.syllable).sort().join() === ['ბა', 'ყა', 'ყი', 'ყუ', 'ბი'].sort().join());
+  check('mixed, never already in order', !ka.tiles.slice(0, 3).every((tile, index) => tile.syllable === ka.syllables[index]));
+  check('defaults: lives 3, the background and the picture to preload', ka.lives === 3 && ka.time_limit === 90 && ka.imageUris.join() === 'https://x/bg.webp,https://x/frog.webp');
+  const ru = rules.normalizeSyllableBuildConfig({ word: 'Ма-ма', extra_syllables: ['па', 'Па', 'ма'] });
+  check('a capital is its small letter; a syllable that does not belong given twice, or of the word, is one tile or none', ru.syllables.join('|') === 'ма|ма' && ru.tiles.length === 3);
+  check('a word that has a syllable twice: two tiles of it', ru.tiles.filter((tile) => tile.syllable === 'ма').length === 2);
+  check('what is no letter is left out of a syllable', rules.normalizeSyllableBuildConfig({ word: 'ap-ple!' }).syllables.join('|') === 'ap|ple');
+  check('one syllable is no word to build, and no game', rules.normalizeSyllableBuildConfig({ word: 'კატა' }).syllables.length === 0 && rules.normalizeSyllableBuildConfig({ word: 'კატა' }).tiles.length === 0);
+  check('six syllables at most, three that do not belong', rules.normalizeSyllableBuildConfig({ word: 'a-b-c-d-e-f-g-h', extra_syllables: 'p q r s t' }).tiles.length === 9);
+
+  const tap = rules.resolveSyllableBuildTap;
+  const game = { syllables: ['მა', 'მა', 'ლო'], tiles: [{ id: 'a', syllable: 'ლო' }, { id: 'b', syllable: 'მა' }, { id: 'c', syllable: 'მა' }, { id: 'd', syllable: 'ბა' }] };
+  check('the syllable that comes next goes to its place, either tile of it', JSON.stringify(tap(game, [], 'c')) === '{"type":"place","slot":0,"complete":false}' && tap(game, ['c'], 'b').type === 'place');
+  check('another syllable is a mistake', JSON.stringify(tap(game, ['c'], 'a')) === '{"type":"wrong","slot":1}' && tap(game, ['c'], 'd').type === 'wrong');
+  check('the last syllable completes it', JSON.stringify(tap(game, ['c', 'b'], 'a')) === '{"type":"place","slot":2,"complete":true}');
+  check('a tile placed already, or the word built, takes nothing', tap(game, ['c'], 'c').type === 'ignored' && tap(game, ['c', 'b', 'a'], 'd').type === 'ignored' && tap(game, [], 'zz').type === 'ignored');
+
+  const overlap = (a, b) => Math.min(a.left + a.width, b.left + b.width) > Math.max(a.left, b.left) + 1e-6
+    && Math.min(a.top + a.height, b.top + b.height) > Math.max(a.top, b.top) + 1e-6;
+  const inside = (inner, outer) => inner.left >= outer.left - 1e-6 && inner.top >= outer.top - 1e-6
+    && inner.left + inner.width <= outer.left + outer.width + 1e-6 && inner.top + inner.height <= outer.top + outer.height + 1e-6;
+  const en = rules.normalizeSyllableBuildConfig({ word: 'wa-ter-mel-on-sea-son', extra_syllables: 'mal ter sum' });
+  const pic = rules.normalizeSyllableBuildConfig({ word: 'პო-მი-დო-რი', extra_syllables: 'პა მე', question_image: 'https://x/t.webp' });
+  const stages = [[852, 393, { top: 56, left: 59, right: 59, bottom: 21 }], [844, 322, { top: 68 }], [1250, 750, {}], [390, 700, { top: 60 }], [1024, 768, {}], [667, 300, { top: 60 }]];
+  let whole = true;
+  let joined = true;
+  let detail = '';
+  stages.forEach(([w, h, insets]) => [ka, ru, en, pic].forEach((config, index) => {
+    const layout = rules.layoutSyllableBuild(w, h, config, insets);
+    const stage = { left: insets.left || 0, top: insets.top || 0, width: w - (insets.left || 0) - (insets.right || 0), height: h - (insets.top || 0) - (insets.bottom || 0) };
+    const ok = layout && inside(layout.panel, stage) && inside(layout.tray, stage) && !overlap(layout.panel, layout.tray)
+      && inside(layout.strip, layout.panel)
+      && layout.slots.length === config.syllables.length && layout.slots.every((slot) => inside(slot, layout.strip))
+      && layout.tiles.length === config.tiles.length && layout.tiles.every((tile) => inside(tile, layout.tray) && tile.height >= 40)
+      && layout.tiles.every((a, i) => layout.tiles.every((b, j) => i === j || !overlap(a, b)))
+      && layout.tileTexts.every((text, i) => inside(text, layout.tiles[i]))
+      && (config.questionImage ? inside(layout.picture, layout.panel) && !overlap(layout.picture, layout.strip) : layout.picture === null);
+    if (!ok && whole) { whole = false; detail = `${w}x${h} config ${index}: ${JSON.stringify(layout)}`; }
+    if (!layout) return;
+    // The places touch and fill the strip; a syllable's writing lands where the whole word has its letters.
+    const em = layout.line / rules.TEXT_ART.lineHeight;
+    const glyphs = rules.layoutTextLine(config.word).glyphs;
+    const wordInk = layout.strip.left + rules.SYLLABLE_BUILD_LAYOUT.stripPad * layout.line;
+    let letter = 0;
+    const lands = config.syllables.every((syllable, i) => {
+      const x = glyphs[letter].x;
+      letter += [...syllable].length;
+      return Math.abs(layout.slotTexts[i].left + rules.TEXT_ART.pad * em - (wordInk + x * em)) < 1e-6
+        && Math.abs(layout.slotTexts[i].width - rules.textLineUnits(syllable) * layout.line) < 1e-6;
+    });
+    const last = layout.slots[layout.slots.length - 1];
+    const touch = layout.slots.every((slot, i) => (i === 0
+      ? Math.abs(slot.left - layout.strip.left) < 1e-6
+      : Math.abs(layout.slots[i - 1].left + layout.slots[i - 1].width - slot.left) < 1e-6))
+      && Math.abs(last.left + last.width - (layout.strip.left + layout.strip.width)) < 1e-6;
+    // A tile's writing is as big as its syllable's in the word: it flies, it is never scaled.
+    const sameSize = config.tiles.every((tile, i) => Math.abs(layout.tileTexts[i].width - rules.textLineUnits(tile.syllable) * layout.line) < 1e-6
+      && Math.abs(layout.tileTexts[i].height - layout.line) < 1e-6);
+    if (!(lands && touch && sameSize) && joined) { joined = false; detail = `${w}x${h} config ${index} joined: ${JSON.stringify(layout)}`; }
+  }));
+  check('on every stage the strip and its picture on the panel, the tiles below, apart, inside the safe area and big enough to hit', whole, detail);
+  check('the places touch, one strip; a syllable lands where the whole word writes its letters, at the size it had on its tile', joined, detail);
+  check('no word, no layout', rules.layoutSyllableBuild(852, 393, { syllables: [], tiles: [], questionImage: null }, {}) === null);
+  check('the timings and the gesture are there', rules.GAME_TIMINGS.syllableBuild.flyMs > 0 && rules.GAME_TIMINGS_BY_KIND['syllable-build'] === rules.GAME_TIMINGS.syllableBuild && rules.GAME_GESTURES['syllable-build'] === 'tap');
+}
+
 section('word_sort: words sorted into baskets');
 
 {

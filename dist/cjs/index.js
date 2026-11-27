@@ -48,7 +48,8 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LABEL_DIAGRAM_LAYOUT = exports.LABEL_DIAGRAM_LABELS_MAX = exports.LABEL_DIAGRAM_PARTS_MAX = exports.LABEL_DIAGRAM_PARTS_MIN = exports.WORD_BUILD_LAYOUT = exports.WORD_BUILD_LETTER_UNITS = exports.WORD_BUILD_EXTRA_MAX = exports.WORD_BUILD_LETTERS_MAX = exports.WORD_BUILD_LETTERS_MIN = exports.MATH_INPUT_LAYOUT = exports.MATH_INPUT_DIGITS_MIN = exports.MATH_INPUT_KEYS = exports.TEXT_CHOICE_LAYOUT = exports.TEXT_CHOICE_ANSWERS_MAX = exports.TEXT_CHOICE_ANSWERS_MIN = exports.MEMORY_CARD_FACE = exports.TEXT_ART = exports.LETTER_ALPHABETS = exports.LETTER_TONE_COUNT = exports.MATH_EQUATION_LAYOUT = exports.MATH_NUMBER_SPACE = exports.MATH_EQUATION_TERMS_MAX = exports.MATH_EQUATION_NUMBER_MAX = exports.MATH_EQUATION_PICTURES_MAX = exports.MATH_EQUATION_CHOICES_MAX = exports.MATH_EQUATION_CHOICES_MIN = exports.MATH_EQUATION_BLANKS_MAX = exports.CONNECT_PAIRS_CARD = exports.CONNECT_PAIRS_LAYOUT = exports.CONNECT_PAIRS_MAX = exports.GAME_TIMINGS = exports.SHADOW_MATCH_MISS_TOLERANCE = exports.SHADOW_MATCH_DROP_TOLERANCE = exports.MEMORY_CARD_COLORS = exports.MEMORY_CARD_MAX_SIDE = exports.IMAGE_ORDER_TILE_MAX = exports.SORT_BINS_TILE_MAX = exports.DEFAULT_CATCH_CORRECT_ITEMS = exports.CATCH_CORRECT_MAX_FALL_MS = exports.CATCH_CORRECT_MIN_FALL_MS = exports.CATCH_CORRECT_MIN_FREQUENCY_MS = exports.FAILURE_REASON = exports.SVG_ASSEMBLE_CARD = exports.SCENE_SAFE_AREA = exports.fitCountPickBoard = exports.ANSWER_CHAIN = exports.ANSWER_CHOICE_STACK = exports.PICTURE_COPIES_GAP = exports.CATCH_CORRECT_COPIES_MAX = exports.PICTURE_COPIES_MAX = void 0;
-exports.panorama = exports.GESTURE_HINT = exports.GAME_GESTURES = exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = void 0;
+exports.GAME_TIMINGS_BY_KIND = exports.GAME_KIND_KEYS = exports.SOUND_MATCH_LAYOUT = exports.SOUND_MATCH_RIGHT = exports.SOUND_MATCH_ANSWERS = exports.HIDDEN_LIGHT_LAYOUT = exports.HIDDEN_LIGHT_ANSWERS = exports.HIDDEN_LIGHT_QUESTIONS = exports.STORY_SCENE_LAYOUT = exports.STORY_SCENE_PIECES = exports.MAP_PLACE_LAYOUT = exports.MAP_PLACE_ITEMS = exports.FIND_IN_SCENE_LAYOUT = exports.FIND_IN_SCENE_TARGETS = exports.CHART_READ_LAYOUT = exports.CHART_KEY_WORDS = exports.CHART_WORDS = exports.CHART_BAR_COLORS = exports.CHART_READ_SIZE = exports.GRID_ROUTE_LAYOUT = exports.GRID_DIRECTIONS = exports.GRID_ROUTE_SIZE = exports.TRUE_FALSE_LAYOUT = exports.TRUE_FALSE_STATEMENTS = exports.NUMBER_LINE_LAYOUT = exports.NUMBER_LINE_TICKS_MAX = exports.WORD_SORT_LAYOUT = exports.WORD_SORT_WORDS = exports.WORD_SORT_BINS = exports.SYLLABLE_BUILD_LAYOUT = exports.SYLLABLE_BUILD_EXTRA_MAX = exports.SYLLABLE_BUILD_SYLLABLES = exports.SENTENCE_BUILD_LAYOUT = exports.SENTENCE_BUILD_EXTRA_MAX = exports.SENTENCE_BUILD_WORDS_MAX = exports.FRACTION_PICK_LAYOUT = exports.FRACTION_PICK_OPTIONS = exports.FRACTION_PARTS = exports.CLOCK_SET_LAYOUT = exports.CLOCK_READ_OPTIONS = exports.CLOCK_MINUTE_STEP = exports.MONEY_PAY_LAYOUT = exports.MONEY_WORDS = exports.MONEY_PAY_PIECES_MAX = exports.MONEY_DENOMINATIONS = exports.WORD_PROBLEM_LAYOUT = exports.READING_TEXT_LAYOUT = exports.READING_TEXT_ANSWERS_MAX = exports.READING_TEXT_ANSWERS_MIN = exports.READING_TEXT_QUESTIONS_MAX = void 0;
+exports.panorama = exports.GESTURE_HINT = exports.GAME_GESTURES = void 0;
 exports.normalizePictureCopies = normalizePictureCopies;
 exports.layoutPictureCopies = layoutPictureCopies;
 exports.getRuntimeConfig = getRuntimeConfig;
@@ -192,6 +193,9 @@ exports.layoutFractionPick = layoutFractionPick;
 exports.normalizeSentenceBuildConfig = normalizeSentenceBuildConfig;
 exports.resolveSentenceBuildTap = resolveSentenceBuildTap;
 exports.layoutSentenceBuild = layoutSentenceBuild;
+exports.normalizeSyllableBuildConfig = normalizeSyllableBuildConfig;
+exports.resolveSyllableBuildTap = resolveSyllableBuildTap;
+exports.layoutSyllableBuild = layoutSyllableBuild;
 exports.normalizeWordSortConfig = normalizeWordSortConfig;
 exports.resolveWordSortTap = resolveWordSortTap;
 exports.layoutWordSort = layoutWordSort;
@@ -1110,6 +1114,15 @@ function resolveGameKind(type, config) {
         "sentence_order",
     ].includes(normalizedType)) {
         return "sentence-build";
+    }
+    if ([
+        "syllable_build",
+        "syllablebuild",
+        "build_syllables",
+        "syllables_build",
+        "word_from_syllables",
+    ].includes(normalizedType)) {
+        return "syllable-build";
     }
     if ([
         "word_sort",
@@ -3788,6 +3801,11 @@ exports.GAME_TIMINGS = {
      * built, so the child reads it whole before the win.
      */
     sentenceBuild: { wrongFeedbackMs: 520, flyMs: 420, successSettleMs: 1100, livesOutDelayMs: 320 },
+    /**
+     * syllable_build: a syllable out of its turn shakes for `wrongFeedbackMs`; a right one flies to its
+     * place for `flyMs`, its tile fading as it lands. The word stays `successSettleMs` once whole.
+     */
+    syllableBuild: { wrongFeedbackMs: 520, flyMs: 460, successSettleMs: 1100, livesOutDelayMs: 320 },
     /**
      * A right word flies into its basket over `flyMs` and the next comes;
      * a wrong tap shakes the card for `wrongFeedbackMs`. After the last word
@@ -7513,6 +7531,217 @@ function layoutSentenceBuild(stageWidth, stageHeight, config, insets = {}) {
     }
     return low > 1 ? place(low) : null;
 }
+// --- syllable_build: a word put together from its syllables -----------------
+//
+// The twin of word_build one level up and of sentence_build one level down: a
+// word cut into its syllables (დე-და, ბა-ყა-ყი), the syllables on tiles mixed
+// among a few that do not belong, and the one that comes next flying to its
+// place. The word's places are ONE word (owner, 2026-11-27): they stand side
+// by side in a single strip with a dotted seam between the places still
+// empty, and a syllable put in its place leaves its tile behind and stands as
+// letters of the word, exactly where the whole word has them — so the word
+// built is the word written, not syllables in a row. The word arrives in the
+// language the game is played in; every syllable is drawn by DrawnText, a
+// colour a letter. Nothing is said as a syllable is placed (owner,
+// 2026-11-27): the voice names the word at the start, and that is all.
+/** A word has 2 to this many syllables, and at most this many that do not belong lie among them. */
+exports.SYLLABLE_BUILD_SYLLABLES = { min: 2, max: 6 };
+exports.SYLLABLE_BUILD_EXTRA_MAX = 3;
+/** A syllable as the game reads it: its letters of the three alphabets alone, small. */
+function readSyllable(source) {
+    const known = Object.values(exports.LETTER_ALPHABETS).join("");
+    return [...source.toLowerCase()].filter((char) => known.includes(char)).join("");
+}
+/** A word cut into its syllables at its hyphens: "დე-და" → ["დე", "და"]. */
+function readSyllables(source) {
+    if (Array.isArray(source)) {
+        return source.flatMap((item) => readSyllables(item));
+    }
+    return (extractText(source) ?? "").split(/[-‐‑–—·\s]+/).map(readSyllable).filter(Boolean);
+}
+/** The syllables that do not belong, as written: space-, comma- or hyphen-separated. */
+function readExtraSyllables(source) {
+    if (Array.isArray(source)) {
+        return source.flatMap((item) => readExtraSyllables(item));
+    }
+    return (extractText(source) ?? "").split(/[\s,;\-‐‑–—·]+/).map(readSyllable).filter(Boolean);
+}
+/**
+ * The game as the players draw it. `word` arrives already in the language of
+ * the game, its syllables split by hyphens ("ბა-ყა-ყი"); `extra_syllables`
+ * (a text, or a list) are the ones that do not belong — none of them a
+ * syllable of the word. The tiles are mixed so that they do not already read
+ * as the word. A word of one syllable is nothing to build: no places, no tiles.
+ */
+function normalizeSyllableBuildConfig(config) {
+    const read = readSyllables(config.word).slice(0, exports.SYLLABLE_BUILD_SYLLABLES.max);
+    const syllables = read.length >= exports.SYLLABLE_BUILD_SYLLABLES.min ? read : [];
+    const extra = readExtraSyllables(config.extra_syllables)
+        .filter((syllable) => !syllables.includes(syllable))
+        .filter((syllable, index, all) => all.indexOf(syllable) === index)
+        .slice(0, exports.SYLLABLE_BUILD_EXTRA_MAX);
+    const all = syllables.length > 0 ? [...syllables, ...extra] : [];
+    let order = shuffle(all.map((syllable, index) => ({ id: `syllable_${index + 1}`, syllable })));
+    // Mixed is mixed: a tray that reads as the word already gives it away.
+    for (let attempt = 0; attempt < 6 && all.length > 1 && order.slice(0, syllables.length).every((tile, index) => tile.syllable === syllables[index]); attempt += 1) {
+        order = shuffle(order);
+    }
+    const questionImage = extractMediaUrl(config.question_image);
+    const bg = normalizeBackground(config);
+    return {
+        syllables,
+        word: syllables.join(""),
+        tiles: order,
+        questionImage,
+        bg_image: bg,
+        time_limit: extractNumber(config.time_limit),
+        lives: Math.max(1, Math.floor(extractNumber(config.lives) ?? 3)),
+        imageUris: [bg, questionImage].filter((uri) => Boolean(uri)),
+    };
+}
+/**
+ * What a tap on a tile does: the whole play rule, so both players follow it
+ * tap for tap. The word is built left to right; `placed` are the tiles in it
+ * so far, in order. Any tile of the right syllable is right — "მა-მა" has two
+ * of it, and either goes first.
+ */
+function resolveSyllableBuildTap(config, placed, tileId) {
+    const slot = placed.length;
+    const tile = config.tiles.find((item) => item.id === tileId);
+    if (!tile || slot >= config.syllables.length || placed.includes(tileId)) {
+        return { type: "ignored" };
+    }
+    if (tile.syllable !== config.syllables[slot]) {
+        return { type: "wrong", slot };
+    }
+    return { type: "place", slot, complete: slot + 1 === config.syllables.length };
+}
+/** Proportions of the word and its tiles. Shares are of a line of writing. */
+exports.SYLLABLE_BUILD_LAYOUT = {
+    /** A tile and the word's strip: this tall for a line, and a tile this much wider than its syllable. */
+    tileHeight: 1.7,
+    tilePadX: 0.8,
+    /** The strip's room before its first letter and after its last. */
+    stripPad: 0.45,
+    /** A line of writing is never taller than this, in px. */
+    maxLine: 56,
+    /** Between tiles, and round the word on its panel. */
+    gap: 0.4,
+    pad: 0.45,
+    /** The picture: a square this many tiles high at the panel's left. */
+    picture: 2.0,
+    /** The most of the free height the word's panel takes. */
+    maxPanelShare: 0.5,
+};
+/**
+ * Where everything of a word to build from its syllables goes. The background
+ * covers the stage; the word's strip sits on a panel above, its picture at its
+ * left when it has one; the tiles below, in rows. One size of writing for
+ * both — the biggest at which they fit — two safe areas a gap apart, inside
+ * the stage less `insets`.
+ */
+function layoutSyllableBuild(stageWidth, stageHeight, config, insets = {}) {
+    const L = exports.SYLLABLE_BUILD_LAYOUT;
+    const originX = insets.left ?? 0;
+    const originY = insets.top ?? 0;
+    const usableWidth = stageWidth - originX - (insets.right ?? 0);
+    const usableHeight = stageHeight - originY - (insets.bottom ?? 0);
+    if (usableWidth <= 0 || usableHeight <= 0 || config.syllables.length === 0 || config.tiles.length === 0) {
+        return null;
+    }
+    const edge = sceneEdge(stageWidth, stageHeight);
+    const gap = sceneGap(stageWidth, stageHeight);
+    const area = {
+        left: originX + edge,
+        top: originY + edge,
+        width: Math.max(usableWidth - edge * 2, 1),
+        height: Math.max(usableHeight - edge * 2, 1),
+    };
+    const hasPicture = Boolean(config.questionImage);
+    // In ems of the writing: where each syllable starts in the word, and the word's own width.
+    const advances = config.syllables.map((syllable) => textLineAdvance(syllable));
+    const starts = advances.map((_, index) => advances.slice(0, index).reduce((sum, value) => sum + value, 0));
+    const wordAdvance = advances.reduce((sum, value) => sum + value, 0);
+    // Everything at a line of `line` px, or null when it does not fit.
+    const place = (line) => {
+        const em = line / exports.TEXT_ART.lineHeight;
+        const tile = line * L.tileHeight;
+        const between = line * L.gap;
+        const pad = line * L.pad;
+        const stripPad = line * L.stripPad;
+        const pictureSize = hasPicture ? tile * L.picture : 0;
+        const stripWidth = wordAdvance * em + stripPad * 2;
+        const panelWidth = pad * 2 + (hasPicture ? pictureSize + between : 0) + stripWidth;
+        const panelHeight = Math.max(pictureSize, tile) + pad * 2;
+        const textWidths = config.tiles.map((item) => textLineUnits(item.syllable) * line);
+        const tileWidths = textWidths.map((width) => width + L.tilePadX * line);
+        const tileRows = flowWidths(tileWidths, area.width, between);
+        if (!tileRows || panelWidth > area.width + 1e-6) {
+            return null;
+        }
+        const trayHeight = tileRows.length * tile + (tileRows.length - 1) * between;
+        if (panelHeight > area.height * L.maxPanelShare + 1e-6 || panelHeight + gap + trayHeight > area.height + 1e-6) {
+            return null;
+        }
+        const free = area.height - panelHeight - gap - trayHeight;
+        const panel = { left: area.left + (area.width - panelWidth) / 2, top: area.top + free * 0.4, width: panelWidth, height: panelHeight };
+        const picture = hasPicture
+            ? { left: panel.left + pad, top: panel.top + (panelHeight - pictureSize) / 2, width: pictureSize, height: pictureSize }
+            : null;
+        const strip = {
+            left: panel.left + pad + (hasPicture ? pictureSize + between : 0),
+            top: panel.top + (panelHeight - tile) / 2,
+            width: stripWidth,
+            height: tile,
+        };
+        // The first letter's pen in the strip: its room, less the padding of a line's box.
+        const ink = strip.left + stripPad;
+        const textTop = strip.top + (tile - line) / 2;
+        const slotTexts = config.syllables.map((syllable, index) => ({
+            left: ink + starts[index] * em - exports.TEXT_ART.pad * em,
+            top: textTop,
+            width: textLineUnits(syllable) * line,
+            height: line,
+        }));
+        // The places cut the strip at the seams; the first and the last take its room at the ends.
+        const slots = config.syllables.map((_, index) => {
+            const left = index === 0 ? strip.left : ink + starts[index] * em;
+            const right = index === config.syllables.length - 1 ? strip.left + strip.width : ink + (starts[index] + advances[index]) * em;
+            return { left, top: strip.top, width: right - left, height: tile };
+        });
+        const trayTop = panel.top + panelHeight + gap + free * 0.3;
+        const rowWidth = (row) => row.reduce((sum, index) => sum + tileWidths[index], 0) + (row.length - 1) * between;
+        const tiles = [];
+        const tileTexts = [];
+        tileRows.forEach((row, rowIndex) => {
+            let left = area.left + (area.width - rowWidth(row)) / 2;
+            row.forEach((index) => {
+                const top = trayTop + rowIndex * (tile + between);
+                tiles[index] = { left, top, width: tileWidths[index], height: tile };
+                tileTexts[index] = { left: left + (tileWidths[index] - textWidths[index]) / 2, top: top + (tile - line) / 2, width: textWidths[index], height: line };
+                left += tileWidths[index] + between;
+            });
+        });
+        const tray = {
+            left: Math.min(...tiles.map((rect) => rect.left)),
+            top: trayTop,
+            width: Math.max(...tiles.map((rect) => rect.left + rect.width)) - Math.min(...tiles.map((rect) => rect.left)),
+            height: trayHeight,
+        };
+        return { panel, picture, strip, slots, slotTexts, tray, tiles, tileTexts, line };
+    };
+    // The biggest writing at which everything fits, found by halving.
+    let low = 0;
+    let high = L.maxLine;
+    for (let step = 0; step < 18; step++) {
+        const middle = (low + high) / 2;
+        if (place(middle))
+            low = middle;
+        else
+            high = middle;
+    }
+    return low > 1 ? place(low) : null;
+}
 // --- word_sort: words sorted into baskets ------------------------------------
 //
 // Words come one at a time on a card — a thing, an action, a quality; living
@@ -9729,6 +9958,7 @@ exports.GAME_KIND_KEYS = {
     "clock-set": "clockSet",
     "fraction-pick": "fractionPick",
     "sentence-build": "sentenceBuild",
+    "syllable-build": "syllableBuild",
     "word-sort": "wordSort",
     "number-line": "numberLine",
     "true-false": "trueFalse",
@@ -9767,6 +9997,7 @@ exports.GAME_TIMINGS_BY_KIND = {
     "clock-set": exports.GAME_TIMINGS.clockSet,
     "fraction-pick": exports.GAME_TIMINGS.fractionPick,
     "sentence-build": exports.GAME_TIMINGS.sentenceBuild,
+    "syllable-build": exports.GAME_TIMINGS.syllableBuild,
     "word-sort": exports.GAME_TIMINGS.wordSort,
     "number-line": exports.GAME_TIMINGS.numberLine,
     "true-false": exports.GAME_TIMINGS.trueFalse,
@@ -9812,6 +10043,7 @@ exports.GAME_GESTURES = {
     "clock-set": "tap",
     "fraction-pick": "pick",
     "sentence-build": "tap",
+    "syllable-build": "tap",
     "word-sort": "tap",
     "number-line": "tap",
     "true-false": "pick",
